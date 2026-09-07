@@ -1,0 +1,2 @@
+APP_NAME = "Me&You"
+VERSION = "1.0"
