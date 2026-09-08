@@ -1,2 +1,7 @@
 fastapi
 uvicorn
+SQLAlchemy
+pwdlib[argon2]
+PyJWT
+pymongo>=4.11
+python-dotenv
