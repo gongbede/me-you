@@ -1,4 +1,52 @@
+from .comment import Comment
+from .assessment import Assessment
+from .assessment_result import AssessmentResult
+from .assessment_submission import AssessmentSubmission
+from .conversation import Conversation
+from .conversation_member import ConversationMember
+from .course_teacher import CourseTeacher
+from .course import Course
+from .department import Department
+from .enrollment import Enrollment
+from .faculty import Faculty
+from .follow import Follow
+from .institution import Institution
+from .exercise import Exercise
+from .lesson import Lesson
+from .lesson_progress import LessonProgress
+from .message import Message
+from .student import Student
+from .teacher import Teacher
+from .notification import Notification
+from .post import Post
+from .post_like import PostLike
+from .profile import Profile
 from .user import User
 
 
-__all__ = ["User"]
+__all__ = [
+	"Comment",
+	"Assessment",
+	"AssessmentResult",
+	"AssessmentSubmission",
+	"Conversation",
+	"ConversationMember",
+	"CourseTeacher",
+	"Course",
+	"Department",
+	"Enrollment",
+	"Faculty",
+			"Institution",
+			"Exercise",
+			"Lesson",
+			"LessonProgress",
+		"Message",
+	"Follow",
+	"Notification",
+	"Post",
+	"PostLike",
+	"Profile",
+	"Student",
+	"Teacher",
+	"User",
+]

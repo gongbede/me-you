@@ -1,10 +1,10 @@
-from datetime import datetime, timezone
-from uuid import uuid4
-
 from fastapi import APIRouter, Depends, HTTPException, status
-from pymongo.errors import DuplicateKeyError
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..database import get_mongo_database
+from ..database import get_postgres_session
+from ..models import User
 from ..schemas import UserCreate, UserResponse
 from ..security import password_hash
 
@@ -13,37 +13,38 @@ router = APIRouter()
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def register(user_data: UserCreate, database=Depends(get_mongo_database)):
-    users = database["users"]
-    if await users.find_one({"username": user_data.username}):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username already exists")
+async def register(
+    user_data: UserCreate,
+    database: AsyncSession = Depends(get_postgres_session),
+):
+    user = User(
+        username=user_data.username,
+        email=user_data.email,
+        password_hash=password_hash.hash(user_data.password),
+    )
 
-    if await users.find_one({"email": user_data.email}):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already exists")
-
-    user = {
-        "_id": uuid4().hex,
-        "username": user_data.username,
-        "email": user_data.email,
-        "password_hash": password_hash.hash(user_data.password),
-        "created_at": datetime.now(timezone.utc),
-    }
-
+    database.add(user)
     try:
-        await users.insert_one(user)
-    except DuplicateKeyError as error:
-        key_pattern = (error.details or {}).get("keyPattern", {})
-        if "username" in key_pattern:
+        await database.commit()
+        await database.refresh(user)
+    except IntegrityError:
+        await database.rollback()
+        username_exists = await database.scalar(
+            select(User.id).where(User.username == user_data.username)
+        )
+        if username_exists is not None:
             detail = "Username already exists"
-        elif "email" in key_pattern:
+        elif await database.scalar(
+            select(User.id).where(User.email == user_data.email)
+        ) is not None:
             detail = "Email already exists"
         else:
             detail = "Username or email already exists"
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail) from None
 
     return {
-        "id": user["_id"],
-        "username": user["username"],
-        "email": user["email"],
-        "created_at": user["created_at"],
+        "id": str(user.id),
+        "username": user.username,
+        "email": user.email,
+        "created_at": user.created_at,
     }

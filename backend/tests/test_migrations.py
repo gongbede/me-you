@@ -1,0 +1,140 @@
+import importlib.util
+import unittest
+from pathlib import Path
+
+from app.database import Base
+from app.models import (
+    Comment,
+    Assessment,
+    AssessmentResult,
+    AssessmentSubmission,
+    Conversation,
+    ConversationMember,
+    CourseTeacher,
+    Course,
+    Department,
+    Enrollment,
+    Exercise,
+    Faculty,
+    Follow,
+    Message,
+    Notification,
+    Post,
+    PostLike,
+    Profile,
+    Institution,
+    Lesson,
+    LessonProgress,
+    Student,
+    Teacher,
+    User,
+)
+
+
+ROOT = Path(__file__).parents[1]
+
+
+def load_module(name: str, path: Path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise AssertionError(f"Could not load {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+class MigrationFoundationTests(unittest.TestCase):
+    def test_alembic_environment_imports_without_database_connection(self):
+        environment = load_module("me_you_alembic_env", ROOT / "alembic" / "env.py")
+        self.assertIs(environment.target_metadata, Base.metadata)
+
+    def test_metadata_contains_only_current_postgres_models(self):
+        self.assertEqual(
+            set(Base.metadata.tables),
+            {
+                "users", "profiles", "posts", "comments", "post_likes", "follows",
+                "notifications", "conversations", "conversation_members", "messages",
+                "institutions", "faculties", "departments", "courses", "teachers",
+                "students", "enrollments",
+                "course_teachers", "lessons", "exercises", "assessments",
+                "assessment_submissions", "assessment_results", "lesson_progress",
+            },
+        )
+        self.assertIs(User.__table__, Base.metadata.tables["users"])
+        self.assertIs(Profile.__table__, Base.metadata.tables["profiles"])
+        self.assertIs(Post.__table__, Base.metadata.tables["posts"])
+        self.assertIs(Comment.__table__, Base.metadata.tables["comments"])
+        self.assertIs(PostLike.__table__, Base.metadata.tables["post_likes"])
+        self.assertIs(Follow.__table__, Base.metadata.tables["follows"])
+        self.assertIs(Notification.__table__, Base.metadata.tables["notifications"])
+        self.assertIs(Conversation.__table__, Base.metadata.tables["conversations"])
+        self.assertIs(ConversationMember.__table__, Base.metadata.tables["conversation_members"])
+        self.assertIs(Message.__table__, Base.metadata.tables["messages"])
+        self.assertIs(Institution.__table__, Base.metadata.tables["institutions"])
+        self.assertIs(Faculty.__table__, Base.metadata.tables["faculties"])
+        self.assertIs(Department.__table__, Base.metadata.tables["departments"])
+        self.assertIs(Course.__table__, Base.metadata.tables["courses"])
+        self.assertIs(Teacher.__table__, Base.metadata.tables["teachers"])
+        self.assertIs(Student.__table__, Base.metadata.tables["students"])
+        self.assertIs(Enrollment.__table__, Base.metadata.tables["enrollments"])
+        self.assertIs(CourseTeacher.__table__, Base.metadata.tables["course_teachers"])
+        self.assertIs(Lesson.__table__, Base.metadata.tables["lessons"])
+        self.assertIs(Exercise.__table__, Base.metadata.tables["exercises"])
+        self.assertIs(Assessment.__table__, Base.metadata.tables["assessments"])
+        self.assertIs(AssessmentSubmission.__table__, Base.metadata.tables["assessment_submissions"])
+        self.assertIs(AssessmentResult.__table__, Base.metadata.tables["assessment_results"])
+        self.assertIs(LessonProgress.__table__, Base.metadata.tables["lesson_progress"])
+
+    def test_initial_migration_has_upgrade_and_downgrade(self):
+        migration = load_module(
+            "me_you_initial_migration",
+            ROOT / "alembic" / "versions" / "0001_initial_schema.py",
+        )
+        self.assertIsNone(migration.down_revision)
+        self.assertTrue(callable(migration.upgrade))
+        self.assertTrue(callable(migration.downgrade))
+
+    def test_social_core_migration_follows_identity_migration(self):
+        migration = load_module(
+            "me_you_social_core_migration",
+            ROOT / "alembic" / "versions" / "0002_social_core.py",
+        )
+        self.assertEqual(migration.down_revision, "0001_initial_schema")
+        self.assertTrue(callable(migration.upgrade))
+        self.assertTrue(callable(migration.downgrade))
+
+    def test_communication_core_migration_follows_social_core(self):
+        migration = load_module(
+            "me_you_communication_core_migration",
+            ROOT / "alembic" / "versions" / "0003_communication_core.py",
+        )
+        self.assertEqual(migration.down_revision, "0002_social_core")
+        self.assertTrue(callable(migration.upgrade))
+        self.assertTrue(callable(migration.downgrade))
+
+    def test_education_migration_follows_communication_core(self):
+        migration = load_module(
+            "me_you_education_core_migration",
+            ROOT / "alembic" / "versions" / "0004_education_core.py",
+        )
+        self.assertEqual(migration.down_revision, "0003_communication_core")
+        self.assertTrue(callable(migration.upgrade))
+        self.assertTrue(callable(migration.downgrade))
+
+    def test_education_learning_migration_follows_education_core(self):
+        migration = load_module(
+            "me_you_education_learning_migration",
+            ROOT / "alembic" / "versions" / "0005_education_learning_core.py",
+        )
+        self.assertEqual(migration.down_revision, "0004_education_core")
+        self.assertTrue(callable(migration.upgrade))
+        self.assertTrue(callable(migration.downgrade))
+
+    def test_application_does_not_create_tables_at_startup(self):
+        main_source = (ROOT / "app" / "main.py").read_text()
+        self.assertNotIn("create_all(", main_source)
+        self.assertNotIn("init_db()", main_source)
+
+
+if __name__ == "__main__":
+    unittest.main()

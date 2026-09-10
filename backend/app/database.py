@@ -1,11 +1,12 @@
 import os
-from collections.abc import Generator
+from collections.abc import AsyncGenerator, Generator
 
 from pymongo import ASCENDING, AsyncMongoClient, IndexModel
 from sqlalchemy import create_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-from .config import DATABASE_URL
+from .config import DATABASE_URL, POSTGRESQL_DATABASE_URL
 
 
 class Base(DeclarativeBase):
@@ -15,6 +16,18 @@ class Base(DeclarativeBase):
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 engine = create_engine(DATABASE_URL, connect_args=connect_args)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+# PostgreSQL is prepared separately while SQLite remains available for rollback.
+postgres_engine = (
+    create_async_engine(POSTGRESQL_DATABASE_URL, future=True)
+    if POSTGRESQL_DATABASE_URL
+    else None
+)
+PostgresSessionLocal = (
+    async_sessionmaker(bind=postgres_engine, class_=AsyncSession, expire_on_commit=False)
+    if postgres_engine is not None
+    else None
+)
 
 MONGODB_URI = os.getenv("ME_YOU_MONGODB_URI")
 mongo_client = AsyncMongoClient(MONGODB_URI) if MONGODB_URI else None
@@ -60,3 +73,11 @@ def get_db() -> Generator[Session, None, None]:
         yield db
     finally:
         db.close()
+
+
+async def get_postgres_session() -> AsyncGenerator[AsyncSession, None]:
+    if PostgresSessionLocal is None:
+        raise RuntimeError("ME_YOU_DATABASE_URL is not configured")
+
+    async with PostgresSessionLocal() as session:
+        yield session

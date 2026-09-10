@@ -1,6 +1,8 @@
 fastapi
 uvicorn
 SQLAlchemy
+alembic
+asyncpg
 pwdlib[argon2]
 PyJWT
 pymongo>=4.11
