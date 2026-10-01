@@ -60,8 +60,17 @@ async def list_messages(conversation_id: uuid.UUID, current_user: User = Depends
 @router.post("/conversations/{conversation_id}/read", response_model=ReadStateResponse, summary="Mark a conversation as read")
 async def mark_read(conversation_id: uuid.UUID, current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session)):
     membership = await require_member(conversation_id, current_user.id, database)
-    membership.last_read_at = datetime.now(timezone.utc)
-    unread = await database.scalar(select(func.count(Message.id)).where(Message.conversation_id == conversation_id, Message.sender_id != current_user.id, Message.deleted_at.is_(None), Message.created_at > membership.last_read_at))
+    previous_read_at = membership.last_read_at
+    unread = await database.scalar(
+        select(func.count(Message.id)).where(
+            Message.conversation_id == conversation_id,
+            Message.sender_id != current_user.id,
+            Message.deleted_at.is_(None),
+            Message.created_at > previous_read_at if previous_read_at is not None else True,
+        )
+    )
+    now = datetime.now(timezone.utc)
+    membership.last_read_at = now
     await database.commit()
     return {"conversation_id": str(conversation_id), "last_read_at": membership.last_read_at, "unread_count": int(unread or 0)}
 

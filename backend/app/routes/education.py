@@ -7,7 +7,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_postgres_session
-from ..models import Course, Enrollment, Institution, Student, Teacher, User
+from ..models import Course, Enrollment, Institution, InstitutionMembership, Student, Teacher, User
+from ..permissions import course_institution_id, require_student_membership_for_institution
 from ..schemas import EnrollmentCreate, EnrollmentResponse, StudentCreate, StudentResponse, TeacherCreate, TeacherResponse
 from ..security import get_current_postgres_user
 
@@ -41,6 +42,9 @@ async def register_student(data: StudentCreate, current_user: User = Depends(get
         raise HTTPException(status_code=404, detail="Institution not found")
     value = Student(user_id=current_user.id, institution_id=institution_id, created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc))
     database.add(value)
+    membership = await database.scalar(select(InstitutionMembership).where(InstitutionMembership.user_id == current_user.id, InstitutionMembership.institution_id == institution_id, InstitutionMembership.role == "STUDENT"))
+    if membership is None:
+        database.add(InstitutionMembership(user_id=current_user.id, institution_id=institution_id, role="STUDENT", created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc)))
     try:
         await database.commit()
         await database.refresh(value)
@@ -63,6 +67,9 @@ async def register_teacher(data: TeacherCreate, current_user: User = Depends(get
         raise HTTPException(status_code=404, detail="Institution not found")
     value = Teacher(user_id=current_user.id, institution_id=institution_id, created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc))
     database.add(value)
+    membership = await database.scalar(select(InstitutionMembership).where(InstitutionMembership.user_id == current_user.id, InstitutionMembership.institution_id == institution_id, InstitutionMembership.role == "TEACHER"))
+    if membership is None:
+        database.add(InstitutionMembership(user_id=current_user.id, institution_id=institution_id, role="TEACHER", created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc)))
     try:
         await database.commit()
         await database.refresh(value)
@@ -84,9 +91,12 @@ async def create_enrollment(data: EnrollmentCreate, current_user: User = Depends
     course = await database.scalar(select(Course).where(Course.id == course_id))
     if course is None:
         raise HTTPException(status_code=404, detail="Course not found")
-    student = await database.scalar(select(Student).where(Student.user_id == current_user.id))
+    course_institution_uuid = await course_institution_id(course.id, database)
+    student = await database.scalar(select(Student).where(Student.user_id == current_user.id, Student.institution_id == course_institution_uuid))
     if student is None:
         raise HTTPException(status_code=404, detail="Student membership not found")
+    if student.institution_id != course_institution_uuid:
+        raise HTTPException(status_code=403, detail="Student does not belong to the course institution")
     value = Enrollment(student_id=student.id, course_id=course.id, created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc))
     database.add(value)
     try:

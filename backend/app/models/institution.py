@@ -9,6 +9,7 @@ from ..database import Base
 
 if TYPE_CHECKING:
     from .faculty import Faculty
+    from .institution_membership import InstitutionMembership
     from .student import Student
     from .teacher import Teacher
 
@@ -34,5 +35,6 @@ class Institution(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
     faculties: Mapped[list["Faculty"]] = relationship(back_populates="institution", cascade="all, delete-orphan", passive_deletes=True)
+    memberships: Mapped[list["InstitutionMembership"]] = relationship(back_populates="institution", cascade="all, delete-orphan", passive_deletes=True)
     teachers: Mapped[list["Teacher"]] = relationship(back_populates="institution")
     students: Mapped[list["Student"]] = relationship(back_populates="institution")

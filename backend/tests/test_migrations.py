@@ -23,6 +23,7 @@ from app.models import (
     PostLike,
     Profile,
     Institution,
+    InstitutionMembership,
     Lesson,
     LessonProgress,
     Student,
@@ -54,8 +55,8 @@ class MigrationFoundationTests(unittest.TestCase):
             {
                 "users", "profiles", "posts", "comments", "post_likes", "follows",
                 "notifications", "conversations", "conversation_members", "messages",
-                "institutions", "faculties", "departments", "courses", "teachers",
-                "students", "enrollments",
+                "institutions", "institution_memberships", "faculties", "departments",
+                "courses", "teachers", "students", "enrollments",
                 "course_teachers", "lessons", "exercises", "assessments",
                 "assessment_submissions", "assessment_results", "lesson_progress",
             },
@@ -71,6 +72,7 @@ class MigrationFoundationTests(unittest.TestCase):
         self.assertIs(ConversationMember.__table__, Base.metadata.tables["conversation_members"])
         self.assertIs(Message.__table__, Base.metadata.tables["messages"])
         self.assertIs(Institution.__table__, Base.metadata.tables["institutions"])
+        self.assertIs(InstitutionMembership.__table__, Base.metadata.tables["institution_memberships"])
         self.assertIs(Faculty.__table__, Base.metadata.tables["faculties"])
         self.assertIs(Department.__table__, Base.metadata.tables["departments"])
         self.assertIs(Course.__table__, Base.metadata.tables["courses"])

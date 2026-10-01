@@ -11,6 +11,7 @@ from .enrollment import Enrollment
 from .faculty import Faculty
 from .follow import Follow
 from .institution import Institution
+from .institution_membership import InstitutionMembership
 from .exercise import Exercise
 from .lesson import Lesson
 from .lesson_progress import LessonProgress
@@ -37,6 +38,7 @@ __all__ = [
 	"Enrollment",
 	"Faculty",
 			"Institution",
+			"InstitutionMembership",
 			"Exercise",
 			"Lesson",
 			"LessonProgress",

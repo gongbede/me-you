@@ -84,10 +84,14 @@ class EducationLearningTests(unittest.IsolatedAsyncioTestCase):
             LessonCreate(title="Lesson", content="   ")
 
     async def test_course_teacher_assignment_requires_matching_institution_and_identity(self):
-        assigned = await assign_teacher(self.course.id, CourseTeacherCreate(teacher_id=str(self.teacher.id)), self.user, LearningSession([self.teacher.institution_id, self.teacher]))
+        admin_membership = type("Membership", (), {"id": uuid.uuid4(), "user_id": self.user.id, "institution_id": self.teacher.institution_id, "role": "ADMIN"})()
+        assigned = await assign_teacher(self.course.id, CourseTeacherCreate(teacher_id=str(self.teacher.id)), self.user, LearningSession([self.teacher.institution_id, admin_membership, self.teacher]))
         self.assertEqual(assigned["teacher_id"], str(self.teacher.id))
         with self.assertRaises(HTTPException) as error:
-            await assign_teacher(self.course.id, CourseTeacherCreate(teacher_id=str(uuid.uuid4())), self.user, LearningSession([self.teacher.institution_id, None]))
+            await assign_teacher(self.course.id, CourseTeacherCreate(teacher_id=str(self.teacher.id)), self.user, LearningSession([self.teacher.institution_id, None, self.teacher]))
+        self.assertEqual(error.exception.status_code, 403)
+        with self.assertRaises(HTTPException) as error:
+            await assign_teacher(self.course.id, CourseTeacherCreate(teacher_id=str(uuid.uuid4())), self.user, LearningSession([self.teacher.institution_id, admin_membership, None]))
         self.assertEqual(error.exception.status_code, 404)
 
     async def test_published_assessment_submission_uses_authenticated_student(self):

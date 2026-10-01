@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from fastapi import HTTPException
 from pydantic import ValidationError
 
-from app.models import Course, Department, Faculty, Institution, Student, Teacher
+from app.models import Course, Department, Faculty, Institution, InstitutionMembership, Student, Teacher
 from app.routes.education import create_enrollment, register_student, register_teacher
 from app.routes.institutions import create_course, create_department, create_faculty, create_institution
 from app.schemas import CourseCreate, DepartmentCreate, EnrollmentCreate, FacultyCreate, InstitutionCreate, StudentCreate, TeacherCreate
@@ -26,6 +26,11 @@ class EducationSession:
 
     def add(self, value):
         self.added.append(value)
+
+    async def flush(self):
+        for value in self.added:
+            if hasattr(value, "id") and value.id is None:
+                value.id = uuid.uuid4()
 
     async def commit(self):
         self.committed = True
@@ -67,7 +72,8 @@ class EducationCoreTests(unittest.IsolatedAsyncioTestCase):
         result = await create_institution(InstitutionCreate(name="New School", institution_type="SCHOOL"), self.user, institution_session)
         self.assertEqual(result["name"], "New School")
 
-        faculty_result = await create_faculty(self.institution.id, FacultyCreate(name="Arts"), self.user, EducationSession([self.institution.id]))
+        admin_membership = InstitutionMembership(id=uuid.uuid4(), user_id=self.user.id, institution_id=self.institution.id, role="ADMIN")
+        faculty_result = await create_faculty(self.institution.id, FacultyCreate(name="Arts"), self.user, EducationSession([self.institution.id, admin_membership]))
         self.assertEqual(faculty_result["institution_id"], str(self.institution.id))
 
         with self.assertRaises(HTTPException) as error:
@@ -79,7 +85,8 @@ class EducationCoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("value must not be blank", str(blank_error.exception))
 
     async def test_course_creation_and_duplicate_error(self):
-        course_result = await create_course(self.department.id, CourseCreate(code="CS201", name="Databases"), self.user, EducationSession([self.department.id]))
+        admin_membership = InstitutionMembership(id=uuid.uuid4(), user_id=self.user.id, institution_id=self.institution.id, role="ADMIN")
+        course_result = await create_course(self.department.id, CourseCreate(code="CS201", name="Databases"), self.user, EducationSession([self.department, self.faculty, admin_membership]))
         self.assertEqual(course_result["code"], "CS201")
         self.assertIsInstance(EducationSession().added, list)
 
@@ -90,7 +97,7 @@ class EducationCoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(student_result["user_id"], str(self.user.id))
 
     async def test_enrollment_requires_current_student(self):
-        result = await create_enrollment(EnrollmentCreate(course_id=str(self.course.id)), self.user, EducationSession([self.course, self.student]))
+        result = await create_enrollment(EnrollmentCreate(course_id=str(self.course.id)), self.user, EducationSession([self.course, self.institution.id, self.student]))
         self.assertEqual(result["student_id"], str(self.student.id))
         self.assertEqual(result["course_id"], str(self.course.id))
 

@@ -24,6 +24,7 @@ from ..models import (
     Teacher,
     User,
 )
+from ..permissions import course_institution_id, require_institution_admin
 from ..schemas import (
     AssessmentCreate,
     AssessmentResponse,
@@ -101,18 +102,6 @@ async def teacher_for_user(user_id: uuid.UUID, teacher_id: uuid.UUID, database: 
     return teacher
 
 
-async def course_institution_id(course_id: uuid.UUID, database: AsyncSession) -> uuid.UUID:
-    value = await database.scalar(
-        select(Faculty.institution_id)
-        .join(Department, Department.faculty_id == Faculty.id)
-        .join(Course, Course.department_id == Department.id)
-        .where(Course.id == course_id)
-    )
-    if value is None:
-        raise HTTPException(status_code=404, detail="Course not found")
-    return value
-
-
 async def assigned_teacher(course_id: uuid.UUID, user_id: uuid.UUID, database: AsyncSession) -> Teacher:
     teacher = await database.scalar(
         select(Teacher)
@@ -167,13 +156,14 @@ def progress_response(value: LessonProgress) -> dict:
 
 @router.post("/courses/{course_id}/teachers", response_model=CourseTeacherResponse, status_code=201, summary="Assign a teacher to a course")
 async def assign_teacher(course_id: uuid.UUID, data: CourseTeacherCreate, current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session)):
-    institution_id = await course_institution_id(course_id, database)
+    course_institution_uuid = await course_institution_id(course_id, database)
+    await require_institution_admin(current_user.id, course_institution_uuid, database)
     teacher_id = parse_uuid(data.teacher_id, "teacher_id")
-    teacher = await database.scalar(select(Teacher).where(Teacher.id == teacher_id, Teacher.institution_id == institution_id))
+    teacher = await database.scalar(select(Teacher).where(Teacher.id == teacher_id))
     if teacher is None:
-        raise HTTPException(status_code=404, detail="Teacher not found in course institution")
-    if teacher.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Only the teacher can assign their own teaching record")
+        raise HTTPException(status_code=404, detail="Teacher not found")
+    if teacher.institution_id != course_institution_uuid:
+        raise HTTPException(status_code=403, detail="Teacher does not belong to the course institution")
     value = CourseTeacher(course_id=course_id, teacher_id=teacher_id)
     database.add(value)
     try:
@@ -194,7 +184,8 @@ async def list_course_teachers(course_id: uuid.UUID, _user: User = Depends(get_c
 
 @router.delete("/courses/{course_id}/teachers/{teacher_id}", status_code=204, summary="Remove a course teacher")
 async def remove_teacher(course_id: uuid.UUID, teacher_id: uuid.UUID, current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session)):
-    await assigned_teacher(course_id, current_user.id, database)
+    course_institution_uuid = await course_institution_id(course_id, database)
+    await require_institution_admin(current_user.id, course_institution_uuid, database)
     value = await database.scalar(select(CourseTeacher).where(CourseTeacher.course_id == course_id, CourseTeacher.teacher_id == teacher_id))
     if value is None:
         raise HTTPException(status_code=404, detail="Course teacher assignment not found")

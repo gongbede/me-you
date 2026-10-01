@@ -8,6 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from ..database import Base
 
 if TYPE_CHECKING:
+    from .institution_membership import InstitutionMembership
     from .student import Student
     from .teacher import Teacher
     from .profile import Profile
@@ -33,5 +34,6 @@ class User(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    memberships: Mapped[list["InstitutionMembership"]] = relationship(back_populates="user", cascade="all, delete-orphan", passive_deletes=True)
     teacher_records: Mapped[list["Teacher"]] = relationship(back_populates="user")
     student_records: Mapped[list["Student"]] = relationship(back_populates="user")
