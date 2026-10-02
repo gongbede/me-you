@@ -50,7 +50,10 @@ async def like_post(
                 recipient_id=post.author_id,
                 actor_id=current_user.id,
                 type="LIKE",
+                title="New like",
                 post_id=post_id,
+                target_type="post",
+                target_id=post_id,
             )
         )
     try:

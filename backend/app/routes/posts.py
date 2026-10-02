@@ -6,6 +6,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from ..activity import record_activity
 from ..database import get_postgres_session
 from ..models import Follow, Post, User
 from ..schemas import CreatePost, FeedResponse, PostResponse, UpdatePost
@@ -55,6 +56,14 @@ async def create_post(
 ):
     post = Post(author_id=current_user.id, author=current_user, content=post_data.content)
     database.add(post)
+    await database.flush()
+    await record_activity(
+        database,
+        event_type="social.post.created",
+        actor_id=current_user.id,
+        target_type="post",
+        target_id=post.id,
+    )
     await database.commit()
     await database.refresh(post)
     return post_response(post)

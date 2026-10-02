@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..activity import record_activity
 from ..database import get_postgres_session
 from ..models import (
     Assessment,
@@ -123,6 +124,15 @@ async def add_member(institution_id: uuid.UUID, target_user_id: uuid.UUID | str,
     value = InstitutionMembership(user_id=user_id, institution_id=institution_id, role=role, created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc))
     database.add(value)
     try:
+        await database.flush()
+        await record_activity(
+            database,
+            event_type="institution.membership.added",
+            actor_id=current_user.id,
+            target_type="institution_membership",
+            target_id=value.id,
+            metadata={"role": role},
+        )
         await database.commit()
         await database.refresh(value)
     except IntegrityError:
@@ -189,10 +199,20 @@ async def update_member_role(institution_id: uuid.UUID, membership_id: uuid.UUID
             raise HTTPException(status_code=404, detail="Membership not found")
         if value.institution_id != institution_id:
             raise HTTPException(status_code=403, detail="Membership does not belong to this institution")
-        if value.role == "ADMIN" and role != "ADMIN":
+        previous_role = value.role
+        if previous_role == "ADMIN" and role != "ADMIN":
             await _guard_final_admin_mutation(database, institution_id, value, action="demoted")
         value.role = role
         value.updated_at = datetime.now(timezone.utc)
+        if previous_role != role:
+            await record_activity(
+                database,
+                event_type="institution.membership.role_changed",
+                actor_id=current_user.id,
+                target_type="institution_membership",
+                target_id=value.id,
+                metadata={"previous_role": previous_role, "new_role": role},
+            )
         await database.refresh(value)
         return membership_response(value)
 
@@ -213,6 +233,14 @@ async def remove_member(institution_id: uuid.UUID, membership_id: uuid.UUID, cur
             raise HTTPException(status_code=403, detail="Membership does not belong to this institution")
         if value.role == "ADMIN":
             await _guard_final_admin_mutation(database, institution_id, value, action="removed")
+        await record_activity(
+            database,
+            event_type="institution.membership.removed",
+            actor_id=current_user.id,
+            target_type="institution_membership",
+            target_id=value.id,
+            metadata={"role": value.role},
+        )
         await database.delete(value)
 
     await _run_membership_mutation(database, mutate)
@@ -512,6 +540,14 @@ async def create_course(department_id: uuid.UUID, data: CourseCreate, current_us
     value = Course(department_id=department_id, **data.model_dump())
     database.add(value)
     try:
+        await database.flush()
+        await record_activity(
+            database,
+            event_type="education.course.created",
+            actor_id=current_user.id,
+            target_type="course",
+            target_id=value.id,
+        )
         await database.commit()
         await database.refresh(value)
     except IntegrityError:

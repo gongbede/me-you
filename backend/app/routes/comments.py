@@ -68,8 +68,11 @@ async def create_comment(
                 recipient_id=post.author_id,
                 actor_id=current_user.id,
                 type="COMMENT",
+                title="New comment",
                 post_id=post.id,
                 comment=comment,
+                target_type="comment",
+                target_id=comment.id,
             )
         )
     await database.commit()

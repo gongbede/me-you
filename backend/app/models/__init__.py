@@ -1,4 +1,5 @@
 from .comment import Comment
+from .activity import Activity
 from .assessment import Assessment
 from .assessment_result import AssessmentResult
 from .assessment_submission import AssessmentSubmission
@@ -27,6 +28,7 @@ from .user import User
 
 __all__ = [
 	"Comment",
+	"Activity",
 	"Assessment",
 	"AssessmentResult",
 	"AssessmentSubmission",

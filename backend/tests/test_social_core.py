@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from fastapi import HTTPException
 
-from app.models import Comment, Follow, Notification, Post, PostLike, User
+from app.models import Activity, Comment, Follow, Notification, Post, PostLike, User
 from app.routes.comments import create_comment, update_comment
 from app.routes.follows import follow_user
 from app.routes.likes import like_post
@@ -38,6 +38,11 @@ class SocialSession:
 
     async def scalars(self, _statement):
         return ScalarResult(self.scalar_rows.pop(0) if self.scalar_rows else [])
+
+    async def flush(self):
+        for value in self.added:
+            if hasattr(value, "id") and getattr(value, "id", None) is None:
+                value.id = uuid.uuid4()
 
     def add(self, value):
         self.added.append(value)
@@ -81,6 +86,14 @@ class SocialCoreTests(unittest.IsolatedAsyncioTestCase):
         created = await create_post(CreatePost(content="  new post  "), self.author, session)
         self.assertEqual(created["content"], "new post")
         self.assertIsInstance(session.added[0], Post)
+        activities = [value for value in session.added if isinstance(value, Activity)]
+        self.assertEqual(len(activities), 1)
+        self.assertEqual(activities[0].event_type, "social.post.created")
+        self.assertEqual(activities[0].actor_id, self.author.id)
+        self.assertEqual(activities[0].target_type, "post")
+        self.assertEqual(activities[0].target_id, uuid.UUID(created["id"]))
+        self.assertIsNone(activities[0].payload)
+        self.assertNotIn("hello", str(activities[0].payload))
 
         with self.assertRaises(HTTPException) as error:
             await update_post(

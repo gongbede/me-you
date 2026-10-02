@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, Uuid
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
@@ -16,11 +16,8 @@ if TYPE_CHECKING:
 class Notification(Base):
     __tablename__ = "notifications"
     __table_args__ = (
-        CheckConstraint(
-            "type IN ('LIKE', 'COMMENT', 'FOLLOW', 'MESSAGE')",
-            name="ck_notifications_type",
-        ),
         Index("ix_notifications_recipient_created_at", "recipient_id", "created_at"),
+        Index("ix_notifications_recipient_unread", "recipient_id", "read_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -36,7 +33,11 @@ class Notification(Base):
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
-    type: Mapped[str] = mapped_column(String(20), nullable=False)
+    type: Mapped[str] = mapped_column(String(64), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    target_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    target_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     post_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("posts.id", ondelete="SET NULL"),

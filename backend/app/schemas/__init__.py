@@ -56,12 +56,14 @@ from .social import (
 	FollowUserResponse,
 	LikeResponse,
 	NotificationResponse,
+	NotificationUnreadCountResponse,
 	PostResponse,
 	UpdateComment,
 	UpdatePost,
 	UserSummary,
 )
-from .profile import CreateProfile, ProfileResponse, UpdateProfile
+from .profile import CreateProfile, ProfileDiscoveryResponse, ProfileResponse, UpdateProfile
+from .platform import SearchResponse, SearchResult
 from .user import LoginRequest, LoginResponse, UserCreate, UserResponse
 
 
@@ -115,9 +117,13 @@ __all__ = [
 	"LoginResponse",
 	"MessageResponse",
 	"NotificationResponse",
+	"NotificationUnreadCountResponse",
 	"PostResponse",
 	"ProfileResponse",
+	"ProfileDiscoveryResponse",
 	"ReadStateResponse",
+	"SearchResponse",
+	"SearchResult",
 	"UpdateComment",
 	"UpdateMessage",
 	"UpdatePost",

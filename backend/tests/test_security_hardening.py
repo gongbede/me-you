@@ -9,7 +9,7 @@ from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import validate_jwt_secret
-from app.models import ConversationMember, Course, Department, Faculty, Institution, Student, Teacher, User
+from app.models import Activity, ConversationMember, Course, Department, Faculty, Institution, InstitutionMembership, Student, Teacher, User
 from app.permissions import require_institution_admin, require_institution_membership
 from app.routes.education import create_enrollment
 from app.routes.education_learning import assign_teacher
@@ -35,6 +35,16 @@ class HardeningSession:
     def __init__(self, scalar_values=None, scalars_values=None):
         self.scalar_values = list(scalar_values or [])
         self.scalars_values = list(scalars_values or [])
+        self.added = []
+        self.deleted = []
+
+    def add(self, value):
+        self.added.append(value)
+
+    async def flush(self):
+        for value in self.added:
+            if hasattr(value, "id") and value.id is None:
+                value.id = uuid.uuid4()
 
     async def scalar(self, _statement):
         return self.scalar_values.pop(0) if self.scalar_values else None
@@ -48,7 +58,7 @@ class HardeningSession:
         return None
 
     async def delete(self, _value):
-        return None
+        self.deleted.append(_value)
 
     async def refresh(self, _value):
         return None
@@ -166,11 +176,63 @@ class SecurityHardeningTests(unittest.IsolatedAsyncioTestCase):
         update_session = HardeningSession(scalar_values=[admin_membership, target_membership, 1], scalars_values=[])
         updated = await update_member_role(self.institution_a.id, target_membership.id, {"role": "ADMIN"}, self.user, update_session)
         self.assertEqual(updated["role"], "ADMIN")
+        role_events = [value for value in update_session.added if isinstance(value, Activity)]
+        self.assertEqual(len(role_events), 1)
+        self.assertEqual(role_events[0].event_type, "institution.membership.role_changed")
+        self.assertEqual(role_events[0].actor_id, self.user.id)
+        self.assertEqual(role_events[0].target_type, "institution_membership")
+        self.assertEqual(role_events[0].target_id, target_membership.id)
+        self.assertEqual(role_events[0].payload, {"previous_role": "STUDENT", "new_role": "ADMIN"})
+
+        add_target = User(id=uuid.uuid4(), username="dana", email="dana@example.com", password_hash="hash")
+        add_session = HardeningSession(scalar_values=[admin_membership, add_target, None])
+        added = await add_member(self.institution_a.id, add_target.id, "STUDENT", self.user, add_session)
+        add_events = [value for value in add_session.added if isinstance(value, Activity)]
+        self.assertEqual(len(add_events), 1)
+        self.assertEqual(add_events[0].event_type, "institution.membership.added")
+        self.assertEqual(add_events[0].actor_id, self.user.id)
+        self.assertEqual(add_events[0].target_type, "institution_membership")
+        self.assertEqual(add_events[0].target_id, uuid.UUID(added["id"]))
+        self.assertEqual(add_events[0].payload, {"role": "STUDENT"})
+
+        removable_member = InstitutionMembership(
+            id=uuid.uuid4(),
+            user_id=target_user.id,
+            institution_id=self.institution_a.id,
+            role="TEACHER",
+        )
+        removal_session = HardeningSession(
+            scalar_values=[admin_membership, removable_member],
+            scalars_values=[[admin_membership, removable_member]],
+        )
+        await remove_member(self.institution_a.id, removable_member.id, self.user, removal_session)
+        removal_events = [value for value in removal_session.added if isinstance(value, Activity)]
+        self.assertEqual(len(removal_events), 1)
+        self.assertEqual(removal_events[0].event_type, "institution.membership.removed")
+        self.assertEqual(removal_events[0].actor_id, self.user.id)
+        self.assertEqual(removal_events[0].target_id, removable_member.id)
+        self.assertEqual(removal_events[0].payload, {"role": "TEACHER"})
+        self.assertEqual(removal_session.deleted, [removable_member])
 
         final_admin = type("Membership", (), {"id": uuid.uuid4(), "user_id": self.user.id, "institution_id": self.institution_a.id, "role": "ADMIN"})()
+        demotion_session = HardeningSession(
+            scalar_values=[admin_membership, final_admin],
+            scalars_values=[[final_admin]],
+        )
+        with self.assertRaises(HTTPException):
+            await update_member_role(
+                self.institution_a.id,
+                final_admin.id,
+                {"role": "TEACHER"},
+                self.user,
+                demotion_session,
+            )
+        self.assertFalse(any(isinstance(value, Activity) for value in demotion_session.added))
+
         remove_session = HardeningSession(scalar_values=[admin_membership, final_admin, 1], scalars_values=[[final_admin]])
         with self.assertRaises(HTTPException):
             await remove_member(self.institution_a.id, final_admin.id, self.user, remove_session)
+        self.assertFalse(any(isinstance(value, Activity) for value in remove_session.added))
 
     async def test_same_institution_admin_counting_ignores_other_institutions(self):
         admin_a = type("Membership", (), {"id": uuid.uuid4(), "user_id": self.user.id, "institution_id": self.institution_a.id, "role": "ADMIN"})()
@@ -179,6 +241,9 @@ class SecurityHardeningTests(unittest.IsolatedAsyncioTestCase):
         session = HardeningSession(scalar_values=[admin_a, admin_b], scalars_values=[[admin_a, admin_b, admin_other]])
         updated = await update_member_role(self.institution_a.id, admin_b.id, {"role": "TEACHER"}, self.user, session)
         self.assertEqual(updated["role"], "TEACHER")
+        events = [value for value in session.added if isinstance(value, Activity)]
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].payload, {"previous_role": "ADMIN", "new_role": "TEACHER"})
 
     async def test_member_mutation_reuses_autobegun_async_session_transaction(self):
         admin_membership = type("Membership", (), {"id": uuid.uuid4(), "user_id": self.user.id, "institution_id": self.institution_a.id, "role": "ADMIN"})()
@@ -188,6 +253,8 @@ class SecurityHardeningTests(unittest.IsolatedAsyncioTestCase):
         session.scalar = AsyncMock(side_effect=[admin_membership, target_membership])
         session.scalars = AsyncMock(return_value=ScalarRows([admin_membership, target_membership]))
         session.refresh = AsyncMock()
+        recorded = []
+        session.add = recorded.append
 
         updated = await update_member_role(
             self.institution_a.id,
@@ -198,6 +265,8 @@ class SecurityHardeningTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(updated["role"], "TEACHER")
+        self.assertEqual(len(recorded), 1)
+        self.assertIsInstance(recorded[0], Activity)
         self.assertFalse(session.in_transaction())
         self.assertEqual(session.scalars.await_count, 1)
         await session.close()
@@ -210,11 +279,14 @@ class SecurityHardeningTests(unittest.IsolatedAsyncioTestCase):
         session.scalar = AsyncMock(side_effect=[admin_membership, final_admin])
         session.scalars = AsyncMock(return_value=ScalarRows([final_admin]))
         session.delete = AsyncMock()
+        recorded = []
+        session.add = recorded.append
 
         with self.assertRaises(HTTPException) as error:
             await remove_member(self.institution_a.id, final_admin.id, self.user, session)
 
         self.assertEqual(error.exception.status_code, 409)
+        self.assertEqual(recorded, [])
         session.delete.assert_not_awaited()
         self.assertFalse(session.in_transaction())
         self.assertEqual(session.scalars.await_count, 1)

@@ -1,10 +1,10 @@
 from datetime import datetime
-from typing import Literal
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-NotificationType = Literal["LIKE", "COMMENT", "FOLLOW", "MESSAGE"]
+NotificationType = str
 
 
 class UserSummary(BaseModel):
@@ -80,11 +80,19 @@ class FollowUserResponse(BaseModel):
 class NotificationResponse(BaseModel):
     id: str
     type: NotificationType
+    title: str
+    payload: dict[str, Any] | None
+    target_type: str | None
+    target_id: str | None
     actor: UserSummary | None
     post_id: str | None
     comment_id: str | None
     created_at: datetime
     read_at: datetime | None
+
+
+class NotificationUnreadCountResponse(BaseModel):
+    unread_count: int
 
 
 class FeedResponse(BaseModel):

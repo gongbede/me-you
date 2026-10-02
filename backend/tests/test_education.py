@@ -4,8 +4,9 @@ from datetime import datetime, timezone
 
 from fastapi import HTTPException
 from pydantic import ValidationError
+from sqlalchemy.exc import IntegrityError
 
-from app.models import Course, Department, Faculty, Institution, InstitutionMembership, Student, Teacher
+from app.models import Activity, Course, Department, Faculty, Institution, InstitutionMembership, Student, Teacher
 from app.routes.education import create_enrollment, register_student, register_teacher
 from app.routes.institutions import create_course, create_department, create_faculty, create_institution
 from app.schemas import CourseCreate, DepartmentCreate, EnrollmentCreate, FacultyCreate, InstitutionCreate, StudentCreate, TeacherCreate
@@ -13,10 +14,13 @@ from app.models import User
 
 
 class EducationSession:
-    def __init__(self, scalar_values=None):
+    def __init__(self, scalar_values=None, commit_error=None):
         self.scalar_values = list(scalar_values or [])
         self.added = []
+        self.added_history = []
         self.committed = False
+        self.commit_error = commit_error
+        self.rolled_back = False
 
     async def scalar(self, _statement):
         return self.scalar_values.pop(0) if self.scalar_values else None
@@ -26,6 +30,7 @@ class EducationSession:
 
     def add(self, value):
         self.added.append(value)
+        self.added_history.append(value)
 
     async def flush(self):
         for value in self.added:
@@ -33,6 +38,8 @@ class EducationSession:
                 value.id = uuid.uuid4()
 
     async def commit(self):
+        if self.commit_error is not None:
+            raise self.commit_error
         self.committed = True
         now = datetime.now(timezone.utc)
         for value in self.added:
@@ -47,7 +54,8 @@ class EducationSession:
         return None
 
     async def rollback(self):
-        return None
+        self.rolled_back = True
+        self.added.clear()
 
 
 class Result:
@@ -86,9 +94,29 @@ class EducationCoreTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_course_creation_and_duplicate_error(self):
         admin_membership = InstitutionMembership(id=uuid.uuid4(), user_id=self.user.id, institution_id=self.institution.id, role="ADMIN")
-        course_result = await create_course(self.department.id, CourseCreate(code="CS201", name="Databases"), self.user, EducationSession([self.department, self.faculty, admin_membership]))
+        session = EducationSession([self.department, self.faculty, admin_membership])
+        course_result = await create_course(self.department.id, CourseCreate(code="CS201", name="Databases"), self.user, session)
         self.assertEqual(course_result["code"], "CS201")
-        self.assertIsInstance(EducationSession().added, list)
+        activities = [value for value in session.added if isinstance(value, Activity)]
+        self.assertEqual(len(activities), 1)
+        self.assertEqual(activities[0].event_type, "education.course.created")
+        self.assertEqual(activities[0].actor_id, self.user.id)
+        self.assertEqual(activities[0].target_type, "course")
+        self.assertEqual(activities[0].target_id, uuid.UUID(course_result["id"]))
+        self.assertIsNone(activities[0].payload)
+
+    async def test_course_integrity_failure_rolls_back_activity(self):
+        admin_membership = InstitutionMembership(id=uuid.uuid4(), user_id=self.user.id, institution_id=self.institution.id, role="ADMIN")
+        failure = IntegrityError("insert", {}, RuntimeError("duplicate course"))
+        session = EducationSession([self.department, self.faculty, admin_membership], commit_error=failure)
+
+        with self.assertRaises(HTTPException) as error:
+            await create_course(self.department.id, CourseCreate(code="CS201", name="Databases"), self.user, session)
+
+        self.assertEqual(error.exception.status_code, 409)
+        self.assertTrue(session.rolled_back)
+        self.assertTrue(any(isinstance(value, Activity) for value in session.added_history))
+        self.assertFalse(any(isinstance(value, Activity) for value in session.added))
 
     async def test_teacher_and_student_identity_comes_from_authenticated_user(self):
         teacher_result = await register_teacher(TeacherCreate(institution_id=str(self.institution.id)), self.user, EducationSession([self.institution.id]))

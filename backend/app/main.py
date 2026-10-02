@@ -20,6 +20,7 @@ from .routes.notifications import router as notifications_router
 from .routes.posts import router as posts_router
 from .routes.profile import router as profile_router
 from .routes.registration import router as registration_router
+from .routes.search import router as search_router
 
 
 @asynccontextmanager
@@ -45,6 +46,7 @@ app.include_router(messages_router)
 app.include_router(education_router)
 app.include_router(education_learning_router)
 app.include_router(institutions_router)
+app.include_router(search_router)
 
 
 def main():

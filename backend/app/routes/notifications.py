@@ -2,13 +2,13 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ..database import get_postgres_session
 from ..models import Notification, User
-from ..schemas import NotificationResponse
+from ..schemas import NotificationResponse, NotificationUnreadCountResponse
 from ..security import get_current_postgres_user
 from .posts import user_summary
 
@@ -20,6 +20,10 @@ def notification_response(notification: Notification) -> dict:
     return {
         "id": str(notification.id),
         "type": notification.type,
+        "title": notification.title,
+        "payload": notification.payload,
+        "target_type": notification.target_type,
+        "target_id": str(notification.target_id) if notification.target_id else None,
         "actor": user_summary(notification.actor) if notification.actor else None,
         "post_id": str(notification.post_id) if notification.post_id else None,
         "comment_id": str(notification.comment_id) if notification.comment_id else None,
@@ -56,20 +60,43 @@ async def list_notifications(
     database: AsyncSession = Depends(get_postgres_session),
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=20, ge=1, le=100),
+    unread_only: bool = Query(default=False),
 ):
+    statement = (
+        select(Notification)
+        .options(selectinload(Notification.actor))
+        .where(Notification.recipient_id == current_user.id)
+    )
+    if unread_only:
+        statement = statement.where(Notification.read_at.is_(None))
     notifications = list(
         (
             await database.scalars(
-                select(Notification)
-                .options(selectinload(Notification.actor))
-                .where(Notification.recipient_id == current_user.id)
-                .order_by(Notification.created_at.desc(), Notification.id.desc())
+                statement.order_by(Notification.created_at.desc(), Notification.id.desc())
                 .offset(offset)
                 .limit(limit)
             )
         ).all()
     )
     return [notification_response(notification) for notification in notifications]
+
+
+@router.get(
+    "/unread-count",
+    response_model=NotificationUnreadCountResponse,
+    summary="Count your unread notifications",
+)
+async def count_unread_notifications(
+    current_user: User = Depends(get_current_postgres_user),
+    database: AsyncSession = Depends(get_postgres_session),
+):
+    unread_count = await database.scalar(
+        select(func.count(Notification.id)).where(
+            Notification.recipient_id == current_user.id,
+            Notification.read_at.is_(None),
+        )
+    )
+    return {"unread_count": int(unread_count or 0)}
 
 
 @router.post(

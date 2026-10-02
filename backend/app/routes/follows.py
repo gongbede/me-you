@@ -52,6 +52,9 @@ async def follow_user(
             recipient_id=target.id,
             actor_id=current_user.id,
             type="FOLLOW",
+            title="New follower",
+            target_type="user",
+            target_id=current_user.id,
         )
     )
     try:

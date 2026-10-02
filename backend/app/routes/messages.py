@@ -43,7 +43,7 @@ async def send_message(conversation_id: uuid.UUID, data: CreateMessage, current_
     database.add(message)
     member_ids = list((await database.scalars(select(ConversationMember.user_id).where(ConversationMember.conversation_id == conversation_id, ConversationMember.user_id != current_user.id))).all())
     for recipient_id in member_ids:
-        database.add(Notification(recipient_id=recipient_id, actor_id=current_user.id, type="MESSAGE"))
+        database.add(Notification(recipient_id=recipient_id, actor_id=current_user.id, type="MESSAGE", title="New message", target_type="conversation", target_id=conversation_id))
     conversation.updated_at = datetime.now(timezone.utc)
     await database.commit()
     await database.refresh(message)

@@ -30,3 +30,12 @@ class ProfileResponse(BaseModel):
     website: str | None
     created_at: datetime
     updated_at: datetime
+
+
+class ProfileDiscoveryResponse(BaseModel):
+    user_id: str
+    display_name: str
+    bio: str | None
+    profile_picture_url: str | None
+    location: str | None
+    website: str | None

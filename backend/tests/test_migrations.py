@@ -4,6 +4,7 @@ from pathlib import Path
 
 from app.database import Base
 from app.models import (
+    Activity,
     Comment,
     Assessment,
     AssessmentResult,
@@ -58,7 +59,7 @@ class MigrationFoundationTests(unittest.TestCase):
                 "institutions", "institution_memberships", "faculties", "departments",
                 "courses", "teachers", "students", "enrollments",
                 "course_teachers", "lessons", "exercises", "assessments",
-                "assessment_submissions", "assessment_results", "lesson_progress",
+                "assessment_submissions", "assessment_results", "lesson_progress", "activities",
             },
         )
         self.assertIs(User.__table__, Base.metadata.tables["users"])
@@ -86,6 +87,7 @@ class MigrationFoundationTests(unittest.TestCase):
         self.assertIs(AssessmentSubmission.__table__, Base.metadata.tables["assessment_submissions"])
         self.assertIs(AssessmentResult.__table__, Base.metadata.tables["assessment_results"])
         self.assertIs(LessonProgress.__table__, Base.metadata.tables["lesson_progress"])
+        self.assertIs(Activity.__table__, Base.metadata.tables["activities"])
 
     def test_initial_migration_has_upgrade_and_downgrade(self):
         migration = load_module(
@@ -129,6 +131,15 @@ class MigrationFoundationTests(unittest.TestCase):
             ROOT / "alembic" / "versions" / "0005_education_learning_core.py",
         )
         self.assertEqual(migration.down_revision, "0004_education_core")
+        self.assertTrue(callable(migration.upgrade))
+        self.assertTrue(callable(migration.downgrade))
+
+    def test_platform_infrastructure_migration_follows_institution_memberships(self):
+        migration = load_module(
+            "me_you_platform_infrastructure_migration",
+            ROOT / "alembic" / "versions" / "0007_platform_infrastructure.py",
+        )
+        self.assertEqual(migration.down_revision, "0006_institution_memberships")
         self.assertTrue(callable(migration.upgrade))
         self.assertTrue(callable(migration.downgrade))
 

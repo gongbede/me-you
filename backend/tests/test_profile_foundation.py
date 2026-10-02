@@ -2,29 +2,36 @@ import uuid
 from datetime import datetime, timedelta, timezone
 import unittest
 
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
 from fastapi.security import HTTPAuthorizationCredentials
 from pwdlib import PasswordHash
 
 from app.models import Profile, User
+from app.database import get_postgres_session
 from app.routes.account import get_my_account
 from app.routes.login import login
 from app.routes.me import get_me
-from app.routes.profile import create_profile, get_my_profile, update_my_profile
+from app.routes.profile import create_profile, get_my_profile, get_user_profile, router as profile_router, update_my_profile
 from app.routes.registration import register
 from app.schemas import CreateProfile, LoginRequest, UpdateProfile, UserCreate
 from app.security import create_access_token, decode_access_token, get_current_postgres_user
 
 
 class FakeSession:
-    def __init__(self, scalar_values=None):
+    def __init__(self, scalar_values=None, scalar_rows=None):
         self.scalar_values = list(scalar_values or [])
+        self.scalar_rows = list(scalar_rows or [])
         self.pending = None
         self.profiles = {}
         self.rollback_count = 0
 
     async def scalar(self, _statement):
         return self.scalar_values.pop(0) if self.scalar_values else None
+
+    async def scalars(self, _statement):
+        values = self.scalar_rows.pop(0) if self.scalar_rows else []
+        return type("Result", (), {"all": lambda _self: values})()
 
     def add(self, value):
         self.pending = value
@@ -158,6 +165,93 @@ class ProfileFoundationTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(HTTPException) as missing_error:
             await get_my_profile(self.user, FakeSession([None]))
         self.assertEqual(missing_error.exception.status_code, 404)
+
+    async def test_profile_discovery_requires_authentication(self):
+        test_app = FastAPI()
+        test_app.include_router(profile_router)
+
+        async def override_database():
+            yield FakeSession()
+
+        test_app.dependency_overrides[get_postgres_session] = override_database
+        with TestClient(test_app) as client:
+            response = client.get(f"/users/{self.user.id}/profile")
+        test_app.dependency_overrides.clear()
+        self.assertEqual(response.status_code, 401)
+
+    async def test_profile_discovery_returns_only_approved_fields_for_shared_member(self):
+        target_user = User(id=uuid.uuid4(), username="target", email="target@example.com", password_hash="secret-hash")
+        target_profile = Profile(
+            user_id=target_user.id,
+            display_name="Target",
+            bio="A short bio",
+            profile_picture_url="https://example.com/avatar.png",
+            location="Town",
+            website="https://example.com",
+        )
+        institution_a = uuid.uuid4()
+        institution_b = uuid.uuid4()
+        session = FakeSession(
+            scalar_values=[target_user, target_profile],
+            scalar_rows=[[institution_a, institution_b], [institution_b]],
+        )
+
+        response = await get_user_profile(target_user.id, self.user, session)
+
+        self.assertEqual(
+            set(response),
+            {
+                "user_id",
+                "display_name",
+                "bio",
+                "profile_picture_url",
+                "location",
+                "website",
+            },
+        )
+        self.assertEqual(response["user_id"], str(target_user.id))
+        self.assertEqual(response["display_name"], "Target")
+        self.assertNotIn("email", response)
+        self.assertNotIn("password_hash", response)
+        self.assertNotIn("institution_id", response)
+        self.assertNotIn("role", response)
+        self.assertNotIn("memberships", response)
+
+    async def test_profile_discovery_hides_missing_and_cross_institution_targets(self):
+        with self.assertRaises(HTTPException) as missing_user_error:
+            await get_user_profile(uuid.uuid4(), self.user, FakeSession([None]))
+        self.assertEqual(missing_user_error.exception.status_code, 404)
+
+        target_user = User(id=uuid.uuid4(), username="target", email="target@example.com", password_hash="hash")
+        missing_profile_session = FakeSession(
+            scalar_values=[target_user, None],
+            scalar_rows=[[uuid.uuid4()], [uuid.uuid4()]],
+        )
+        with self.assertRaises(HTTPException) as missing_profile_error:
+            await get_user_profile(target_user.id, self.user, missing_profile_session)
+        self.assertEqual(missing_profile_error.exception.status_code, 404)
+
+        cross_institution_session = FakeSession(
+            scalar_values=[target_user],
+            scalar_rows=[[uuid.uuid4()], [uuid.uuid4()]],
+        )
+        with self.assertRaises(HTTPException) as cross_institution_error:
+            await get_user_profile(target_user.id, self.user, cross_institution_session)
+        self.assertEqual(cross_institution_error.exception.status_code, 404)
+        self.assertEqual(cross_institution_session.scalar_values, [])
+
+    async def test_profile_discovery_allows_any_shared_membership(self):
+        target_user = User(id=uuid.uuid4(), username="target", email="target@example.com", password_hash="hash")
+        target_profile = Profile(user_id=target_user.id, display_name="Target")
+        shared_institution = uuid.uuid4()
+        session = FakeSession(
+            scalar_values=[target_user, target_profile],
+            scalar_rows=[[uuid.uuid4(), shared_institution], [shared_institution, uuid.uuid4()]],
+        )
+
+        response = await get_user_profile(target_user.id, self.user, session)
+
+        self.assertEqual(response["display_name"], "Target")
 
     async def test_profile_partial_update_changes_updated_at(self):
         old_timestamp = datetime.now(timezone.utc) - timedelta(minutes=1)
