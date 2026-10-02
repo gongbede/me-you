@@ -3,8 +3,10 @@ import os
 import unittest
 import uuid
 from datetime import datetime, timezone
+from unittest.mock import AsyncMock
 
 from fastapi import HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import validate_jwt_secret
 from app.models import ConversationMember, Course, Department, Faculty, Institution, Student, Teacher, User
@@ -12,14 +14,19 @@ from app.permissions import require_institution_admin, require_institution_membe
 from app.routes.education import create_enrollment
 from app.routes.education_learning import assign_teacher
 from app.routes.institutions import (
+    add_member,
     get_course,
     get_department,
     get_faculty,
     get_institution,
+    get_member,
     list_courses,
     list_departments,
     list_faculties,
     list_institutions,
+    list_members,
+    remove_member,
+    update_member_role,
 )
 from app.routes.messages import mark_read
 
@@ -40,11 +47,22 @@ class HardeningSession:
     async def commit(self):
         return None
 
+    async def delete(self, _value):
+        return None
+
     async def refresh(self, _value):
         return None
 
     async def rollback(self):
         return None
+
+
+class ScalarRows:
+    def __init__(self, values):
+        self.values = values
+
+    def all(self):
+        return self.values
 
 
 class SecurityHardeningTests(unittest.IsolatedAsyncioTestCase):
@@ -131,6 +149,76 @@ class SecurityHardeningTests(unittest.IsolatedAsyncioTestCase):
             await require_institution_admin(self.user.id, self.institution_b.id, session)
         with self.assertRaises(HTTPException):
             await require_institution_membership(self.user.id, uuid.uuid4(), session)
+
+    async def test_member_management_requires_same_institution_and_last_admin_protection(self):
+        target_user = User(id=uuid.uuid4(), username="charlie", email="charlie@example.com", password_hash="hash")
+        admin_membership = type("Membership", (), {"id": uuid.uuid4(), "user_id": self.user.id, "institution_id": self.institution_a.id, "role": "ADMIN"})()
+        target_membership = type("Membership", (), {"id": uuid.uuid4(), "user_id": target_user.id, "institution_id": self.institution_a.id, "role": "STUDENT"})()
+
+        list_session = HardeningSession(scalar_values=[admin_membership], scalars_values=[[admin_membership, target_membership]])
+        members = await list_members(self.institution_a.id, self.user, list_session)
+        self.assertEqual(len(members), 2)
+
+        get_session = HardeningSession(scalar_values=[admin_membership, target_membership], scalars_values=[])
+        member = await get_member(self.institution_a.id, target_membership.id, self.user, get_session)
+        self.assertEqual(member["id"], str(target_membership.id))
+
+        update_session = HardeningSession(scalar_values=[admin_membership, target_membership, 1], scalars_values=[])
+        updated = await update_member_role(self.institution_a.id, target_membership.id, {"role": "ADMIN"}, self.user, update_session)
+        self.assertEqual(updated["role"], "ADMIN")
+
+        final_admin = type("Membership", (), {"id": uuid.uuid4(), "user_id": self.user.id, "institution_id": self.institution_a.id, "role": "ADMIN"})()
+        remove_session = HardeningSession(scalar_values=[admin_membership, final_admin, 1], scalars_values=[[final_admin]])
+        with self.assertRaises(HTTPException):
+            await remove_member(self.institution_a.id, final_admin.id, self.user, remove_session)
+
+    async def test_same_institution_admin_counting_ignores_other_institutions(self):
+        admin_a = type("Membership", (), {"id": uuid.uuid4(), "user_id": self.user.id, "institution_id": self.institution_a.id, "role": "ADMIN"})()
+        admin_b = type("Membership", (), {"id": uuid.uuid4(), "user_id": self.other.id, "institution_id": self.institution_a.id, "role": "ADMIN"})()
+        admin_other = type("Membership", (), {"id": uuid.uuid4(), "user_id": self.other.id, "institution_id": self.institution_b.id, "role": "ADMIN"})()
+        session = HardeningSession(scalar_values=[admin_a, admin_b], scalars_values=[[admin_a, admin_b, admin_other]])
+        updated = await update_member_role(self.institution_a.id, admin_b.id, {"role": "TEACHER"}, self.user, session)
+        self.assertEqual(updated["role"], "TEACHER")
+
+    async def test_member_mutation_reuses_autobegun_async_session_transaction(self):
+        admin_membership = type("Membership", (), {"id": uuid.uuid4(), "user_id": self.user.id, "institution_id": self.institution_a.id, "role": "ADMIN"})()
+        target_membership = type("Membership", (), {"id": uuid.uuid4(), "user_id": self.other.id, "institution_id": self.institution_a.id, "role": "ADMIN"})()
+        session = AsyncSession()
+        session.sync_session._autobegin_t()
+        session.scalar = AsyncMock(side_effect=[admin_membership, target_membership])
+        session.scalars = AsyncMock(return_value=ScalarRows([admin_membership, target_membership]))
+        session.refresh = AsyncMock()
+
+        updated = await update_member_role(
+            self.institution_a.id,
+            target_membership.id,
+            {"role": "TEACHER"},
+            self.user,
+            session,
+        )
+
+        self.assertEqual(updated["role"], "TEACHER")
+        self.assertFalse(session.in_transaction())
+        self.assertEqual(session.scalars.await_count, 1)
+        await session.close()
+
+    async def test_autobegun_async_session_still_rejects_removing_final_admin(self):
+        admin_membership = type("Membership", (), {"id": uuid.uuid4(), "user_id": self.user.id, "institution_id": self.institution_a.id, "role": "ADMIN"})()
+        final_admin = type("Membership", (), {"id": uuid.uuid4(), "user_id": self.other.id, "institution_id": self.institution_a.id, "role": "ADMIN"})()
+        session = AsyncSession()
+        session.sync_session._autobegin_t()
+        session.scalar = AsyncMock(side_effect=[admin_membership, final_admin])
+        session.scalars = AsyncMock(return_value=ScalarRows([final_admin]))
+        session.delete = AsyncMock()
+
+        with self.assertRaises(HTTPException) as error:
+            await remove_member(self.institution_a.id, final_admin.id, self.user, session)
+
+        self.assertEqual(error.exception.status_code, 409)
+        session.delete.assert_not_awaited()
+        self.assertFalse(session.in_transaction())
+        self.assertEqual(session.scalars.await_count, 1)
+        await session.close()
 
     def test_production_secret_validation_requires_real_secret(self):
         module = importlib.import_module("app.config")

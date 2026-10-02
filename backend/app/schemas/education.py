@@ -34,6 +34,24 @@ class InstitutionResponse(BaseModel):
     updated_at: datetime
 
 
+class InstitutionMembershipCreate(BaseModel):
+    user_id: str
+    role: Literal["ADMIN", "TEACHER", "STUDENT"]
+
+
+class InstitutionMembershipUpdate(BaseModel):
+    role: Literal["ADMIN", "TEACHER", "STUDENT"]
+
+
+class InstitutionMembershipResponse(BaseModel):
+    id: str
+    user_id: str
+    institution_id: str
+    role: str
+    created_at: datetime
+    updated_at: datetime
+
+
 class FacultyCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=4000)

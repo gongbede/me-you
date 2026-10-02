@@ -11,6 +11,7 @@ from .routes.conversations import router as conversations_router
 from .routes.education import router as education_router
 from .routes.education_learning import router as education_learning_router
 from .routes.follows import router as follows_router
+from .routes.institutions import router as institutions_router
 from .routes.login import router as login_router
 from .routes.likes import router as likes_router
 from .routes.me import router as me_router
@@ -43,6 +44,7 @@ app.include_router(conversations_router)
 app.include_router(messages_router)
 app.include_router(education_router)
 app.include_router(education_learning_router)
+app.include_router(institutions_router)
 
 
 def main():
