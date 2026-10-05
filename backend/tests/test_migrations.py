@@ -16,6 +16,7 @@ from app.models import (
     Department,
     Enrollment,
     Exercise,
+    ExerciseSubmission,
     Faculty,
     Follow,
     Message,
@@ -27,6 +28,8 @@ from app.models import (
     InstitutionMembership,
     Lesson,
     LessonProgress,
+    LoginThrottle,
+    MediaAsset,
     Student,
     Teacher,
     User,
@@ -58,8 +61,8 @@ class MigrationFoundationTests(unittest.TestCase):
                 "notifications", "conversations", "conversation_members", "messages",
                 "institutions", "institution_memberships", "faculties", "departments",
                 "courses", "teachers", "students", "enrollments",
-                "course_teachers", "lessons", "exercises", "assessments",
-                "assessment_submissions", "assessment_results", "lesson_progress", "activities",
+                "course_teachers", "lessons", "exercises", "exercise_submissions", "assessments",
+                "assessment_submissions", "assessment_results", "lesson_progress", "activities", "login_throttles", "media_assets",
             },
         )
         self.assertIs(User.__table__, Base.metadata.tables["users"])
@@ -70,6 +73,10 @@ class MigrationFoundationTests(unittest.TestCase):
         self.assertIs(Follow.__table__, Base.metadata.tables["follows"])
         self.assertIs(Notification.__table__, Base.metadata.tables["notifications"])
         self.assertIs(Conversation.__table__, Base.metadata.tables["conversations"])
+        self.assertIn(
+            "ix_conversations_created_by_id",
+            {index.name for index in Conversation.__table__.indexes},
+        )
         self.assertIs(ConversationMember.__table__, Base.metadata.tables["conversation_members"])
         self.assertIs(Message.__table__, Base.metadata.tables["messages"])
         self.assertIs(Institution.__table__, Base.metadata.tables["institutions"])
@@ -83,10 +90,13 @@ class MigrationFoundationTests(unittest.TestCase):
         self.assertIs(CourseTeacher.__table__, Base.metadata.tables["course_teachers"])
         self.assertIs(Lesson.__table__, Base.metadata.tables["lessons"])
         self.assertIs(Exercise.__table__, Base.metadata.tables["exercises"])
+        self.assertIs(ExerciseSubmission.__table__, Base.metadata.tables["exercise_submissions"])
         self.assertIs(Assessment.__table__, Base.metadata.tables["assessments"])
         self.assertIs(AssessmentSubmission.__table__, Base.metadata.tables["assessment_submissions"])
         self.assertIs(AssessmentResult.__table__, Base.metadata.tables["assessment_results"])
         self.assertIs(LessonProgress.__table__, Base.metadata.tables["lesson_progress"])
+        self.assertIs(LoginThrottle.__table__, Base.metadata.tables["login_throttles"])
+        self.assertIs(MediaAsset.__table__, Base.metadata.tables["media_assets"])
         self.assertIs(Activity.__table__, Base.metadata.tables["activities"])
 
     def test_initial_migration_has_upgrade_and_downgrade(self):
@@ -140,6 +150,42 @@ class MigrationFoundationTests(unittest.TestCase):
             ROOT / "alembic" / "versions" / "0007_platform_infrastructure.py",
         )
         self.assertEqual(migration.down_revision, "0006_institution_memberships")
+        self.assertTrue(callable(migration.upgrade))
+        self.assertTrue(callable(migration.downgrade))
+
+    def test_exercise_submissions_migration_follows_platform_infrastructure(self):
+        migration = load_module(
+            "me_you_exercise_submissions_migration",
+            ROOT / "alembic" / "versions" / "0008_exercise_submissions.py",
+        )
+        self.assertEqual(migration.down_revision, "0007_platform_infrastructure")
+        self.assertTrue(callable(migration.upgrade))
+        self.assertTrue(callable(migration.downgrade))
+
+    def test_account_security_migration_follows_exercise_submissions(self):
+        migration = load_module(
+            "me_you_account_security_migration",
+            ROOT / "alembic" / "versions" / "0009_account_security.py",
+        )
+        self.assertEqual(migration.down_revision, "0008_exercise_submissions")
+        self.assertTrue(callable(migration.upgrade))
+        self.assertTrue(callable(migration.downgrade))
+
+    def test_conversation_ownership_migration_follows_account_security(self):
+        migration = load_module(
+            "me_you_conversation_ownership_migration",
+            ROOT / "alembic" / "versions" / "0010_conversation_ownership.py",
+        )
+        self.assertEqual(migration.down_revision, "0009_account_security")
+        self.assertTrue(callable(migration.upgrade))
+        self.assertTrue(callable(migration.downgrade))
+
+    def test_media_assets_migration_follows_conversation_ownership(self):
+        migration = load_module(
+            "me_you_media_assets_migration",
+            ROOT / "alembic" / "versions" / "0011_media_assets.py",
+        )
+        self.assertEqual(migration.down_revision, "0010_conversation_ownership")
         self.assertTrue(callable(migration.upgrade))
         self.assertTrue(callable(migration.downgrade))
 

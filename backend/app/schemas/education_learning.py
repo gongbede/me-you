@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, field_validator
 
 ExerciseType = Literal["PRACTICE", "WRITTEN", "PROJECT", "OTHER"]
 SubmissionStatus = Literal["DRAFT", "SUBMITTED", "GRADED"]
+StudentSubmissionStatus = Literal["DRAFT", "SUBMITTED"]
 
 
 def non_blank(value: str) -> str:
@@ -86,6 +87,30 @@ class ExerciseResponse(BaseModel):
     updated_at: datetime
 
 
+class ExerciseSubmissionCreate(BaseModel):
+    attempt_number: int = Field(ge=1)
+    answer_text: str = Field(min_length=1, max_length=50000)
+    _answer_not_blank = field_validator("answer_text")(non_blank)
+
+
+class ExerciseSubmissionReview(BaseModel):
+    feedback: str | None = Field(default=None, max_length=20000)
+
+
+class ExerciseSubmissionResponse(BaseModel):
+    id: str
+    exercise_id: str
+    student_id: str
+    attempt_number: int
+    answer_text: str
+    feedback: str | None
+    reviewer_id: str | None
+    submitted_at: datetime
+    reviewed_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
 class AssessmentCreate(BaseModel):
     title: str = Field(min_length=1, max_length=300)
     instructions: str = Field(min_length=1, max_length=20000)
@@ -118,13 +143,13 @@ class AssessmentResponse(BaseModel):
 
 class SubmissionCreate(BaseModel):
     answer_text: str = Field(min_length=1, max_length=50000)
-    status: SubmissionStatus = "SUBMITTED"
+    status: StudentSubmissionStatus = "SUBMITTED"
     _answer_not_blank = field_validator("answer_text")(non_blank)
 
 
 class SubmissionUpdate(BaseModel):
     answer_text: str | None = Field(default=None, min_length=1, max_length=50000)
-    status: SubmissionStatus | None = None
+    status: StudentSubmissionStatus | None = None
     _answer_not_blank = field_validator("answer_text")(lambda value: non_blank(value) if value is not None else value)
 
 

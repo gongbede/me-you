@@ -28,6 +28,14 @@ class CreateGroupConversation(BaseModel):
     _name_not_blank = field_validator("name")(non_blank)
 
 
+class AddConversationMember(BaseModel):
+    user_id: str
+
+
+class TransferConversationOwnership(BaseModel):
+    user_id: str
+
+
 class ConversationMemberResponse(BaseModel):
     user: UserSummary
     joined_at: datetime

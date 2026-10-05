@@ -14,8 +14,11 @@ from .follow import Follow
 from .institution import Institution
 from .institution_membership import InstitutionMembership
 from .exercise import Exercise
+from .exercise_submission import ExerciseSubmission
 from .lesson import Lesson
 from .lesson_progress import LessonProgress
+from .login_throttle import LoginThrottle
+from .media_asset import MediaAsset
 from .message import Message
 from .student import Student
 from .teacher import Teacher
@@ -42,8 +45,11 @@ __all__ = [
 			"Institution",
 			"InstitutionMembership",
 			"Exercise",
+			"ExerciseSubmission",
 			"Lesson",
 			"LessonProgress",
+			"LoginThrottle",
+			"MediaAsset",
 		"Message",
 	"Follow",
 	"Notification",

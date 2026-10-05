@@ -38,7 +38,11 @@ async def get_message(message_id: uuid.UUID, database: AsyncSession) -> Message:
 @router.post("/conversations/{conversation_id}/messages", response_model=MessageResponse, status_code=status.HTTP_201_CREATED, summary="Send a message")
 async def send_message(conversation_id: uuid.UUID, data: CreateMessage, current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session)):
     await require_member(conversation_id, current_user.id, database)
-    conversation = await database.scalar(select(Conversation).where(Conversation.id == conversation_id))
+    conversation = await database.scalar(
+        select(Conversation).where(Conversation.id == conversation_id).with_for_update()
+    )
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
     message = Message(conversation_id=conversation_id, sender_id=current_user.id, sender=current_user, content=data.content)
     database.add(message)
     member_ids = list((await database.scalars(select(ConversationMember.user_id).where(ConversationMember.conversation_id == conversation_id, ConversationMember.user_id != current_user.id))).all())
@@ -60,6 +64,11 @@ async def list_messages(conversation_id: uuid.UUID, current_user: User = Depends
 @router.post("/conversations/{conversation_id}/read", response_model=ReadStateResponse, summary="Mark a conversation as read")
 async def mark_read(conversation_id: uuid.UUID, current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session)):
     membership = await require_member(conversation_id, current_user.id, database)
+    await database.scalar(
+        select(Conversation.id)
+        .where(Conversation.id == conversation_id)
+        .with_for_update()
+    )
     previous_read_at = membership.last_read_at
     unread = await database.scalar(
         select(func.count(Message.id)).where(

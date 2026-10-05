@@ -7,14 +7,27 @@ from fastapi.testclient import TestClient
 from fastapi.security import HTTPAuthorizationCredentials
 from pwdlib import PasswordHash
 
-from app.models import Profile, User
+from app.models import LoginThrottle, Profile, User
 from app.database import get_postgres_session
-from app.routes.account import get_my_account
-from app.routes.login import login
+from app.routes.account import (
+    change_my_password,
+    deactivate_account,
+    get_my_account,
+    revoke_account_sessions,
+    router as account_router,
+)
+from app.routes.login import login, login_subject_hash
 from app.routes.me import get_me
 from app.routes.profile import create_profile, get_my_profile, get_user_profile, router as profile_router, update_my_profile
 from app.routes.registration import register
-from app.schemas import CreateProfile, LoginRequest, UpdateProfile, UserCreate
+from app.schemas import (
+    CreateProfile,
+    LoginRequest,
+    PasswordChangeRequest,
+    PasswordConfirmationRequest,
+    UpdateProfile,
+    UserCreate,
+)
 from app.security import create_access_token, decode_access_token, get_current_postgres_user
 
 
@@ -25,8 +38,10 @@ class FakeSession:
         self.pending = None
         self.profiles = {}
         self.rollback_count = 0
+        self.statements = []
 
     async def scalar(self, _statement):
+        self.statements.append(_statement)
         return self.scalar_values.pop(0) if self.scalar_values else None
 
     async def scalars(self, _statement):
@@ -54,6 +69,24 @@ class FakeSession:
     async def rollback(self):
         self.rollback_count += 1
 
+    async def delete(self, _value):
+        return None
+
+
+class PasswordSession:
+    def __init__(self):
+        self.committed = False
+        self.rollback_count = 0
+
+    async def commit(self):
+        self.committed = True
+
+    async def rollback(self):
+        self.rollback_count += 1
+
+    async def scalars(self, _statement):
+        return type("Rows", (), {"all": lambda _self: []})()
+
 
 class ProfileFoundationTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
@@ -80,7 +113,7 @@ class ProfileFoundationTests(unittest.IsolatedAsyncioTestCase):
 
         login_response = await login(
             LoginRequest(email=self.user.email, password="correct-password"),
-            FakeSession([self.user]),
+            FakeSession([None, self.user]),
         )
         self.assertEqual(login_response["token_type"], "bearer")
         self.assertEqual(login_response["id"], str(self.user.id))
@@ -303,6 +336,105 @@ class ProfileFoundationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response["email"], self.user.email)
         self.assertNotIn("password_hash", response)
         self.assertNotIn("JWT_SECRET_KEY", response)
+
+    async def test_password_change_verifies_old_secret_and_stores_only_a_hash(self):
+        original_hash = self.user.password_hash
+        session = PasswordSession()
+        response = await change_my_password(
+            PasswordChangeRequest(current_password="correct-password", new_password="new-password"),
+            self.user,
+            session,
+        )
+        self.assertEqual(response, {"message": "Password updated"})
+        self.assertTrue(session.committed)
+        self.assertNotEqual(self.user.password_hash, original_hash)
+        self.assertTrue(PasswordHash.recommended().verify("new-password", self.user.password_hash))
+
+        with self.assertRaises(HTTPException) as error:
+            await change_my_password(
+                PasswordChangeRequest(current_password="incorrect-password", new_password="other-password"),
+                self.user,
+                PasswordSession(),
+            )
+        self.assertEqual(error.exception.status_code, 400)
+
+    async def test_password_change_endpoint_requires_authentication(self):
+        test_app = FastAPI()
+        test_app.include_router(account_router)
+
+        async def override_database():
+            yield PasswordSession()
+
+        test_app.dependency_overrides[get_postgres_session] = override_database
+        with TestClient(test_app) as client:
+            response = client.put(
+                "/account/password",
+                json={"current_password": "correct-password", "new_password": "new-password"},
+            )
+        test_app.dependency_overrides.clear()
+        self.assertEqual(response.status_code, 401)
+
+    async def test_revoke_sessions_and_deactivation_require_password_and_invalidate_tokens(self):
+        old_token = create_access_token(self.user.id)
+        revoke_session = PasswordSession()
+        response = await revoke_account_sessions(
+            PasswordConfirmationRequest(current_password="correct-password"),
+            self.user,
+            revoke_session,
+        )
+        self.assertEqual(response["message"], "All account sessions have been revoked")
+        self.assertEqual(self.user.token_version, 1)
+        self.assertTrue(revoke_session.committed)
+        self.assertEqual(decode_access_token(old_token)["ver"], 0)
+
+        with self.assertRaises(HTTPException) as wrong_password:
+            await deactivate_account(
+                PasswordConfirmationRequest(current_password="incorrect-password"),
+                self.user,
+                PasswordSession(),
+            )
+        self.assertEqual(wrong_password.exception.status_code, 400)
+
+        deactivation_session = PasswordSession()
+        response = await deactivate_account(
+            PasswordConfirmationRequest(current_password="correct-password"),
+            self.user,
+            deactivation_session,
+        )
+        self.assertEqual(response["message"], "Account deactivated")
+        self.assertFalse(self.user.is_active)
+        self.assertEqual(self.user.token_version, 2)
+        self.assertTrue(deactivation_session.committed)
+
+    async def test_login_uses_hashed_subjects_and_persisted_throttle(self):
+        session = FakeSession([None, None, 1])
+        with self.assertRaises(HTTPException) as error:
+            await login(
+                LoginRequest(email="unknown@example.com", password="wrong-password"),
+                session,
+            )
+        self.assertEqual(error.exception.status_code, 401)
+        fingerprint = login_subject_hash(" Unknown@Example.com ")
+        self.assertEqual(len(fingerprint), 64)
+        self.assertNotEqual(fingerprint, "unknown@example.com")
+        throttle_sql = str(session.statements[-1].compile())
+        self.assertIn("ON CONFLICT", throttle_sql)
+        self.assertNotIn("unknown@example.com", str(session.statements[-1].compile().params))
+
+        blocked_attempt = LoginThrottle(
+            subject_hash=fingerprint,
+            failed_count=5,
+            window_started_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+        blocked_session = FakeSession([blocked_attempt])
+        with self.assertRaises(HTTPException) as blocked_error:
+            await login(
+                LoginRequest(email="unknown@example.com", password="wrong-password"),
+                blocked_session,
+            )
+        self.assertEqual(blocked_error.exception.status_code, 429)
+        self.assertEqual(len(blocked_session.statements), 1)
 
 
 if __name__ == "__main__":

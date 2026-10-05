@@ -10,9 +10,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import validate_jwt_secret
 from app.models import Activity, ConversationMember, Course, Department, Faculty, Institution, InstitutionMembership, Student, Teacher, User
-from app.permissions import require_institution_admin, require_institution_membership
+from app.permissions import (
+    ensure_account_can_be_deactivated,
+    require_course_teacher,
+    require_enrolled_student,
+    require_institution_admin,
+    require_institution_membership,
+)
 from app.routes.education import create_enrollment
-from app.routes.education_learning import assign_teacher
+from app.routes.education_learning import assign_teacher, list_course_teachers
 from app.routes.institutions import (
     add_member,
     get_course,
@@ -35,6 +41,7 @@ class HardeningSession:
     def __init__(self, scalar_values=None, scalars_values=None):
         self.scalar_values = list(scalar_values or [])
         self.scalars_values = list(scalars_values or [])
+        self.statements = []
         self.added = []
         self.deleted = []
 
@@ -46,10 +53,12 @@ class HardeningSession:
             if hasattr(value, "id") and value.id is None:
                 value.id = uuid.uuid4()
 
-    async def scalar(self, _statement):
+    async def scalar(self, statement):
+        self.statements.append(statement)
         return self.scalar_values.pop(0) if self.scalar_values else None
 
     async def scalars(self, _statement):
+        self.statements.append(_statement)
         if not self.scalars_values:
             return type("Result", (), {"all": lambda self: []})()
         return type("Result", (), {"all": lambda self, values=None: values or self._values, "_values": self.scalars_values.pop(0)})()
@@ -96,6 +105,57 @@ class SecurityHardeningTests(unittest.IsolatedAsyncioTestCase):
             await create_enrollment(type("Data", (), {"course_id": str(self.course_b.id)})(), self.user, session)
         self.assertEqual(error.exception.status_code, 403)
 
+    async def test_course_teacher_list_requires_course_institution_membership(self):
+        outsider_session = HardeningSession([self.institution_a.id, None])
+        with self.assertRaises(HTTPException) as error:
+            await list_course_teachers(self.course_a.id, self.user, outsider_session)
+        self.assertEqual(error.exception.status_code, 403)
+
+        member = type("Membership", (), {"institution_id": self.institution_a.id})()
+        member_session = HardeningSession(
+            [self.institution_a.id, member],
+            [[]],
+        )
+        self.assertEqual(await list_course_teachers(self.course_a.id, self.user, member_session), [])
+
+    async def test_shared_enrollment_helper_uses_course_and_institution_scope(self):
+        session = HardeningSession([None])
+        with self.assertRaises(HTTPException) as error:
+            await require_enrolled_student(self.course_a.id, self.user.id, session)
+        self.assertEqual(error.exception.status_code, 403)
+        query = str(session.statements[0].compile())
+        self.assertIn("enrollments.course_id", query)
+        self.assertIn("students.institution_id = faculties.institution_id", query)
+
+    async def test_shared_teacher_helper_enforces_course_institution(self):
+        session = HardeningSession([None])
+        with self.assertRaises(HTTPException) as error:
+            await require_course_teacher(self.course_a.id, self.other.id, session)
+        self.assertEqual(error.exception.status_code, 403)
+        query = str(session.statements[0].compile())
+        self.assertIn("teachers.institution_id = faculties.institution_id", query)
+
+    async def test_account_deactivation_cannot_strand_final_institution_admin(self):
+        class ScalarValuesSession:
+            def __init__(self, institution_id):
+                self.values = [[institution_id], [uuid.uuid4()]]
+                self.statements = []
+
+            async def scalars(self, statement):
+                self.statements.append(statement)
+                values = self.values.pop(0)
+                return ScalarRows(values)
+
+        session = ScalarValuesSession(self.institution_a.id)
+        with self.assertRaises(HTTPException) as error:
+            await ensure_account_can_be_deactivated(
+                self.user.id,
+                session,
+                is_platform_admin=False,
+            )
+        self.assertEqual(error.exception.status_code, 409)
+        self.assertIn("institution_memberships.role", str(session.statements[0].compile()))
+
     async def test_course_teacher_assignment_requires_same_institution(self):
         session = HardeningSession([self.institution_a.id, None, self.teacher_b])
         with self.assertRaises(HTTPException) as error:
@@ -109,7 +169,7 @@ class SecurityHardeningTests(unittest.IsolatedAsyncioTestCase):
     async def test_mark_read_uses_previous_timestamp(self):
         now = datetime.now(timezone.utc)
         membership = ConversationMember(conversation_id=uuid.uuid4(), user_id=self.user.id, last_read_at=now)
-        session = HardeningSession([membership, 2])
+        session = HardeningSession([membership, True, 2])
         response = await mark_read(membership.conversation_id, self.user, session)
         self.assertEqual(response["unread_count"], 2)
         self.assertIsNotNone(response["last_read_at"])

@@ -7,6 +7,9 @@ from .education_learning import (
 	CourseTeacherResponse,
 	ExerciseCreate,
 	ExerciseResponse,
+	ExerciseSubmissionCreate,
+	ExerciseSubmissionResponse,
+	ExerciseSubmissionReview,
 	ExerciseUpdate,
 	LessonCreate,
 	LessonProgressResponse,
@@ -39,6 +42,7 @@ from .education import (
 	TeacherResponse,
 )
 from .communication import (
+	AddConversationMember,
 	ConversationMemberResponse,
 	ConversationResponse,
 	CreateDirectConversation,
@@ -47,6 +51,7 @@ from .communication import (
 	MessageResponse,
 	ReadStateResponse,
 	UpdateMessage,
+	TransferConversationOwnership,
 )
 from .social import (
 	CommentResponse,
@@ -64,7 +69,23 @@ from .social import (
 )
 from .profile import CreateProfile, ProfileDiscoveryResponse, ProfileResponse, UpdateProfile
 from .platform import SearchResponse, SearchResult
-from .user import LoginRequest, LoginResponse, UserCreate, UserResponse
+from .administration import PlatformAdminUserResponse
+from .media import (
+	MediaAssetResponse,
+	MediaDownloadResponse,
+	MediaUploadIntentCreate,
+	MediaUploadIntentResponse,
+)
+from .user import (
+	LoginRequest,
+	LoginResponse,
+	AccountLifecycleResponse,
+	PasswordConfirmationRequest,
+	PasswordChangeRequest,
+	PasswordChangeResponse,
+	UserCreate,
+	UserResponse,
+)
 
 
 __all__ = [
@@ -78,6 +99,9 @@ __all__ = [
 		"DepartmentResponse",
 		"ExerciseCreate",
 		"ExerciseResponse",
+		"ExerciseSubmissionCreate",
+		"ExerciseSubmissionResponse",
+		"ExerciseSubmissionReview",
 		"ExerciseUpdate",
 		"EnrollmentCreate",
 		"EnrollmentResponse",
@@ -103,6 +127,7 @@ __all__ = [
 		"TeacherCreate",
 		"TeacherResponse",
 	"ConversationMemberResponse",
+	"AddConversationMember",
 	"ConversationResponse",
 	"CreateDirectConversation",
 	"CreateGroupConversation",
@@ -115,17 +140,27 @@ __all__ = [
 	"LikeResponse",
 	"LoginRequest",
 	"LoginResponse",
+	"AccountLifecycleResponse",
+	"PasswordConfirmationRequest",
+	"PasswordChangeRequest",
+	"PasswordChangeResponse",
 	"MessageResponse",
+	"MediaAssetResponse",
+	"MediaDownloadResponse",
+	"MediaUploadIntentCreate",
+	"MediaUploadIntentResponse",
 	"NotificationResponse",
 	"NotificationUnreadCountResponse",
 	"PostResponse",
 	"ProfileResponse",
+	"PlatformAdminUserResponse",
 	"ProfileDiscoveryResponse",
 	"ReadStateResponse",
 	"SearchResponse",
 	"SearchResult",
 	"UpdateComment",
 	"UpdateMessage",
+	"TransferConversationOwnership",
 	"UpdatePost",
 	"UpdateProfile",
 	"UserCreate",

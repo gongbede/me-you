@@ -17,11 +17,16 @@ password_hash = PasswordHash.recommended()
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
-def create_access_token(subject: int | str, expires_delta: timedelta | None = None) -> str:
+def create_access_token(
+	subject: int | str,
+	expires_delta: timedelta | None = None,
+	*,
+	token_version: int = 0,
+) -> str:
 	expires_at = datetime.now(timezone.utc) + (
 		expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
 	)
-	payload = {"sub": str(subject), "exp": expires_at}
+	payload = {"sub": str(subject), "ver": token_version, "exp": expires_at}
 	return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
 
 
@@ -102,7 +107,11 @@ async def get_current_postgres_user(
 		) from None
 
 	user = await database.scalar(select(User).where(User.id == user_id))
-	if user is None:
+	if (
+		user is None
+		or getattr(user, "is_active", True) is False
+		or payload.get("ver", 0) != (getattr(user, "token_version", 0) or 0)
+	):
 		raise HTTPException(
 			status_code=status.HTTP_401_UNAUTHORIZED,
 			detail="Invalid or expired access token",

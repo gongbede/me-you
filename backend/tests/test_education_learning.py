@@ -5,18 +5,24 @@ from decimal import Decimal
 
 from fastapi import HTTPException
 from pydantic import ValidationError
+from sqlalchemy.dialects import postgresql
 
-from app.models import Assessment, AssessmentSubmission, Course, Lesson, Student, Teacher, User
+from app.models import Assessment, AssessmentResult, AssessmentSubmission, Course, Exercise, ExerciseSubmission, Lesson, LessonProgress, Student, Teacher, User
 from app.routes.education_learning import (
     assign_teacher,
     create_assessment,
     create_lesson,
     create_submission,
     create_result,
+    delete_assessment,
+    delete_exercise,
+    delete_lesson,
     get_course_progress,
+    update_assessment,
     update_progress,
+    update_submission,
 )
-from app.schemas import AssessmentCreate, CourseTeacherCreate, LessonCreate, LessonProgressUpdate, SubmissionCreate
+from app.schemas import AssessmentCreate, AssessmentUpdate, CourseTeacherCreate, LessonCreate, LessonProgressUpdate, SubmissionCreate, SubmissionUpdate
 
 
 class Result:
@@ -32,9 +38,11 @@ class LearningSession:
         self.scalar_values = list(scalar_values or [])
         self.scalar_rows = list(scalar_rows or [])
         self.added = []
+        self.statements = []
         self.committed = False
 
-    async def scalar(self, _statement):
+    async def scalar(self, statement):
+        self.statements.append(statement)
         return self.scalar_values.pop(0) if self.scalar_values else None
 
     async def scalars(self, _statement):
@@ -57,6 +65,9 @@ class LearningSession:
         return None
 
     async def rollback(self):
+        return None
+
+    async def delete(self, _value):
         return None
 
 
@@ -106,6 +117,123 @@ class EducationLearningTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(HTTPException) as error:
             await create_submission(due.id, SubmissionCreate(answer_text="late"), self.student_user, LearningSession([due, self.student]))
         self.assertEqual(error.exception.status_code, 422)
+
+    async def test_students_cannot_mark_assessments_graded_or_submit_drafts_late(self):
+        with self.assertRaises(ValidationError):
+            SubmissionCreate(answer_text="answer", status="GRADED")
+
+        draft = AssessmentSubmission(
+            id=uuid.uuid4(),
+            assessment_id=self.assessment.id,
+            student_id=self.student.id,
+            answer_text="draft",
+            status="DRAFT",
+        )
+        late_assessment = Assessment(
+            id=self.assessment.id,
+            course_id=self.course.id,
+            title="Quiz",
+            instructions="Answer",
+            max_score=Decimal("10.00"),
+            is_published=True,
+            due_at=datetime.now(timezone.utc) - timedelta(minutes=1),
+        )
+        with self.assertRaises(HTTPException) as error:
+            await update_submission(
+                draft.id,
+                SubmissionUpdate(status="SUBMITTED"),
+                self.student_user,
+                LearningSession([draft, self.student, late_assessment]),
+            )
+        self.assertEqual(error.exception.status_code, 422)
+
+    async def test_teacher_cannot_grade_a_draft_assessment_submission(self):
+        draft = AssessmentSubmission(
+            id=uuid.uuid4(),
+            assessment_id=self.assessment.id,
+            student_id=self.student.id,
+            status="DRAFT",
+        )
+        with self.assertRaises(HTTPException) as error:
+            await create_result(
+                draft.id,
+                type("ResultInput", (), {"score": Decimal("1"), "feedback": None})(),
+                self.user,
+                LearningSession([draft, self.assessment, self.teacher]),
+            )
+        self.assertEqual(error.exception.status_code, 409)
+
+    async def test_existing_learning_records_block_parent_deletion_and_score_invalidation(self):
+        exercise = Exercise(id=uuid.uuid4(), lesson_id=self.lesson.id, title="Exercise", instructions="Do it", exercise_type="WRITTEN")
+        attempt = ExerciseSubmission(id=uuid.uuid4(), exercise_id=exercise.id, student_id=self.student.id, attempt_number=1, answer_text="answer")
+        with self.assertRaises(HTTPException) as exercise_error:
+            await delete_exercise(
+                exercise.id,
+                self.user,
+                LearningSession([exercise, self.lesson, self.teacher, attempt.id]),
+            )
+        self.assertEqual(exercise_error.exception.status_code, 409)
+
+        progress = LessonProgress(id=uuid.uuid4(), student_id=self.student.id, lesson_id=self.lesson.id)
+        with self.assertRaises(HTTPException) as lesson_error:
+            await delete_lesson(
+                self.lesson.id,
+                self.user,
+                LearningSession([self.lesson, self.teacher, progress.id]),
+            )
+        self.assertEqual(lesson_error.exception.status_code, 409)
+
+        with self.assertRaises(HTTPException) as assessment_delete_error:
+            await delete_assessment(
+                self.assessment.id,
+                self.user,
+                LearningSession([self.assessment, self.teacher, uuid.uuid4()]),
+            )
+        self.assertEqual(assessment_delete_error.exception.status_code, 409)
+
+        with self.assertRaises(HTTPException) as score_error:
+            await update_assessment(
+                self.assessment.id,
+                AssessmentUpdate(max_score=Decimal("5.00")),
+                self.user,
+                LearningSession([self.assessment, self.teacher, uuid.uuid4()]),
+            )
+        self.assertEqual(score_error.exception.status_code, 409)
+
+    async def test_submitted_assessment_answer_must_remain_nonblank(self):
+        draft = AssessmentSubmission(
+            id=uuid.uuid4(), assessment_id=self.assessment.id, student_id=self.student.id,
+            answer_text="draft", status="DRAFT",
+        )
+        with self.assertRaises(HTTPException) as error:
+            await update_submission(
+                draft.id,
+                SubmissionUpdate(answer_text=None, status="SUBMITTED"),
+                self.student_user,
+                LearningSession([draft, self.student, self.assessment]),
+            )
+        self.assertEqual(error.exception.status_code, 422)
+
+    async def test_progress_upsert_is_safe_for_concurrent_first_completion(self):
+        progress = LessonProgress(
+            id=uuid.uuid4(),
+            student_id=self.student.id,
+            lesson_id=self.lesson.id,
+            completed=True,
+            completed_at=datetime.now(timezone.utc),
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+        session = LearningSession([self.lesson, self.student, progress])
+        response = await update_progress(
+            self.lesson.id,
+            LessonProgressUpdate(completed=True),
+            self.student_user,
+            session,
+        )
+        self.assertEqual(response["id"], str(progress.id))
+        sql = str(session.statements[-1].compile(dialect=postgresql.dialect()))
+        self.assertIn("ON CONFLICT (student_id, lesson_id) DO UPDATE", sql)
 
     async def test_result_rejects_score_above_maximum(self):
         submission = AssessmentSubmission(id=uuid.uuid4(), assessment_id=self.assessment.id, student_id=self.student.id, status="SUBMITTED")

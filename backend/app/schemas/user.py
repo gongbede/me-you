@@ -14,6 +14,23 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=8, max_length=128)
 
 
+class PasswordChangeRequest(BaseModel):
+    current_password: str = Field(min_length=8, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class PasswordChangeResponse(BaseModel):
+    message: str
+
+
+class PasswordConfirmationRequest(BaseModel):
+    current_password: str = Field(min_length=8, max_length=128)
+
+
+class AccountLifecycleResponse(BaseModel):
+    message: str
+
+
 class LoginResponse(BaseModel):
     message: str
     access_token: str
