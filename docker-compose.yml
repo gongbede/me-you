@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: me_you
+      POSTGRES_USER: me_you
+      POSTGRES_PASSWORD: placeholder-local-password
+    ports:
+      - "5432:5432"
+    volumes:
+      - me_you_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U me_you -d me_you"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+volumes:
+  me_you_postgres_data:
