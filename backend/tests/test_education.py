@@ -16,13 +16,15 @@ from app.models import User
 class EducationSession:
     def __init__(self, scalar_values=None, commit_error=None):
         self.scalar_values = list(scalar_values or [])
+        self.statements = []
         self.added = []
         self.added_history = []
         self.committed = False
         self.commit_error = commit_error
         self.rolled_back = False
 
-    async def scalar(self, _statement):
+    async def scalar(self, statement):
+        self.statements.append(statement)
         return self.scalar_values.pop(0) if self.scalar_values else None
 
     async def scalars(self, _statement):
@@ -125,9 +127,13 @@ class EducationCoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(student_result["user_id"], str(self.user.id))
 
     async def test_enrollment_requires_current_student(self):
-        result = await create_enrollment(EnrollmentCreate(course_id=str(self.course.id)), self.user, EducationSession([self.course, self.institution.id, self.student]))
+        session = EducationSession([self.course, self.institution.id, self.student])
+        result = await create_enrollment(EnrollmentCreate(course_id=str(self.course.id)), self.user, session)
         self.assertEqual(result["student_id"], str(self.student.id))
         self.assertEqual(result["course_id"], str(self.course.id))
+        membership_query = str(session.statements[2].compile()).lower()
+        self.assertIn("institution_memberships.role", membership_query)
+        self.assertIn("users.is_active", membership_query)
 
         with self.assertRaises(HTTPException) as error:
             await create_enrollment(EnrollmentCreate(course_id=str(uuid.uuid4())), self.user, EducationSession([None]))

@@ -115,6 +115,8 @@ class ExerciseSubmissionTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("answer", str(notification.payload))
         authorization_sql = str(session.statements[2].compile())
         self.assertIn("students.institution_id = faculties.institution_id", authorization_sql)
+        self.assertIn("institution_memberships.role", authorization_sql)
+        self.assertIn("users.is_active", authorization_sql)
 
     async def test_submission_requires_published_exercise_and_course_enrollment(self):
         with self.assertRaises(HTTPException) as missing_error:
@@ -164,12 +166,16 @@ class ExerciseSubmissionTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(any(isinstance(value, Activity) for value in session.added))
 
     async def test_students_only_read_their_own_attempts_and_teachers_can_review(self):
-        owner_session = ExerciseSession([self.attempt, self.student.id])
+        owner_session = ExerciseSession(
+            [self.attempt, self.exercise, self.lesson, self.student.id, self.student]
+        )
         own_response = await get_exercise_submission(self.attempt.id, self.student_user, owner_session)
         self.assertEqual(own_response["id"], str(self.attempt.id))
+        self.assertIn("institution_memberships.role", str(owner_session.statements[4].compile()))
+        self.assertIn("users.is_active", str(owner_session.statements[4].compile()))
 
         other_user = User(id=uuid.uuid4(), username="other", email="other@example.com", password_hash="hash")
-        forbidden = ExerciseSession([self.attempt, None, self.exercise, self.lesson, None])
+        forbidden = ExerciseSession([self.attempt, self.exercise, self.lesson, None, None])
         with self.assertRaises(HTTPException) as access_error:
             await get_exercise_submission(self.attempt.id, other_user, forbidden)
         self.assertEqual(access_error.exception.status_code, 403)
@@ -187,6 +193,9 @@ class ExerciseSubmissionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reviewed["reviewer_id"], str(self.teacher_user.id))
         self.assertIsNotNone(reviewed["reviewed_at"])
         self.assertTrue(any(isinstance(value, Notification) for value in review_session.added))
+        teacher_authorization_sql = str(review_session.statements[3].compile())
+        self.assertIn("institution_memberships.role", teacher_authorization_sql)
+        self.assertIn("users.is_active", teacher_authorization_sql)
 
     async def test_list_scope_and_teacher_access(self):
         own_session = ExerciseSession(
@@ -195,6 +204,9 @@ class ExerciseSubmissionTests(unittest.IsolatedAsyncioTestCase):
         )
         own = await list_exercise_submissions(self.exercise.id, self.student_user, own_session)
         self.assertEqual([value["id"] for value in own], [str(self.attempt.id)])
+        student_authorization_sql = str(own_session.statements[3].compile())
+        self.assertIn("institution_memberships.role", student_authorization_sql)
+        self.assertIn("users.is_active", student_authorization_sql)
         self.assertIn("exercise_submissions.student_id =", str(own_session.statements[-1].compile()))
 
         teacher_session = ExerciseSession(
@@ -203,6 +215,9 @@ class ExerciseSubmissionTests(unittest.IsolatedAsyncioTestCase):
         )
         for_teacher = await list_exercise_submissions(self.exercise.id, self.teacher_user, teacher_session)
         self.assertEqual(len(for_teacher), 1)
+        teacher_authorization_sql = str(teacher_session.statements[2].compile())
+        self.assertIn("institution_memberships.role", teacher_authorization_sql)
+        self.assertIn("users.is_active", teacher_authorization_sql)
         self.assertNotIn("exercise_submissions.student_id =", str(teacher_session.statements[-1].compile()))
 
     async def test_invalid_submission_input_and_unauthenticated_endpoint(self):

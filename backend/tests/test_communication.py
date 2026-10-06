@@ -112,6 +112,23 @@ class CommunicationCoreTests(unittest.IsolatedAsyncioTestCase):
             await create_group(CreateGroupConversation(name="Team", member_ids=[str(uuid.uuid4())]), self.user, CommunicationSession(rows=[[self.user]]))
         self.assertEqual(error.exception.status_code, 404)
 
+    async def test_group_creation_rejects_inactive_members(self):
+        inactive_member = User(
+            id=uuid.uuid4(),
+            username="inactive",
+            email="inactive@example.com",
+            password_hash="hash",
+            is_active=False,
+        )
+        with self.assertRaises(HTTPException) as error:
+            await create_group(
+                CreateGroupConversation(name="Team", member_ids=[str(inactive_member.id)]),
+                self.user,
+                CommunicationSession(rows=[[self.user]]),
+            )
+        self.assertEqual(error.exception.status_code, 404)
+        self.assertEqual(error.exception.detail, "One or more users not found")
+
     async def test_non_member_cannot_view_conversation(self):
         with self.assertRaises(HTTPException) as error:
             await get_conversation(self.conversation.id, self.target, CommunicationSession([None, self.conversation.id]))

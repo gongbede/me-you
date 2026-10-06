@@ -163,7 +163,16 @@ async def create_group(data: CreateGroupConversation, current_user: User = Depen
     except ValueError:
         raise HTTPException(status_code=422, detail="member_ids must contain UUIDs") from None
     member_ids.add(current_user.id)
-    users = list((await database.scalars(select(User).where(User.id.in_(member_ids)))).all())
+    users = list(
+        (
+            await database.scalars(
+                select(User).where(
+                    User.id.in_(member_ids),
+                    User.is_active.is_(True),
+                )
+            )
+        ).all()
+    )
     if len(users) != len(member_ids):
         raise HTTPException(status_code=404, detail="One or more users not found")
     conversation = Conversation(type="GROUP", name=data.name, description=data.description, created_by_id=current_user.id, created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc))

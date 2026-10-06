@@ -45,7 +45,8 @@ class LearningSession:
         self.statements.append(statement)
         return self.scalar_values.pop(0) if self.scalar_values else None
 
-    async def scalars(self, _statement):
+    async def scalars(self, statement):
+        self.statements.append(statement)
         return Result(self.scalar_rows.pop(0) if self.scalar_rows else [])
 
     def add(self, value):
@@ -82,8 +83,12 @@ class EducationLearningTests(unittest.IsolatedAsyncioTestCase):
         self.assessment = Assessment(id=uuid.uuid4(), course_id=self.course.id, title="Quiz", instructions="Answer", max_score=Decimal("10.00"), is_published=True)
 
     async def test_assigned_teacher_creates_lesson_and_non_teacher_is_forbidden(self):
-        created = await create_lesson(self.course.id, LessonCreate(title="Lesson", content="Body"), self.user, LearningSession([self.teacher]))
+        session = LearningSession([self.teacher])
+        created = await create_lesson(self.course.id, LessonCreate(title="Lesson", content="Body"), self.user, session)
         self.assertEqual(created["course_id"], str(self.course.id))
+        teacher_query = str(session.statements[0].compile()).lower()
+        self.assertIn("institution_memberships.role", teacher_query)
+        self.assertIn("users.is_active", teacher_query)
         with self.assertRaises(HTTPException) as error:
             await create_lesson(self.course.id, LessonCreate(title="Denied", content="Body"), self.student_user, LearningSession([None]))
         self.assertEqual(error.exception.status_code, 403)
@@ -106,17 +111,25 @@ class EducationLearningTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(error.exception.status_code, 404)
 
     async def test_published_assessment_submission_uses_authenticated_student(self):
-        submission = await create_submission(self.assessment.id, SubmissionCreate(answer_text="answer"), self.student_user, LearningSession([self.assessment, self.student]))
+        session = LearningSession([self.assessment, self.student])
+        submission = await create_submission(self.assessment.id, SubmissionCreate(answer_text="answer"), self.student_user, session)
         self.assertEqual(submission["student_id"], str(self.student.id))
+        student_query = str(session.statements[1].compile()).lower()
+        self.assertIn("institution_memberships.role", student_query)
+        self.assertIn("users.is_active", student_query)
         with self.assertRaises(HTTPException) as error:
             await create_submission(self.assessment.id, SubmissionCreate(answer_text="answer"), self.user, LearningSession([self.assessment, None]))
         self.assertEqual(error.exception.status_code, 403)
 
     async def test_due_assessment_rejects_late_submission(self):
         due = Assessment(id=uuid.uuid4(), course_id=self.course.id, title="Quiz", instructions="Answer", max_score=Decimal("10.00"), is_published=True, due_at=datetime.now(timezone.utc) - timedelta(minutes=1))
+        session = LearningSession([due, self.student])
         with self.assertRaises(HTTPException) as error:
-            await create_submission(due.id, SubmissionCreate(answer_text="late"), self.student_user, LearningSession([due, self.student]))
+            await create_submission(due.id, SubmissionCreate(answer_text="late"), self.student_user, session)
         self.assertEqual(error.exception.status_code, 422)
+        student_query = str(session.statements[1].compile()).lower()
+        self.assertIn("institution_memberships.role", student_query)
+        self.assertIn("users.is_active", student_query)
 
     async def test_students_cannot_mark_assessments_graded_or_submit_drafts_late(self):
         with self.assertRaises(ValidationError):
@@ -143,7 +156,7 @@ class EducationLearningTests(unittest.IsolatedAsyncioTestCase):
                 draft.id,
                 SubmissionUpdate(status="SUBMITTED"),
                 self.student_user,
-                LearningSession([draft, self.student, late_assessment]),
+                LearningSession([draft, self.student, late_assessment, self.student]),
             )
         self.assertEqual(error.exception.status_code, 422)
 
@@ -210,7 +223,7 @@ class EducationLearningTests(unittest.IsolatedAsyncioTestCase):
                 draft.id,
                 SubmissionUpdate(answer_text=None, status="SUBMITTED"),
                 self.student_user,
-                LearningSession([draft, self.student, self.assessment]),
+                LearningSession([draft, self.student, self.assessment, self.student]),
             )
         self.assertEqual(error.exception.status_code, 422)
 

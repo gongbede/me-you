@@ -8,8 +8,9 @@ from pathlib import Path
 
 import asyncpg
 import pytest
+from fastapi import HTTPException
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.engine import make_url
@@ -19,6 +20,7 @@ from app.database import get_postgres_session
 from app.main import app
 from app.models import (
     Course,
+    CourseTeacher,
     Department,
     Enrollment,
     Exercise,
@@ -28,9 +30,13 @@ from app.models import (
     InstitutionMembership,
     Lesson,
     Student,
+    Teacher,
     User,
 )
+import app.routes.institutions as institution_routes
 from app.security import get_current_postgres_user
+from app.permissions import ensure_account_can_be_deactivated
+from app.permissions import require_course_teacher, require_enrolled_student
 
 
 pytestmark = pytest.mark.postgres
@@ -210,6 +216,55 @@ def test_database_rejects_duplicate_course_enrollment(postgres_database_url):
     asyncio.run(verify())
 
 
+def test_revoked_student_membership_denies_course_access(postgres_database_url):
+    async def verify():
+        async with database_session(postgres_database_url) as session:
+            _, institution, course, student = await create_learning_records(session)
+            membership = InstitutionMembership(
+                user_id=student.user_id,
+                institution_id=institution.id,
+                role="STUDENT",
+            )
+            session.add_all(
+                [membership, Enrollment(student_id=student.id, course_id=course.id)]
+            )
+            await session.commit()
+            await session.delete(membership)
+            await session.commit()
+
+            with pytest.raises(HTTPException) as error:
+                await require_enrolled_student(course.id, student.user_id, session)
+            assert error.value.status_code == 403
+            assert error.value.detail == "Course enrollment required"
+
+    asyncio.run(verify())
+
+
+def test_revoked_teacher_membership_denies_course_access(postgres_database_url):
+    async def verify():
+        async with database_session(postgres_database_url) as session:
+            user, institution, course, _ = await create_learning_records(session)
+            teacher = Teacher(user_id=user.id, institution_id=institution.id)
+            membership = InstitutionMembership(
+                user_id=user.id,
+                institution_id=institution.id,
+                role="TEACHER",
+            )
+            session.add_all([teacher, membership])
+            await session.flush()
+            session.add(CourseTeacher(course_id=course.id, teacher_id=teacher.id))
+            await session.commit()
+            await session.delete(membership)
+            await session.commit()
+
+            with pytest.raises(HTTPException) as error:
+                await require_course_teacher(course.id, user.id, session)
+            assert error.value.status_code == 403
+            assert error.value.detail == "Assigned teacher access required"
+
+    asyncio.run(verify())
+
+
 def test_foreign_keys_and_delete_cascades_for_users_and_institutions(postgres_database_url):
     async def verify():
         async with database_session(postgres_database_url) as session:
@@ -270,6 +325,7 @@ def test_concurrent_admin_demotions_preserve_final_administrator(postgres_databa
         engine = create_async_engine(postgres_database_url)
         session_factory = async_sessionmaker(engine, expire_on_commit=False)
         original_overrides = app.dependency_overrides.copy()
+        original_require_admin = institution_routes.require_institution_admin
         try:
             async with session_factory() as session:
                 institution = await create_institution(session)
@@ -290,38 +346,145 @@ def test_concurrent_admin_demotions_preserve_final_administrator(postgres_databa
             async def test_user_dependency(request: Request):
                 return users_by_id[uuid.UUID(request.headers["x-test-user"])]
 
+            barrier = None
+
+            async def synchronized_admin_check(user_id, institution_id, database):
+                membership = await original_require_admin(user_id, institution_id, database)
+                await barrier.wait()
+                return membership
+
             app.dependency_overrides[get_postgres_session] = test_database_dependency
             app.dependency_overrides[get_current_postgres_user] = test_user_dependency
+            institution_routes.require_institution_admin = synchronized_admin_check
             transport = ASGITransport(app=app)
             async with AsyncClient(transport=transport, base_url="http://test") as client:
-                responses = await asyncio.gather(
-                    *(
-                        client.patch(
-                            f"/institutions/{institution.id}/members/{memberships[index].id}",
-                            headers={"x-test-user": str(administrators[index].id)},
-                            json={"role": "TEACHER"},
+                for iteration in range(20):
+                    async with session_factory() as session:
+                        await session.execute(
+                            update(InstitutionMembership)
+                            .where(InstitutionMembership.institution_id == institution.id)
+                            .values(role="ADMIN")
                         )
-                        for index in range(2)
-                    )
-                )
+                        await session.commit()
 
-            async with session_factory() as session:
-                persisted_roles = list(
-                    (
-                        await session.scalars(
-                            select(InstitutionMembership.role).where(
+                    barrier = asyncio.Barrier(2)
+                    responses = await asyncio.wait_for(
+                        asyncio.gather(
+                            client.patch(
+                                f"/institutions/{institution.id}/members/{memberships[1].id}",
+                                headers={"x-test-user": str(administrators[0].id)},
+                                json={"role": "TEACHER"},
+                            ),
+                            client.patch(
+                                f"/institutions/{institution.id}/members/{memberships[0].id}",
+                                headers={"x-test-user": str(administrators[1].id)},
+                                json={"role": "TEACHER"},
+                            ),
+                        ),
+                        timeout=10,
+                    )
+
+                    async with session_factory() as session:
+                        persisted_roles = list(
+                            (
+                                await session.scalars(
+                                    select(InstitutionMembership.role)
+                                    .where(InstitutionMembership.institution_id == institution.id)
+                                    .order_by(InstitutionMembership.id)
+                                )
+                            ).all()
+                        )
+                        active_admin_count = await session.scalar(
+                            select(func.count())
+                            .select_from(InstitutionMembership)
+                            .join(User, User.id == InstitutionMembership.user_id)
+                            .where(
                                 InstitutionMembership.institution_id == institution.id,
+                                InstitutionMembership.role == "ADMIN",
+                                User.is_active.is_(True),
                             )
                         )
-                    ).all()
+                    status_codes = sorted(response.status_code for response in responses)
+                    assert status_codes == [200, 409], (
+                        f"Race {iteration + 1}: responses were "
+                        f"{[(response.status_code, response.json()) for response in responses]}"
+                    )
+                    success = next(response for response in responses if response.status_code == 200)
+                    conflict = next(response for response in responses if response.status_code == 409)
+                    assert success.json()["role"] == "TEACHER"
+                    assert conflict.json()["detail"] == "Final administrator cannot be demoted"
+                    assert active_admin_count == 1, (
+                        f"Race {iteration + 1}: persisted roles were {persisted_roles}"
+                    )
+        finally:
+            institution_routes.require_institution_admin = original_require_admin
+            app.dependency_overrides.clear()
+            app.dependency_overrides.update(original_overrides)
+            await engine.dispose()
+
+    asyncio.run(verify())
+
+
+def test_active_admin_cannot_demote_remove_or_deactivate_with_inactive_coadmin(postgres_database_url):
+    async def verify():
+        engine = create_async_engine(postgres_database_url)
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        original_overrides = app.dependency_overrides.copy()
+        try:
+            async with session_factory() as session:
+                institution = await create_institution(session)
+                active_admin = await create_user(session)
+                inactive_admin = await create_user(session)
+                inactive_admin.is_active = False
+                active_membership = InstitutionMembership(
+                    user_id=active_admin.id,
+                    institution_id=institution.id,
+                    role="ADMIN",
                 )
-                remaining_admins = persisted_roles.count("ADMIN")
-            status_codes = sorted(response.status_code for response in responses)
-            assert status_codes == [200, 409] and remaining_admins == 1, (
-                f"Concurrent demotions returned HTTP {status_codes}; "
-                f"roles returned {[response.json().get('role') for response in responses]}; "
-                f"persisted roles are {persisted_roles}"
-            )
+                session.add_all(
+                    [
+                        active_membership,
+                        InstitutionMembership(
+                            user_id=inactive_admin.id,
+                            institution_id=institution.id,
+                            role="ADMIN",
+                        ),
+                    ]
+                )
+                await session.commit()
+
+            async def test_database_dependency():
+                async with session_factory() as session:
+                    yield session
+
+            async def test_user_dependency():
+                return active_admin
+
+            app.dependency_overrides[get_postgres_session] = test_database_dependency
+            app.dependency_overrides[get_current_postgres_user] = test_user_dependency
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                demotion = await client.patch(
+                    f"/institutions/{institution.id}/members/{active_membership.id}",
+                    json={"role": "TEACHER"},
+                )
+                removal = await client.delete(
+                    f"/institutions/{institution.id}/members/{active_membership.id}"
+                )
+
+            assert demotion.status_code == 409
+            assert demotion.json()["detail"] == "Final administrator cannot be demoted"
+            assert removal.status_code == 409
+            assert removal.json()["detail"] == "Final administrator cannot be removed"
+
+            async with session_factory() as session:
+                with pytest.raises(HTTPException) as error:
+                    await ensure_account_can_be_deactivated(
+                        active_admin.id,
+                        session,
+                        is_platform_admin=False,
+                    )
+                assert error.value.status_code == 409
+                assert error.value.detail == "Transfer institution administration before deactivating this account"
         finally:
             app.dependency_overrides.clear()
             app.dependency_overrides.update(original_overrides)

@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_postgres_session
-from ..models import Course, Enrollment, Institution, InstitutionMembership, Student, Teacher, User
+from ..models import Course, Department, Enrollment, Faculty, Institution, InstitutionMembership, Student, Teacher, User
 from ..permissions import course_institution_id, require_student_membership_for_institution
 from ..schemas import EnrollmentCreate, EnrollmentResponse, StudentCreate, StudentResponse, TeacherCreate, TeacherResponse
 from ..security import get_current_postgres_user
@@ -92,9 +92,11 @@ async def create_enrollment(data: EnrollmentCreate, current_user: User = Depends
     if course is None:
         raise HTTPException(status_code=404, detail="Course not found")
     course_institution_uuid = await course_institution_id(course.id, database)
-    student = await database.scalar(select(Student).where(Student.user_id == current_user.id, Student.institution_id == course_institution_uuid))
-    if student is None:
-        raise HTTPException(status_code=404, detail="Student membership not found")
+    student = await require_student_membership_for_institution(
+        current_user.id,
+        course_institution_uuid,
+        database,
+    )
     if student.institution_id != course_institution_uuid:
         raise HTTPException(status_code=403, detail="Student does not belong to the course institution")
     value = Enrollment(student_id=student.id, course_id=course.id, created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc))
@@ -110,14 +112,55 @@ async def create_enrollment(data: EnrollmentCreate, current_user: User = Depends
 
 @router.get("/enrollments", response_model=list[EnrollmentResponse], summary="List current enrollments")
 async def list_my_enrollments(current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session)):
-    student_ids = select(Student.id).where(Student.user_id == current_user.id)
-    values = list((await database.scalars(select(Enrollment).where(Enrollment.student_id.in_(student_ids)).order_by(Enrollment.created_at.desc()))).all())
+    values = list(
+        (
+            await database.scalars(
+                select(Enrollment)
+                .join(Student, Student.id == Enrollment.student_id)
+                .join(Course, Course.id == Enrollment.course_id)
+                .join(Department, Department.id == Course.department_id)
+                .join(Faculty, Faculty.id == Department.faculty_id)
+                .join(
+                    InstitutionMembership,
+                    InstitutionMembership.user_id == Student.user_id,
+                )
+                .join(User, User.id == Student.user_id)
+                .where(
+                    Student.user_id == current_user.id,
+                    Student.institution_id == Faculty.institution_id,
+                    InstitutionMembership.institution_id == Faculty.institution_id,
+                    InstitutionMembership.role == "STUDENT",
+                    User.is_active.is_(True),
+                )
+                .order_by(Enrollment.created_at.desc())
+            )
+        ).all()
+    )
     return [enrollment_response(value) for value in values]
 
 
 @router.get("/enrollments/{enrollment_id}", response_model=EnrollmentResponse, summary="Get an enrollment")
 async def get_my_enrollment(enrollment_id: uuid.UUID, current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session)):
-    value = await database.scalar(select(Enrollment).join(Student).where(Enrollment.id == enrollment_id, Student.user_id == current_user.id))
+    value = await database.scalar(
+        select(Enrollment)
+        .join(Student, Student.id == Enrollment.student_id)
+        .join(Course, Course.id == Enrollment.course_id)
+        .join(Department, Department.id == Course.department_id)
+        .join(Faculty, Faculty.id == Department.faculty_id)
+        .join(
+            InstitutionMembership,
+            InstitutionMembership.user_id == Student.user_id,
+        )
+        .join(User, User.id == Student.user_id)
+        .where(
+            Enrollment.id == enrollment_id,
+            Student.user_id == current_user.id,
+            Student.institution_id == Faculty.institution_id,
+            InstitutionMembership.institution_id == Faculty.institution_id,
+            InstitutionMembership.role == "STUDENT",
+            User.is_active.is_(True),
+        )
+    )
     if value is None:
         raise HTTPException(status_code=404, detail="Enrollment not found")
     return enrollment_response(value)

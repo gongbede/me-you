@@ -86,8 +86,8 @@ class ScalarRows:
 
 class SecurityHardeningTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        self.user = User(id=uuid.uuid4(), username="alice", email="alice@example.com", password_hash="hash")
-        self.other = User(id=uuid.uuid4(), username="bob", email="bob@example.com", password_hash="hash")
+        self.user = User(id=uuid.uuid4(), username="alice", email="alice@example.com", password_hash="hash", is_active=True)
+        self.other = User(id=uuid.uuid4(), username="bob", email="bob@example.com", password_hash="hash", is_active=True)
         self.institution_a = Institution(id=uuid.uuid4(), name="Alpha", institution_type="UNIVERSITY")
         self.institution_b = Institution(id=uuid.uuid4(), name="Beta", institution_type="SCHOOL")
         self.faculty_a = Faculty(id=uuid.uuid4(), institution_id=self.institution_a.id, name="Science")
@@ -126,6 +126,8 @@ class SecurityHardeningTests(unittest.IsolatedAsyncioTestCase):
         query = str(session.statements[0].compile())
         self.assertIn("enrollments.course_id", query)
         self.assertIn("students.institution_id = faculties.institution_id", query)
+        self.assertIn("institution_memberships.role", query)
+        self.assertIn("users.is_active", query)
 
     async def test_shared_teacher_helper_enforces_course_institution(self):
         session = HardeningSession([None])
@@ -134,11 +136,13 @@ class SecurityHardeningTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(error.exception.status_code, 403)
         query = str(session.statements[0].compile())
         self.assertIn("teachers.institution_id = faculties.institution_id", query)
+        self.assertIn("institution_memberships.role", query)
+        self.assertIn("users.is_active", query)
 
     async def test_account_deactivation_cannot_strand_final_institution_admin(self):
         class ScalarValuesSession:
-            def __init__(self, institution_id):
-                self.values = [[institution_id], [uuid.uuid4()]]
+            def __init__(self, institution_id, membership):
+                self.values = [[institution_id], [membership]]
                 self.statements = []
 
             async def scalars(self, statement):
@@ -146,7 +150,18 @@ class SecurityHardeningTests(unittest.IsolatedAsyncioTestCase):
                 values = self.values.pop(0)
                 return ScalarRows(values)
 
-        session = ScalarValuesSession(self.institution_a.id)
+        admin_membership = type(
+            "Membership",
+            (),
+            {
+                "id": uuid.uuid4(),
+                "user_id": self.user.id,
+                "institution_id": self.institution_a.id,
+                "role": "ADMIN",
+                "user": self.user,
+            },
+        )()
+        session = ScalarValuesSession(self.institution_a.id, admin_membership)
         with self.assertRaises(HTTPException) as error:
             await ensure_account_can_be_deactivated(
                 self.user.id,
@@ -222,7 +237,7 @@ class SecurityHardeningTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_member_management_requires_same_institution_and_last_admin_protection(self):
         target_user = User(id=uuid.uuid4(), username="charlie", email="charlie@example.com", password_hash="hash")
-        admin_membership = type("Membership", (), {"id": uuid.uuid4(), "user_id": self.user.id, "institution_id": self.institution_a.id, "role": "ADMIN"})()
+        admin_membership = type("Membership", (), {"id": uuid.uuid4(), "user_id": self.user.id, "institution_id": self.institution_a.id, "role": "ADMIN", "user": self.user})()
         target_membership = type("Membership", (), {"id": uuid.uuid4(), "user_id": target_user.id, "institution_id": self.institution_a.id, "role": "STUDENT"})()
 
         list_session = HardeningSession(scalar_values=[admin_membership], scalars_values=[[admin_membership, target_membership]])
@@ -274,7 +289,7 @@ class SecurityHardeningTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(removal_events[0].payload, {"role": "TEACHER"})
         self.assertEqual(removal_session.deleted, [removable_member])
 
-        final_admin = type("Membership", (), {"id": uuid.uuid4(), "user_id": self.user.id, "institution_id": self.institution_a.id, "role": "ADMIN"})()
+        final_admin = type("Membership", (), {"id": uuid.uuid4(), "user_id": self.user.id, "institution_id": self.institution_a.id, "role": "ADMIN", "user": self.user})()
         demotion_session = HardeningSession(
             scalar_values=[admin_membership, final_admin],
             scalars_values=[[final_admin]],
@@ -295,10 +310,10 @@ class SecurityHardeningTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(any(isinstance(value, Activity) for value in remove_session.added))
 
     async def test_same_institution_admin_counting_ignores_other_institutions(self):
-        admin_a = type("Membership", (), {"id": uuid.uuid4(), "user_id": self.user.id, "institution_id": self.institution_a.id, "role": "ADMIN"})()
-        admin_b = type("Membership", (), {"id": uuid.uuid4(), "user_id": self.other.id, "institution_id": self.institution_a.id, "role": "ADMIN"})()
-        admin_other = type("Membership", (), {"id": uuid.uuid4(), "user_id": self.other.id, "institution_id": self.institution_b.id, "role": "ADMIN"})()
-        session = HardeningSession(scalar_values=[admin_a, admin_b], scalars_values=[[admin_a, admin_b, admin_other]])
+        admin_a = type("Membership", (), {"id": uuid.uuid4(), "user_id": self.user.id, "institution_id": self.institution_a.id, "role": "ADMIN", "user": self.user})()
+        admin_b = type("Membership", (), {"id": uuid.uuid4(), "user_id": self.other.id, "institution_id": self.institution_a.id, "role": "ADMIN", "user": self.other})()
+        admin_other = type("Membership", (), {"id": uuid.uuid4(), "user_id": self.other.id, "institution_id": self.institution_b.id, "role": "ADMIN", "user": self.other})()
+        session = HardeningSession(scalar_values=[admin_a, admin_b], scalars_values=[[admin_a, admin_b]])
         updated = await update_member_role(self.institution_a.id, admin_b.id, {"role": "TEACHER"}, self.user, session)
         self.assertEqual(updated["role"], "TEACHER")
         events = [value for value in session.added if isinstance(value, Activity)]
@@ -306,8 +321,8 @@ class SecurityHardeningTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(events[0].payload, {"previous_role": "ADMIN", "new_role": "TEACHER"})
 
     async def test_member_mutation_reuses_autobegun_async_session_transaction(self):
-        admin_membership = type("Membership", (), {"id": uuid.uuid4(), "user_id": self.user.id, "institution_id": self.institution_a.id, "role": "ADMIN"})()
-        target_membership = type("Membership", (), {"id": uuid.uuid4(), "user_id": self.other.id, "institution_id": self.institution_a.id, "role": "ADMIN"})()
+        admin_membership = type("Membership", (), {"id": uuid.uuid4(), "user_id": self.user.id, "institution_id": self.institution_a.id, "role": "ADMIN", "user": self.user})()
+        target_membership = type("Membership", (), {"id": uuid.uuid4(), "user_id": self.other.id, "institution_id": self.institution_a.id, "role": "ADMIN", "user": self.other})()
         session = AsyncSession()
         session.sync_session._autobegin_t()
         session.scalar = AsyncMock(side_effect=[admin_membership, target_membership])
@@ -332,8 +347,8 @@ class SecurityHardeningTests(unittest.IsolatedAsyncioTestCase):
         await session.close()
 
     async def test_autobegun_async_session_still_rejects_removing_final_admin(self):
-        admin_membership = type("Membership", (), {"id": uuid.uuid4(), "user_id": self.user.id, "institution_id": self.institution_a.id, "role": "ADMIN"})()
-        final_admin = type("Membership", (), {"id": uuid.uuid4(), "user_id": self.other.id, "institution_id": self.institution_a.id, "role": "ADMIN"})()
+        admin_membership = type("Membership", (), {"id": uuid.uuid4(), "user_id": self.user.id, "institution_id": self.institution_a.id, "role": "ADMIN", "user": self.user})()
+        final_admin = type("Membership", (), {"id": uuid.uuid4(), "user_id": self.other.id, "institution_id": self.institution_a.id, "role": "ADMIN", "user": self.other})()
         session = AsyncSession()
         session.sync_session._autobegin_t()
         session.scalar = AsyncMock(side_effect=[admin_membership, final_admin])

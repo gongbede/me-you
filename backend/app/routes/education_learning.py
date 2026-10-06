@@ -30,6 +30,8 @@ from ..models import (
 )
 from ..permissions import (
     course_institution_id,
+    require_course_teacher,
+    require_enrolled_student,
     require_institution_admin,
     require_institution_membership,
 )
@@ -114,39 +116,21 @@ async def teacher_for_user(user_id: uuid.UUID, teacher_id: uuid.UUID, database: 
 
 
 async def assigned_teacher(course_id: uuid.UUID, user_id: uuid.UUID, database: AsyncSession) -> Teacher:
-    teacher = await database.scalar(
-        select(Teacher)
-        .join(CourseTeacher, CourseTeacher.teacher_id == Teacher.id)
-        .join(Course, Course.id == CourseTeacher.course_id)
-        .join(Department, Department.id == Course.department_id)
-        .join(Faculty, Faculty.id == Department.faculty_id)
-        .where(
-            CourseTeacher.course_id == course_id,
-            Teacher.user_id == user_id,
-            Teacher.institution_id == Faculty.institution_id,
-        )
-    )
-    if teacher is None:
-        raise HTTPException(status_code=403, detail="Assigned teacher access required")
-    return teacher
+    return await require_course_teacher(course_id, user_id, database)
 
 
 async def student_for_course(course_id: uuid.UUID, user_id: uuid.UUID, database: AsyncSession) -> Student:
-    student = await database.scalar(
-        select(Student)
-        .join(Enrollment, Enrollment.student_id == Student.id)
-        .join(Course, Course.id == Enrollment.course_id)
-        .join(Department, Department.id == Course.department_id)
-        .join(Faculty, Faculty.id == Department.faculty_id)
-        .where(
-            Enrollment.course_id == course_id,
-            Student.user_id == user_id,
-            Student.institution_id == Faculty.institution_id,
-        )
-    )
-    if student is None:
-        raise HTTPException(status_code=403, detail="Course enrollment required")
-    return student
+    return await require_enrolled_student(course_id, user_id, database)
+
+
+async def has_course_teacher_access(course_id: uuid.UUID, user_id: uuid.UUID, database: AsyncSession) -> bool:
+    try:
+        await assigned_teacher(course_id, user_id, database)
+    except HTTPException as error:
+        if error.status_code != status.HTTP_403_FORBIDDEN:
+            raise
+        return False
+    return True
 
 
 async def accessible_lesson(lesson: Lesson, user_id: uuid.UUID, database: AsyncSession) -> Student:
@@ -251,8 +235,7 @@ async def create_lesson(course_id: uuid.UUID, data: LessonCreate, current_user: 
 @router.get("/courses/{course_id}/lessons", response_model=list[LessonResponse], summary="List course lessons")
 async def list_lessons(course_id: uuid.UUID, current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session)):
     await course_or_404(course_id, database)
-    teacher = await database.scalar(select(Teacher).join(CourseTeacher, CourseTeacher.teacher_id == Teacher.id).where(CourseTeacher.course_id == course_id, Teacher.user_id == current_user.id))
-    if teacher is None:
+    if not await has_course_teacher_access(course_id, current_user.id, database):
         await student_for_course(course_id, current_user.id, database)
         statement = select(Lesson).where(Lesson.course_id == course_id, Lesson.is_published.is_(True))
     else:
@@ -410,13 +393,8 @@ async def create_exercise_submission(exercise_id: uuid.UUID, data: ExerciseSubmi
 async def list_exercise_submissions(exercise_id: uuid.UUID, current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session)):
     exercise = await exercise_or_404(exercise_id, database)
     lesson = await lesson_or_404(exercise.lesson_id, database)
-    teacher = await database.scalar(
-        select(Teacher)
-        .join(CourseTeacher, CourseTeacher.teacher_id == Teacher.id)
-        .where(CourseTeacher.course_id == lesson.course_id, Teacher.user_id == current_user.id)
-    )
     statement = select(ExerciseSubmission).where(ExerciseSubmission.exercise_id == exercise.id)
-    if teacher is None:
+    if not await has_course_teacher_access(lesson.course_id, current_user.id, database):
         if not lesson.is_published:
             raise HTTPException(status_code=404, detail="Exercise not found")
         student = await student_for_course(lesson.course_id, current_user.id, database)
@@ -438,15 +416,17 @@ async def get_exercise_submission(submission_id: uuid.UUID, current_user: User =
     )
     if value is None:
         raise HTTPException(status_code=404, detail="Exercise submission not found")
+    exercise = await exercise_or_404(value.exercise_id, database)
+    lesson = await lesson_or_404(exercise.lesson_id, database)
     owner_student_id = await database.scalar(
         select(Student.id).where(
             Student.id == value.student_id,
             Student.user_id == current_user.id,
         )
     )
-    if owner_student_id is None:
-        exercise = await exercise_or_404(value.exercise_id, database)
-        lesson = await lesson_or_404(exercise.lesson_id, database)
+    if owner_student_id is not None:
+        await student_for_course(lesson.course_id, current_user.id, database)
+    else:
         await assigned_teacher(lesson.course_id, current_user.id, database)
     return exercise_submission_response(value)
 
@@ -506,8 +486,7 @@ async def create_assessment(course_id: uuid.UUID, data: AssessmentCreate, curren
 @router.get("/courses/{course_id}/assessments", response_model=list[AssessmentResponse], summary="List course assessments")
 async def list_assessments(course_id: uuid.UUID, current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session)):
     await course_or_404(course_id, database)
-    teacher = await database.scalar(select(Teacher).join(CourseTeacher, CourseTeacher.teacher_id == Teacher.id).where(CourseTeacher.course_id == course_id, Teacher.user_id == current_user.id))
-    if teacher is None:
+    if not await has_course_teacher_access(course_id, current_user.id, database):
         await student_for_course(course_id, current_user.id, database)
         statement = select(Assessment).where(Assessment.course_id == course_id, Assessment.is_published.is_(True))
     else:
@@ -600,6 +579,9 @@ async def get_submission(submission_id: uuid.UUID, current_user: User = Depends(
     if student.user_id != current_user.id:
         assessment = await assessment_or_404(value.assessment_id, database)
         await assigned_teacher(assessment.course_id, current_user.id, database)
+    else:
+        assessment = await assessment_or_404(value.assessment_id, database)
+        await student_for_course(assessment.course_id, current_user.id, database)
     return submission_response(value)
 
 
@@ -611,9 +593,10 @@ async def update_submission(submission_id: uuid.UUID, data: SubmissionUpdate, cu
     student = await database.scalar(select(Student).where(Student.id == value.student_id))
     if student.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Only the submission owner may modify it")
+    assessment = await assessment_or_404(value.assessment_id, database)
+    await student_for_course(assessment.course_id, current_user.id, database)
     if value.status != "DRAFT":
         raise HTTPException(status_code=409, detail="Only draft submissions may be modified")
-    assessment = await assessment_or_404(value.assessment_id, database)
     now = datetime.now(timezone.utc)
     if data.status == "SUBMITTED":
         if not assessment.is_published:
@@ -669,6 +652,9 @@ async def get_result(submission_id: uuid.UUID, current_user: User = Depends(get_
     if student.user_id != current_user.id:
         assessment = await assessment_or_404(submission.assessment_id, database)
         await assigned_teacher(assessment.course_id, current_user.id, database)
+    else:
+        assessment = await assessment_or_404(submission.assessment_id, database)
+        await student_for_course(assessment.course_id, current_user.id, database)
     return result_response(value)
 
 

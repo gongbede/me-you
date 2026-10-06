@@ -26,7 +26,7 @@ from ..models import (
     Teacher,
     User,
 )
-from ..permissions import list_user_institution_ids, require_institution_admin, require_institution_membership
+from ..permissions import count_active_institution_admins, list_user_institution_ids, require_institution_admin, require_institution_membership
 from ..schemas import (
     CourseCreate,
     CourseResponse,
@@ -141,23 +141,14 @@ async def add_member(institution_id: uuid.UUID, target_user_id: uuid.UUID | str,
     return membership_response(value)
 
 
-async def _lock_institution_admin_rows(database: AsyncSession, institution_id: uuid.UUID):
-    statement = select(InstitutionMembership).where(
-        InstitutionMembership.institution_id == institution_id,
-        InstitutionMembership.role == "ADMIN",
-    )
-    dialect = getattr(getattr(getattr(database, "bind", None), "dialect", None), "name", None)
-    if dialect == "postgresql":
-        statement = statement.with_for_update()
-    return list((await database.scalars(statement)).all())
-
-
 async def _guard_final_admin_mutation(database: AsyncSession, institution_id: uuid.UUID, membership: InstitutionMembership, *, action: str) -> None:
     if membership is None or membership.role != "ADMIN":
         return
-    admin_rows = await _lock_institution_admin_rows(database, institution_id)
-    admin_count = len(admin_rows)
-    if admin_count <= 1 and any(row.id == membership.id for row in admin_rows):
+    admin_count, active_admin_user_ids = await count_active_institution_admins(
+        institution_id,
+        database,
+    )
+    if admin_count <= 1 and membership.user_id in active_admin_user_ids:
         raise HTTPException(status_code=409, detail=f"Final administrator cannot be {action}")
 
 
@@ -213,7 +204,6 @@ async def update_member_role(institution_id: uuid.UUID, membership_id: uuid.UUID
                 target_id=value.id,
                 metadata={"previous_role": previous_role, "new_role": role},
             )
-        await database.refresh(value)
         return membership_response(value)
 
     return await _run_membership_mutation(

@@ -3,6 +3,7 @@ import uuid
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import contains_eager
 
 from .models import (
     Course,
@@ -63,6 +64,34 @@ async def require_institution_admin(user_id: uuid.UUID, institution_id: uuid.UUI
     return membership
 
 
+async def count_active_institution_admins(
+    institution_id: uuid.UUID,
+    database: AsyncSession,
+) -> tuple[int, set[uuid.UUID]]:
+    memberships = list(
+        (
+            await database.scalars(
+                select(InstitutionMembership)
+                .join(User, User.id == InstitutionMembership.user_id)
+                .options(contains_eager(InstitutionMembership.user))
+                .where(
+                    InstitutionMembership.institution_id == institution_id,
+                    InstitutionMembership.role == ADMIN_ROLE,
+                )
+                .order_by(InstitutionMembership.id)
+                .with_for_update(of=InstitutionMembership)
+                .execution_options(populate_existing=True)
+            )
+        ).all()
+    )
+    active_admin_user_ids = {
+        membership.user_id
+        for membership in memberships
+        if membership.user.is_active
+    }
+    return len(active_admin_user_ids), active_admin_user_ids
+
+
 async def ensure_account_can_be_deactivated(
     user_id: uuid.UUID,
     database: AsyncSession,
@@ -75,27 +104,16 @@ async def ensure_account_can_be_deactivated(
                 select(InstitutionMembership.institution_id).where(
                     InstitutionMembership.user_id == user_id,
                     InstitutionMembership.role == ADMIN_ROLE,
-                )
+                ).order_by(InstitutionMembership.institution_id)
             )
         ).all()
     )
-    for institution_id in sorted(institution_ids):
-        active_admin_ids = list(
-            (
-                await database.scalars(
-                    select(InstitutionMembership.id)
-                    .join(User, User.id == InstitutionMembership.user_id)
-                    .where(
-                        InstitutionMembership.institution_id == institution_id,
-                        InstitutionMembership.role == ADMIN_ROLE,
-                        User.is_active.is_(True),
-                    )
-                    .order_by(InstitutionMembership.user_id)
-                    .with_for_update(of=InstitutionMembership)
-                )
-            ).all()
+    for institution_id in institution_ids:
+        active_admin_count, active_admin_user_ids = await count_active_institution_admins(
+            institution_id,
+            database,
         )
-        if len(active_admin_ids) <= 1:
+        if user_id in active_admin_user_ids and active_admin_count <= 1:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Transfer institution administration before deactivating this account",
@@ -154,6 +172,8 @@ async def require_course_teacher(course_id: uuid.UUID, user_id: uuid.UUID, datab
     teacher = await database.scalar(
         select(Teacher)
         .join(CourseTeacher, CourseTeacher.teacher_id == Teacher.id)
+        .join(InstitutionMembership, InstitutionMembership.user_id == Teacher.user_id)
+        .join(User, User.id == Teacher.user_id)
         .join(Course, Course.id == CourseTeacher.course_id)
         .join(Department, Department.id == Course.department_id)
         .join(Faculty, Faculty.id == Department.faculty_id)
@@ -161,6 +181,9 @@ async def require_course_teacher(course_id: uuid.UUID, user_id: uuid.UUID, datab
             CourseTeacher.course_id == course_id,
             Teacher.user_id == user_id,
             Teacher.institution_id == Faculty.institution_id,
+            InstitutionMembership.institution_id == Teacher.institution_id,
+            InstitutionMembership.role == TEACHER_ROLE,
+            User.is_active.is_(True),
         )
     )
     if teacher is None:
@@ -175,6 +198,8 @@ async def require_enrolled_student(course_id: uuid.UUID, user_id: uuid.UUID, dat
     student = await database.scalar(
         select(Student)
         .join(Enrollment, Enrollment.student_id == Student.id)
+        .join(InstitutionMembership, InstitutionMembership.user_id == Student.user_id)
+        .join(User, User.id == Student.user_id)
         .join(Course, Course.id == Enrollment.course_id)
         .join(Department, Department.id == Course.department_id)
         .join(Faculty, Faculty.id == Department.faculty_id)
@@ -182,6 +207,9 @@ async def require_enrolled_student(course_id: uuid.UUID, user_id: uuid.UUID, dat
             Enrollment.course_id == course_id,
             Student.user_id == user_id,
             Student.institution_id == Faculty.institution_id,
+            InstitutionMembership.institution_id == Student.institution_id,
+            InstitutionMembership.role == STUDENT_ROLE,
+            User.is_active.is_(True),
         )
     )
     if student is None:
@@ -214,7 +242,16 @@ async def same_institution_or_403(left_id: uuid.UUID, right_id: uuid.UUID, label
 
 async def require_student_membership_for_institution(user_id: uuid.UUID, institution_id: uuid.UUID, database: AsyncSession) -> Student:
     student = await database.scalar(
-        select(Student).where(Student.user_id == user_id, Student.institution_id == institution_id)
+        select(Student)
+        .join(InstitutionMembership, InstitutionMembership.user_id == Student.user_id)
+        .join(User, User.id == Student.user_id)
+        .where(
+            Student.user_id == user_id,
+            Student.institution_id == institution_id,
+            InstitutionMembership.institution_id == institution_id,
+            InstitutionMembership.role == STUDENT_ROLE,
+            User.is_active.is_(True),
+        )
     )
     if student is None:
         raise HTTPException(
