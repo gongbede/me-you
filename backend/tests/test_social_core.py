@@ -24,11 +24,18 @@ class ScalarResult:
 class ExecuteResult:
     rowcount = 2
 
+    def __init__(self, rows=None):
+        self.rows = rows or []
+
+    def all(self):
+        return self.rows
+
 
 class SocialSession:
-    def __init__(self, scalar_values=None, scalar_rows=None):
+    def __init__(self, scalar_values=None, scalar_rows=None, execute_rows=None):
         self.scalar_values = list(scalar_values or [])
         self.scalar_rows = list(scalar_rows or [])
+        self.execute_rows = list(execute_rows or [])
         self.added = []
         self.deleted = []
         self.committed = False
@@ -65,7 +72,8 @@ class SocialSession:
         self.deleted.append(value)
 
     async def execute(self, _statement):
-        return ExecuteResult()
+        rows = self.execute_rows.pop(0) if self.execute_rows else []
+        return ExecuteResult(rows)
 
 
 class SocialCoreTests(unittest.IsolatedAsyncioTestCase):
@@ -162,6 +170,32 @@ class SocialCoreTests(unittest.IsolatedAsyncioTestCase):
         response = await get_feed(self.author, SocialSession(scalar_rows=[[newer, older]]), offset=0, limit=1)
         self.assertEqual(response["items"][0]["content"], "newer")
         self.assertTrue(response["has_more"])
+
+    async def test_feed_post_response_includes_engagement_and_author_summary(self):
+        session = SocialSession(
+            scalar_rows=[[self.post], [self.post.id]],
+            execute_rows=[
+                [(self.post.id, 3)],
+                [(self.post.id, 2)],
+                [(self.author, None, None, True)],
+            ],
+        )
+
+        response = await get_feed(self.author, session, offset=0, limit=20)
+        post = response["items"][0]
+
+        self.assertEqual(post["like_count"], 3)
+        self.assertEqual(post["comment_count"], 2)
+        self.assertTrue(post["liked_by_me"])
+        self.assertEqual(
+            post["author"],
+            {
+                "id": str(self.author.id),
+                "username": self.author.username,
+                "display_name": self.author.username,
+                "avatar_url": None,
+            },
+        )
 
     async def test_notification_recipient_isolation_and_read_all(self):
         with self.assertRaises(HTTPException) as error:

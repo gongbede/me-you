@@ -1,10 +1,7 @@
-export const MAX_POST_LENGTH = 10_000
+import type { InfiniteData } from '@tanstack/react-query'
+import type { FeedPage } from '../api/social'
 
-export interface Engagement {
-  likeCount: number
-  commentCount: number
-  likedByUserIds: Set<string>
-}
+export const MAX_POST_LENGTH = 10_000
 
 export function isValidPostContent(value: string): boolean {
   const trimmed = value.trim()
@@ -13,17 +10,25 @@ export function isValidPostContent(value: string): boolean {
 }
 
 export function updateOptimisticLike(
-  previous: Engagement | undefined,
-  userId: string,
+  previous: InfiniteData<FeedPage> | undefined,
+  postId: string,
   liked: boolean,
-): Engagement | undefined {
+): InfiniteData<FeedPage> | undefined {
   if (!previous) return previous
-  const wasLiked = previous.likedByUserIds.has(userId)
-  if (wasLiked === liked) return previous
-  const likedByUserIds = new Set(previous.likedByUserIds)
-  if (liked) likedByUserIds.add(userId)
-  else likedByUserIds.delete(userId)
-  return { ...previous, likeCount: previous.likeCount + (liked ? 1 : -1), likedByUserIds }
+  return {
+    ...previous,
+    pages: previous.pages.map((page) => ({
+      ...page,
+      items: page.items.map((post) => {
+        if (post.id !== postId || post.liked_by_me === liked) return post
+        return {
+          ...post,
+          liked_by_me: liked,
+          like_count: Math.max(0, post.like_count + (liked ? 1 : -1)),
+        }
+      }),
+    })),
+  }
 }
 
 export function relativeTime(timestamp: string, now = Date.now()): string {

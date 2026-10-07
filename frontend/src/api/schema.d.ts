@@ -4292,11 +4292,24 @@ export interface components {
             /** Username */
             username: string;
         };
+        /** PostAuthorSummary */
+        PostAuthorSummary: {
+            /** Avatar Url */
+            avatar_url: string | null;
+            /** Display Name */
+            display_name: string;
+            /** Id */
+            id: string;
+            /** Username */
+            username: string;
+        };
         /** PostResponse */
         PostResponse: {
-            author: components["schemas"]["UserSummary"];
+            author: components["schemas"]["PostAuthorSummary"];
             /** Author Id */
             author_id: string;
+            /** Comment Count */
+            comment_count: number;
             /** Content */
             content: string;
             /**
@@ -4306,6 +4319,10 @@ export interface components {
             created_at: string;
             /** Id */
             id: string;
+            /** Like Count */
+            like_count: number;
+            /** Liked By Me */
+            liked_by_me: boolean;
             /**
              * Updated At
              * Format: date-time

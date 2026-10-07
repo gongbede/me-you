@@ -10,7 +10,7 @@ import asyncpg
 import pytest
 from fastapi import HTTPException
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import func, select, text, update
+from sqlalchemy import event, func, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.engine import make_url
@@ -1212,6 +1212,117 @@ def test_profile_and_post_visibility_modes_are_enforced(postgres_database_url):
                 with pytest.raises(HTTPException) as inactive_post:
                     await get_post(ids["deactivated_post"], session, owner_user)
                 assert inactive_post.value.status_code == 404
+        finally:
+            await engine.dispose()
+
+    asyncio.run(verify())
+
+
+def test_feed_query_count_is_bounded_for_twenty_posts(postgres_database_url):
+    from sqlalchemy.orm import selectinload
+
+    from app.models import Comment, Post, PostLike
+    from app.routes.comments import list_comments
+    from app.routes.likes import list_likes
+    from app.routes.posts import get_feed
+
+    async def verify():
+        engine = create_async_engine(postgres_database_url)
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        statements = []
+
+        def count_statement(_connection, _cursor, statement, _parameters, _context, _executemany):
+            statements.append(statement)
+
+        event.listen(engine.sync_engine, "before_cursor_execute", count_statement)
+        try:
+            async with session_factory() as session:
+                viewer = await create_user(session)
+                posts = [
+                    Post(author_id=viewer.id, content=f"feed post {index}")
+                    for index in range(20)
+                ]
+                session.add_all(posts)
+                await session.flush()
+                session.add_all(
+                    [
+                        value
+                        for post in posts
+                        for value in (
+                            PostLike(post_id=post.id, user_id=viewer.id),
+                            Comment(
+                                post_id=post.id,
+                                author_id=viewer.id,
+                                content="one comment",
+                            ),
+                        )
+                    ]
+                )
+                await session.commit()
+
+                statements.clear()
+                legacy_posts = list(
+                    (
+                        await session.scalars(
+                            select(Post)
+                            .options(selectinload(Post.author))
+                            .where(Post.author_id == viewer.id)
+                            .order_by(Post.created_at.desc(), Post.id.desc())
+                            .limit(21)
+                        )
+                    ).all()
+                )
+                for post in legacy_posts:
+                    await list_likes(post.id, viewer, session, limit=100)
+                    await list_comments(post.id, viewer, session, limit=100)
+                legacy_query_count = len(statements)
+
+                statements.clear()
+                one_post_page = await get_feed(viewer, session, offset=0, limit=1)
+                one_post_query_count = len(statements)
+                statements.clear()
+                twenty_post_page = await get_feed(viewer, session, offset=0, limit=20)
+                twenty_post_query_count = len(statements)
+
+                assert len(one_post_page["items"]) == 1
+                assert len(twenty_post_page["items"]) == 20
+                assert legacy_query_count == 142
+                assert one_post_query_count == twenty_post_query_count == 5
+                assert twenty_post_query_count <= 5
+        finally:
+            event.remove(engine.sync_engine, "before_cursor_execute", count_statement)
+            await engine.dispose()
+
+    asyncio.run(verify())
+
+
+def test_private_profile_avatar_is_not_in_post_author_summary(postgres_database_url):
+    from app.models import Post, Profile
+    from app.routes.posts import get_post_by_id
+
+    async def verify():
+        engine = create_async_engine(postgres_database_url)
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        try:
+            async with session_factory() as session:
+                author = await create_user(session)
+                viewer = await create_user(session)
+                session.add(
+                    Profile(
+                        user_id=author.id,
+                        display_name="Hidden name",
+                        profile_picture_url="https://private.example/avatar.png",
+                        visibility="PRIVATE",
+                    )
+                )
+                post = Post(author_id=author.id, content="public post", visibility="PUBLIC")
+                session.add(post)
+                await session.commit()
+
+                response = await get_post_by_id(post.id, viewer, session)
+
+                assert response["author"]["avatar_url"] is None
+                assert response["author"]["display_name"] == author.username
         finally:
             await engine.dispose()
 

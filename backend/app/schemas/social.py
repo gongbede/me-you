@@ -12,6 +12,11 @@ class UserSummary(BaseModel):
     username: str
 
 
+class PostAuthorSummary(UserSummary):
+    display_name: str
+    avatar_url: str | None
+
+
 class CreatePost(BaseModel):
     content: str = Field(min_length=1, max_length=10000)
     visibility: Literal["PUBLIC", "AUTHENTICATED", "NETWORK", "PRIVATE"] = "PUBLIC"
@@ -34,11 +39,14 @@ class PostResponse(BaseModel):
 
     id: str
     author_id: str
-    author: UserSummary
+    author: PostAuthorSummary
     content: str
     visibility: Literal["PUBLIC", "AUTHENTICATED", "NETWORK", "PRIVATE"]
     created_at: datetime
     updated_at: datetime
+    like_count: int
+    comment_count: int
+    liked_by_me: bool
 
 
 class CreateComment(BaseModel):

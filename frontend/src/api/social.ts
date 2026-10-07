@@ -28,22 +28,6 @@ export function setPostLike(postId: string, liked: boolean): Promise<void | Post
     : apiRequest(`/api/v1/posts/${postId}/like`, { method: 'DELETE' })
 }
 
-export async function getPostEngagement(postId: string): Promise<{
-  likeCount: number
-  commentCount: number
-  likedByUserIds: Set<string>
-}> {
-  const [likes, comments] = await Promise.all([
-    getAllCursorItems<PostLike>(`/api/v1/posts/${postId}/likes`),
-    getAllCursorItems<Comment>(`/api/v1/posts/${postId}/comments`),
-  ])
-  return {
-    likeCount: likes.length,
-    commentCount: comments.length,
-    likedByUserIds: new Set(likes.map((like) => like.user_id)),
-  }
-}
-
 export function getCommentsPage(postId: string, cursor?: string): Promise<{
   items: Comment[]
   nextCursor: string | null

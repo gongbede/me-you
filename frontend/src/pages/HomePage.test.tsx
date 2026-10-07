@@ -21,11 +21,14 @@ vi.mock('../components/PostCard', () => ({
 const makePost = (id: string, content: string) => ({
   id,
   author_id: 'author-id',
-  author: { id: 'author-id', username: 'author' },
+  author: { id: 'author-id', username: 'author', display_name: 'Author', avatar_url: null },
   content,
   visibility: 'PUBLIC' as const,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
+  like_count: 0,
+  comment_count: 0,
+  liked_by_me: false,
 })
 
 describe('HomePage feed pagination', () => {

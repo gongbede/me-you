@@ -2402,14 +2402,53 @@
         "title": "PlatformAdminUserResponse",
         "type": "object"
       },
+      "PostAuthorSummary": {
+        "properties": {
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "display_name",
+          "avatar_url"
+        ],
+        "title": "PostAuthorSummary",
+        "type": "object"
+      },
       "PostResponse": {
         "properties": {
           "author": {
-            "$ref": "#/components/schemas/UserSummary"
+            "$ref": "#/components/schemas/PostAuthorSummary"
           },
           "author_id": {
             "title": "Author Id",
             "type": "string"
+          },
+          "comment_count": {
+            "title": "Comment Count",
+            "type": "integer"
           },
           "content": {
             "title": "Content",
@@ -2423,6 +2462,14 @@
           "id": {
             "title": "Id",
             "type": "string"
+          },
+          "like_count": {
+            "title": "Like Count",
+            "type": "integer"
+          },
+          "liked_by_me": {
+            "title": "Liked By Me",
+            "type": "boolean"
           },
           "updated_at": {
             "format": "date-time",
@@ -2447,7 +2494,10 @@
           "content",
           "visibility",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "like_count",
+          "comment_count",
+          "liked_by_me"
         ],
         "title": "PostResponse",
         "type": "object"

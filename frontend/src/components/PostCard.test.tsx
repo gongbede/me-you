@@ -1,8 +1,8 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider, useInfiniteQuery } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { getPostEngagement, setPostLike } from '../api/social'
+import { setPostLike } from '../api/social'
 import { PostCard } from './PostCard'
 
 vi.mock('../hooks/useAuth', () => ({
@@ -11,7 +11,6 @@ vi.mock('../hooks/useAuth', () => ({
 
 vi.mock('../api/social', () => ({
   deletePost: vi.fn(),
-  getPostEngagement: vi.fn(),
   setPostLike: vi.fn(),
 }))
 
@@ -27,32 +26,55 @@ vi.mock('./CommentsSection', () => ({
 const post = {
   id: 'post-id',
   author_id: 'author-id',
-  author: { id: 'author-id', username: 'author' },
+  author: { id: 'author-id', username: 'author', display_name: 'Author', avatar_url: null },
   content: 'A learning update',
   visibility: 'PUBLIC' as const,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
+  like_count: 2,
+  comment_count: 4,
+  liked_by_me: false,
 }
+
+const feedPage = { items: [post], offset: 0, limit: 20, has_more: false, next_cursor: null }
 
 function renderCard() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { staleTime: Infinity, retry: false }, mutations: { retry: false } },
   })
-  queryClient.setQueryData(['engagement', post.id], {
-    likeCount: 2,
-    commentCount: 4,
-    likedByUserIds: new Set<string>(),
-  })
+  queryClient.setQueryData(['feed'], { pages: [feedPage], pageParams: [undefined] })
+
+  function FeedCard() {
+    const feedQuery = useInfiniteQuery({
+      queryKey: ['feed'],
+      queryFn: async () => feedPage,
+      initialPageParam: undefined as string | undefined,
+      getNextPageParam: (page) => page.next_cursor ?? undefined,
+      enabled: false,
+    })
+    const feedPost = feedQuery.data?.pages[0]?.items[0] ?? post
+    return <PostCard post={feedPost} onDeleted={vi.fn()} />
+  }
+
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter><PostCard post={post} onDeleted={vi.fn()} /></MemoryRouter>
+      <MemoryRouter><FeedCard /></MemoryRouter>
     </QueryClientProvider>,
   )
 }
 
 describe('PostCard optimistic likes', () => {
   beforeEach(() => {
-    vi.mocked(getPostEngagement).mockResolvedValue({ likeCount: 2, commentCount: 4, likedByUserIds: new Set() })
+    vi.mocked(setPostLike).mockResolvedValue(undefined)
+  })
+
+  it('updates the feed post after a successful like', async () => {
+    renderCard()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Like post, 2 likes' }))
+
+    expect(await screen.findByRole('button', { name: 'Unlike post, 3 likes' })).toBeInTheDocument()
+    expect(setPostLike).toHaveBeenCalledWith('post-id', true)
   })
 
   it('rolls the optimistic like count back when the request fails', async () => {
