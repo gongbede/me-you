@@ -9,6 +9,7 @@ from app.routes.conversations import (
     add_group_member,
     create_direct,
     create_group,
+    conversation_response,
     get_conversation,
     list_conversations,
     remove_group_member,
@@ -139,6 +140,29 @@ class CommunicationCoreTests(unittest.IsolatedAsyncioTestCase):
             )
         self.assertEqual(error.exception.status_code, 422)
         self.assertEqual(error.exception.detail, "Groups may have at most 100 members")
+
+    async def test_conversation_response_caps_embedded_members(self):
+        group = Conversation(
+            id=uuid.uuid4(),
+            type="GROUP",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+        group.members = [
+            ConversationMember(
+                conversation_id=group.id,
+                user_id=uuid.uuid4(),
+                user=User(
+                    id=uuid.uuid4(),
+                    username=f"member-{index}",
+                    email=f"member-{index}@example.com",
+                    password_hash="hash",
+                ),
+            )
+            for index in range(101)
+        ]
+
+        self.assertEqual(len(conversation_response(group)["members"]), 100)
 
     async def test_non_member_cannot_view_conversation(self):
         with self.assertRaises(HTTPException) as error:

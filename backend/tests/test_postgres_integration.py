@@ -1499,6 +1499,68 @@ def test_migration_downgrade_refuses_message_notification_data(postgres_database
     asyncio.run(verify())
 
 
+def test_account_email_token_downgrade_preserves_lifecycle_data(postgres_database_url):
+    from datetime import datetime, timedelta, timezone
+
+    from app.models import AccountEmailToken
+
+    async def verify():
+        now = datetime.now(timezone.utc)
+        async with database_session(postgres_database_url) as session:
+            user = await create_user(session)
+            user.email_verified_at = now
+            user.deleted_at = now
+            token = AccountEmailToken(
+                user_id=user.id,
+                purpose="EMAIL_VERIFICATION",
+                token_hash=uuid.uuid4().hex + uuid.uuid4().hex,
+                expires_at=now + timedelta(hours=1),
+            )
+            session.add(token)
+            await session.commit()
+            user_id = user.id
+            token_id = token.id
+
+        downgrade = _alembic(
+            postgres_database_url,
+            "downgrade",
+            "0015_education_integrity",
+        )
+        assert downgrade.returncode != 0
+        assert "Cannot downgrade account email token lifecycle" in (
+            downgrade.stdout + downgrade.stderr
+        )
+
+        async with database_session(postgres_database_url) as session:
+            assert await session.get(AccountEmailToken, token_id) is not None
+            user = await session.get(User, user_id)
+            assert user.email_verified_at is not None
+            assert user.deleted_at is not None
+            await session.execute(
+                text("DELETE FROM account_email_tokens WHERE user_id = :user_id"),
+                {"user_id": user_id},
+            )
+            await session.execute(
+                text(
+                    "UPDATE users SET email_verified_at = NULL, deleted_at = NULL "
+                    "WHERE id = :user_id"
+                ),
+                {"user_id": user_id},
+            )
+            await session.commit()
+
+        downgrade = _alembic(
+            postgres_database_url,
+            "downgrade",
+            "0015_education_integrity",
+        )
+        assert downgrade.returncode == 0, downgrade.stdout + downgrade.stderr
+        upgrade = _alembic(postgres_database_url, "upgrade", "head")
+        assert upgrade.returncode == 0, upgrade.stdout + upgrade.stderr
+
+    asyncio.run(verify())
+
+
 def test_account_email_tokens_logout_and_anonymizing_deletion(postgres_database_url):
     import hashlib
     from urllib.parse import parse_qs, urlparse
@@ -1563,6 +1625,10 @@ def test_account_email_tokens_logout_and_anonymizing_deletion(postgres_database_
                 await session.commit()
                 user_id = user.id
                 old_token = create_access_token(user.id, token_version=0)
+                await request_email_verification(user, session, providers)
+                prior_verification_raw = parse_qs(
+                    urlparse(email.sent[-1].text_body.split()[-1]).query
+                )["token"][0]
                 await request_password_recovery(
                     PasswordRecoveryRequest(email=user.email), session, providers
                 )
@@ -1598,6 +1664,12 @@ def test_account_email_tokens_logout_and_anonymizing_deletion(postgres_database_
                     session,
                     request,
                 )
+                with pytest.raises(HTTPException) as invalidated_verification:
+                    await confirm_email_verification(
+                        EmailTokenConfirm(token=prior_verification_raw), session, request
+                    )
+                assert invalidated_verification.value.status_code == 400
+                await session.rollback()
                 with pytest.raises(HTTPException) as replayed_reset:
                     await confirm_password_recovery(
                         PasswordRecoveryConfirm(

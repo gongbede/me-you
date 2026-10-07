@@ -255,6 +255,7 @@ async def confirm_password_recovery(
     token.consumed_at = now
     user.password_hash = password_hash.hash(data.new_password)
     user.token_version = (getattr(user, "token_version", 0) or 0) + 1
+    await invalidate_account_email_tokens(database, user.id)
     if request is not None:
         record_security_event(
             database,

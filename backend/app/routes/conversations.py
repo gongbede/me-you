@@ -43,7 +43,7 @@ def conversation_response(
         "updated_at": conversation.updated_at,
         "members": [
             {"user": summary_user(member.user), "joined_at": member.joined_at, "last_read_at": member.last_read_at}
-            for member in conversation.members
+            for member in conversation.members[:100]
         ],
         "last_message_preview": (
             last_message.content[:200] if last_message is not None else None

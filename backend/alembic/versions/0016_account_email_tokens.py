@@ -53,6 +53,17 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    has_lifecycle_data = op.get_bind().execute(
+        sa.text(
+            "SELECT EXISTS (SELECT 1 FROM account_email_tokens) "
+            "OR EXISTS (SELECT 1 FROM users "
+            "WHERE email_verified_at IS NOT NULL OR deleted_at IS NOT NULL)"
+        )
+    ).scalar_one()
+    if has_lifecycle_data:
+        raise RuntimeError(
+            "Cannot downgrade account email token lifecycle while token or account lifecycle data exists"
+        )
     op.drop_index(
         "uq_account_email_tokens_active_user_purpose",
         table_name="account_email_tokens",
