@@ -29,6 +29,10 @@ class AdminSession:
         self.rolled_back = False
         self.statements = []
 
+    async def execute(self, statement):
+        self.statements.append(statement)
+        return None
+
     async def scalar(self, statement):
         self.statements.append(statement)
         return self.scalar_values.pop(0) if self.scalar_values else None

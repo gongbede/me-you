@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -204,10 +205,10 @@ async def assign_teacher(course_id: uuid.UUID, data: CourseTeacherCreate, curren
 
 
 @router.get("/courses/{course_id}/teachers", response_model=list[CourseTeacherResponse], summary="List course teachers")
-async def list_course_teachers(course_id: uuid.UUID, current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session)):
+async def list_course_teachers(course_id: uuid.UUID, current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session), offset: Annotated[int, Query(ge=0)] = 0, limit: Annotated[int, Query(ge=1, le=100)] = 100):
     institution_id = await course_institution_id(course_id, database)
     await require_institution_membership(current_user.id, institution_id, database)
-    values = list((await database.scalars(select(CourseTeacher).where(CourseTeacher.course_id == course_id))).all())
+    values = list((await database.scalars(select(CourseTeacher).where(CourseTeacher.course_id == course_id).order_by(CourseTeacher.created_at.asc(), CourseTeacher.id.asc()).offset(offset).limit(limit))).all())
     return [response_value(value, ("id", "course_id", "teacher_id", "created_at", "updated_at")) for value in values]
 
 
@@ -233,14 +234,14 @@ async def create_lesson(course_id: uuid.UUID, data: LessonCreate, current_user: 
 
 
 @router.get("/courses/{course_id}/lessons", response_model=list[LessonResponse], summary="List course lessons")
-async def list_lessons(course_id: uuid.UUID, current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session)):
+async def list_lessons(course_id: uuid.UUID, current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session), offset: Annotated[int, Query(ge=0)] = 0, limit: Annotated[int, Query(ge=1, le=100)] = 100):
     await course_or_404(course_id, database)
     if not await has_course_teacher_access(course_id, current_user.id, database):
         await student_for_course(course_id, current_user.id, database)
         statement = select(Lesson).where(Lesson.course_id == course_id, Lesson.is_published.is_(True))
     else:
         statement = select(Lesson).where(Lesson.course_id == course_id)
-    values = list((await database.scalars(statement.order_by(Lesson.position.asc(), Lesson.id.asc()))).all())
+    values = list((await database.scalars(statement.order_by(Lesson.position.asc(), Lesson.id.asc()).offset(offset).limit(limit))).all())
     return [lesson_response(value) for value in values]
 
 
@@ -296,10 +297,10 @@ async def create_exercise(lesson_id: uuid.UUID, data: ExerciseCreate, current_us
 
 
 @router.get("/lessons/{lesson_id}/exercises", response_model=list[ExerciseResponse], summary="List lesson exercises")
-async def list_exercises(lesson_id: uuid.UUID, current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session)):
+async def list_exercises(lesson_id: uuid.UUID, current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session), offset: Annotated[int, Query(ge=0)] = 0, limit: Annotated[int, Query(ge=1, le=100)] = 100):
     lesson = await lesson_or_404(lesson_id, database)
     await accessible_lesson(lesson, current_user.id, database)
-    values = list((await database.scalars(select(Exercise).where(Exercise.lesson_id == lesson_id).order_by(Exercise.position.asc(), Exercise.id.asc()))).all())
+    values = list((await database.scalars(select(Exercise).where(Exercise.lesson_id == lesson_id).order_by(Exercise.position.asc(), Exercise.id.asc()).offset(offset).limit(limit))).all())
     return [exercise_response(value) for value in values]
 
 
@@ -390,7 +391,7 @@ async def create_exercise_submission(exercise_id: uuid.UUID, data: ExerciseSubmi
 
 
 @router.get("/exercises/{exercise_id}/submissions", response_model=list[ExerciseSubmissionResponse], summary="List exercise attempts")
-async def list_exercise_submissions(exercise_id: uuid.UUID, current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session)):
+async def list_exercise_submissions(exercise_id: uuid.UUID, current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session), offset: Annotated[int, Query(ge=0)] = 0, limit: Annotated[int, Query(ge=1, le=100)] = 100):
     exercise = await exercise_or_404(exercise_id, database)
     lesson = await lesson_or_404(exercise.lesson_id, database)
     statement = select(ExerciseSubmission).where(ExerciseSubmission.exercise_id == exercise.id)
@@ -402,7 +403,7 @@ async def list_exercise_submissions(exercise_id: uuid.UUID, current_user: User =
     values = list(
         (
             await database.scalars(
-                statement.order_by(ExerciseSubmission.attempt_number.asc())
+                statement.order_by(ExerciseSubmission.attempt_number.asc()).offset(offset).limit(limit)
             )
         ).all()
     )
@@ -484,14 +485,14 @@ async def create_assessment(course_id: uuid.UUID, data: AssessmentCreate, curren
 
 
 @router.get("/courses/{course_id}/assessments", response_model=list[AssessmentResponse], summary="List course assessments")
-async def list_assessments(course_id: uuid.UUID, current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session)):
+async def list_assessments(course_id: uuid.UUID, current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session), offset: Annotated[int, Query(ge=0)] = 0, limit: Annotated[int, Query(ge=1, le=100)] = 100):
     await course_or_404(course_id, database)
     if not await has_course_teacher_access(course_id, current_user.id, database):
         await student_for_course(course_id, current_user.id, database)
         statement = select(Assessment).where(Assessment.course_id == course_id, Assessment.is_published.is_(True))
     else:
         statement = select(Assessment).where(Assessment.course_id == course_id)
-    values = list((await database.scalars(statement.order_by(Assessment.created_at.asc()))).all())
+    values = list((await database.scalars(statement.order_by(Assessment.created_at.asc(), Assessment.id.asc()).offset(offset).limit(limit))).all())
     return [assessment_response(value) for value in values]
 
 
@@ -563,10 +564,10 @@ async def create_submission(assessment_id: uuid.UUID, data: SubmissionCreate, cu
 
 
 @router.get("/assessments/{assessment_id}/submissions", response_model=list[SubmissionResponse], summary="List assessment submissions")
-async def list_submissions(assessment_id: uuid.UUID, current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session)):
+async def list_submissions(assessment_id: uuid.UUID, current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session), offset: Annotated[int, Query(ge=0)] = 0, limit: Annotated[int, Query(ge=1, le=100)] = 100):
     assessment = await assessment_or_404(assessment_id, database)
     await assigned_teacher(assessment.course_id, current_user.id, database)
-    values = list((await database.scalars(select(AssessmentSubmission).where(AssessmentSubmission.assessment_id == assessment_id))).all())
+    values = list((await database.scalars(select(AssessmentSubmission).where(AssessmentSubmission.assessment_id == assessment_id).order_by(AssessmentSubmission.created_at.asc(), AssessmentSubmission.id.asc()).offset(offset).limit(limit))).all())
     return [submission_response(value) for value in values]
 
 

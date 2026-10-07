@@ -67,6 +67,13 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    message_notifications = op.get_bind().execute(
+        sa.text("SELECT count(*) FROM notifications WHERE type = 'MESSAGE'")
+    ).scalar_one()
+    if message_notifications:
+        raise RuntimeError(
+            "Cannot downgrade Communication Core while MESSAGE notifications exist"
+        )
     op.drop_index("ix_messages_sender_id", table_name="messages")
     op.drop_index("ix_messages_conversation_created_at", table_name="messages")
     op.drop_table("messages")

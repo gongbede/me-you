@@ -1,23 +1,30 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_postgres_session
 from ..models import Notification, Post, PostLike, User
+from ..pagination import ascending_time_uuid_clause, time_uuid_cursor
+from ..privacy import require_post_visibility
 from ..schemas import LikeResponse
-from ..security import get_current_postgres_user
+from ..security import get_current_postgres_user, get_optional_postgres_user
 
 
 router = APIRouter(tags=["likes"])
 
 
-async def require_post(post_id: uuid.UUID, database: AsyncSession) -> Post:
+async def require_post(
+    post_id: uuid.UUID,
+    database: AsyncSession,
+    viewer: User | None = None,
+) -> Post:
     post = await database.scalar(select(Post).where(Post.id == post_id))
     if post is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+    await require_post_visibility(post, viewer, database)
     return post
 
 
@@ -32,7 +39,7 @@ async def like_post(
     current_user: User = Depends(get_current_postgres_user),
     database: AsyncSession = Depends(get_postgres_session),
 ):
-    post = await require_post(post_id, database)
+    post = await require_post(post_id, database, current_user)
     existing_like = await database.scalar(
         select(PostLike).where(
             PostLike.post_id == post_id,
@@ -76,7 +83,7 @@ async def unlike_post(
     current_user: User = Depends(get_current_postgres_user),
     database: AsyncSession = Depends(get_postgres_session),
 ):
-    await require_post(post_id, database)
+    await require_post(post_id, database, current_user)
     like = await database.scalar(
         select(PostLike).where(
             PostLike.post_id == post_id,
@@ -97,16 +104,33 @@ async def unlike_post(
 )
 async def list_likes(
     post_id: uuid.UUID,
+    current_user: User | None = Depends(get_optional_postgres_user),
     database: AsyncSession = Depends(get_postgres_session),
+    cursor: str | None = None,
+    limit: int = Query(default=50, ge=1, le=100),
+    response: Response = None,
 ):
-    await require_post(post_id, database)
+    await require_post(post_id, database, current_user)
+    statement = (
+        select(PostLike)
+        .join(User, User.id == PostLike.user_id)
+        .where(PostLike.post_id == post_id, User.is_active.is_(True))
+    )
+    if cursor is not None:
+        statement = statement.where(
+            ascending_time_uuid_clause(PostLike.created_at, PostLike.user_id, cursor)
+        )
     likes = list(
         (
             await database.scalars(
-                select(PostLike)
-                .where(PostLike.post_id == post_id)
-                .order_by(PostLike.created_at.asc(), PostLike.user_id.asc())
+                statement.order_by(PostLike.created_at.asc(), PostLike.user_id.asc()).limit(limit + 1)
             )
         ).all()
     )
-    return [{"user_id": str(like.user_id), "created_at": like.created_at} for like in likes]
+    has_more = len(likes) > limit
+    page = likes[:limit]
+    if response is not None and has_more and page:
+        response.headers["X-Next-Cursor"] = time_uuid_cursor(
+            page[-1].created_at, page[-1].user_id
+        )
+    return [{"user_id": str(like.user_id), "created_at": like.created_at} for like in page]

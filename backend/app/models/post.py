@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Text, Uuid
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
@@ -15,6 +15,10 @@ class Post(Base):
     __tablename__ = "posts"
     __table_args__ = (
         CheckConstraint("length(btrim(content)) > 0", name="ck_posts_content_not_blank"),
+        CheckConstraint(
+            "visibility IN ('PUBLIC', 'AUTHENTICATED', 'NETWORK', 'PRIVATE')",
+            name="ck_posts_visibility",
+        ),
         Index("ix_posts_author_created_at", "author_id", "created_at"),
     )
 
@@ -27,6 +31,9 @@ class Post(Base):
         nullable=False,
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    visibility: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="PUBLIC", server_default="PUBLIC"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

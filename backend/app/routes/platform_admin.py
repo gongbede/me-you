@@ -1,16 +1,18 @@
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..activity import record_activity
+from ..account_tokens import invalidate_account_email_tokens
 from ..database import get_postgres_session
 from ..models import User
 from ..permissions import ensure_account_can_be_deactivated, require_platform_admin
 from ..schemas import PlatformAdminUserResponse
 from ..security import get_current_postgres_user
+from ..security_audit import record_security_event
 
 
 router = APIRouter(prefix="/platform-admin", tags=["platform-administration"])
@@ -32,6 +34,7 @@ async def set_account_active(
     active: bool,
     current_user: User,
     database: AsyncSession,
+    request: Request | None = None,
 ) -> dict:
     require_platform_admin(current_user)
     if not active:
@@ -50,9 +53,22 @@ async def set_account_active(
     )
     if target is None:
         raise HTTPException(status_code=404, detail="Account not found")
+    if active and getattr(target, "deleted_at", None) is not None:
+        raise HTTPException(status_code=409, detail="Deleted accounts cannot be reactivated")
 
     target.is_active = active
     target.token_version = (getattr(target, "token_version", 0) or 0) + 1
+    if not active:
+        await invalidate_account_email_tokens(database, target.id)
+    if request is not None:
+        record_security_event(
+            database,
+            event_type="account.reactivated" if active else "account.deactivated",
+            outcome="SUCCESS",
+            request=request,
+            actor_user_id=current_user.id,
+            target_user_id=target.id,
+        )
     await record_activity(
         database,
         event_type="platform.account.activated" if active else "platform.account.deactivated",
@@ -92,8 +108,9 @@ async def deactivate_platform_user(
     user_id: uuid.UUID,
     current_user: User = Depends(get_current_postgres_user),
     database: AsyncSession = Depends(get_postgres_session),
+    request: Request = None,
 ):
-    return await set_account_active(user_id, False, current_user, database)
+    return await set_account_active(user_id, False, current_user, database, request)
 
 
 @router.post("/users/{user_id}/activate", response_model=PlatformAdminUserResponse)
@@ -101,5 +118,6 @@ async def activate_platform_user(
     user_id: uuid.UUID,
     current_user: User = Depends(get_current_postgres_user),
     database: AsyncSession = Depends(get_postgres_session),
+    request: Request = None,
 ):
-    return await set_account_active(user_id, True, current_user, database)
+    return await set_account_active(user_id, True, current_user, database, request)

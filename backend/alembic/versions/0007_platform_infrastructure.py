@@ -66,12 +66,12 @@ def downgrade() -> None:
     unsupported_types = op.get_bind().execute(
         sa.text(
             "SELECT DISTINCT type FROM notifications "
-            "WHERE type NOT IN ('LIKE', 'COMMENT', 'FOLLOW', 'MESSAGE')"
+            "WHERE type NOT IN ('LIKE', 'COMMENT', 'FOLLOW')"
         )
     ).scalars().all()
     if unsupported_types:
         raise RuntimeError(
-            "Cannot downgrade platform infrastructure while extensible notification types exist"
+            "Cannot downgrade platform infrastructure while MESSAGE or extensible notification types exist"
         )
 
     op.drop_index("ix_activities_event_created_at", table_name="activities")

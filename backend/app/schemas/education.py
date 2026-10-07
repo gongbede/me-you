@@ -43,6 +43,27 @@ class InstitutionMembershipUpdate(BaseModel):
     role: Literal["ADMIN", "TEACHER", "STUDENT"]
 
 
+class InstitutionJoinRequestCreate(BaseModel):
+    role: Literal["TEACHER", "STUDENT"]
+
+
+class InstitutionInvitationCreate(BaseModel):
+    user_id: str
+    role: Literal["ADMIN", "TEACHER", "STUDENT"]
+
+
+class InstitutionMembershipRequestResponse(BaseModel):
+    id: str
+    institution_id: str
+    user_id: str
+    role: str
+    request_type: str
+    status: str
+    created_by_user_id: str
+    created_at: datetime
+    updated_at: datetime
+
+
 class InstitutionMembershipResponse(BaseModel):
     id: str
     user_id: str

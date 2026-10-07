@@ -1,9 +1,12 @@
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import String, func, literal, or_, select, union_all
+from sqlalchemy import String, Uuid, func, literal, or_, select, tuple_, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_postgres_session
 from ..models import Course, Department, Faculty, Institution, InstitutionMembership, User
+from ..pagination import decode_cursor, encode_cursor
 from ..schemas import SearchResponse
 from ..security import get_current_postgres_user
 
@@ -22,6 +25,7 @@ async def global_search(
     database: AsyncSession = Depends(get_postgres_session),
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=20, ge=1, le=100),
+    cursor: str | None = None,
 ):
     normalized = normalize_search_query(query)
     if len(normalized) < 2:
@@ -37,7 +41,7 @@ async def global_search(
         Institution.id.label("id"),
         Institution.name.label("name"),
         literal(None, type_=String()).label("code"),
-        literal(None, type_=String()).label("institution_id"),
+        literal(None, type_=Uuid(as_uuid=True)).label("institution_id"),
     ).join(
         InstitutionMembership,
         InstitutionMembership.institution_id == Institution.id,
@@ -77,12 +81,32 @@ async def global_search(
             results.c.code,
             results.c.institution_id,
         )
-        .order_by(func.lower(results.c.name), results.c.resource_type, results.c.id)
-        .offset(offset)
-        .limit(limit + 1)
     )
+    if cursor is not None:
+        cursor_name, cursor_type, cursor_id_value = decode_cursor(cursor, 3)
+        try:
+            cursor_id = uuid.UUID(cursor_id_value)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Invalid pagination cursor",
+            ) from None
+        statement = statement.where(
+            tuple_(
+                func.lower(results.c.name),
+                results.c.resource_type,
+                results.c.id,
+            )
+            > tuple_(cursor_name.casefold(), cursor_type, cursor_id)
+        )
+    else:
+        statement = statement.offset(offset)
+    statement = statement.order_by(
+        func.lower(results.c.name), results.c.resource_type, results.c.id
+    ).limit(limit + 1)
     rows = list((await database.execute(statement)).mappings().all())
     has_more = len(rows) > limit
+    page_rows = rows[:limit]
     items = [
         {
             "id": str(row["id"]),
@@ -91,12 +115,22 @@ async def global_search(
             "code": row["code"],
             "institution_id": str(row["institution_id"]) if row["institution_id"] else None,
         }
-        for row in rows[:limit]
+        for row in page_rows
     ]
+    next_cursor = (
+        encode_cursor(
+            str(page_rows[-1]["name"]),
+            str(page_rows[-1]["resource_type"]),
+            str(page_rows[-1]["id"]),
+        )
+        if has_more and page_rows
+        else None
+    )
     return {
         "query": normalized,
         "items": items,
         "offset": offset,
         "limit": limit,
         "has_more": has_more,
+        "next_cursor": next_cursor,
     }

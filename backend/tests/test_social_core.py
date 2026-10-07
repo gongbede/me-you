@@ -100,12 +100,12 @@ class SocialCoreTests(unittest.IsolatedAsyncioTestCase):
                 self.post.id,
                 CreatePost(content="changed"),
                 self.other,
-                SocialSession([self.post]),
+                SocialSession([self.post, True]),
             )
         self.assertEqual(error.exception.status_code, 403)
 
     async def test_comment_create_and_unauthorized_update(self):
-        session = SocialSession([self.post])
+        session = SocialSession([self.post, True])
         created = await create_comment(
             self.post.id,
             CreateComment(content="useful comment"),
@@ -131,7 +131,11 @@ class SocialCoreTests(unittest.IsolatedAsyncioTestCase):
     async def test_like_duplicate_and_follow_self_are_rejected(self):
         duplicate_like = PostLike(post_id=self.post.id, user_id=self.other.id)
         with self.assertRaises(HTTPException) as like_error:
-            await like_post(self.post.id, self.other, SocialSession([self.post, duplicate_like]))
+            await like_post(
+                self.post.id,
+                self.other,
+                SocialSession([self.post, True, duplicate_like]),
+            )
         self.assertEqual(like_error.exception.status_code, 409)
 
         with self.assertRaises(HTTPException) as follow_error:

@@ -325,7 +325,7 @@ class SecurityHardeningTests(unittest.IsolatedAsyncioTestCase):
         target_membership = type("Membership", (), {"id": uuid.uuid4(), "user_id": self.other.id, "institution_id": self.institution_a.id, "role": "ADMIN", "user": self.other})()
         session = AsyncSession()
         session.sync_session._autobegin_t()
-        session.scalar = AsyncMock(side_effect=[admin_membership, target_membership])
+        session.scalar = AsyncMock(side_effect=[admin_membership, target_membership, None])
         session.scalars = AsyncMock(return_value=ScalarRows([admin_membership, target_membership]))
         session.refresh = AsyncMock()
         recorded = []
@@ -340,8 +340,9 @@ class SecurityHardeningTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(updated["role"], "TEACHER")
-        self.assertEqual(len(recorded), 1)
-        self.assertIsInstance(recorded[0], Activity)
+        self.assertEqual(len(recorded), 2)
+        self.assertEqual(sum(isinstance(value, Activity) for value in recorded), 1)
+        self.assertEqual(sum(isinstance(value, Teacher) for value in recorded), 1)
         self.assertFalse(session.in_transaction())
         self.assertEqual(session.scalars.await_count, 1)
         await session.close()

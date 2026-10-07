@@ -1,15 +1,17 @@
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ..database import get_postgres_session
 from ..models import Comment, Notification, Post, User
+from ..pagination import ascending_time_uuid_clause, time_uuid_cursor
+from ..privacy import require_post_visibility
 from ..schemas import CommentResponse, CreateComment, UpdateComment
-from ..security import get_current_postgres_user
+from ..security import get_current_postgres_user, get_optional_postgres_user
 from .posts import user_summary
 
 
@@ -54,6 +56,7 @@ async def create_comment(
     post = await database.scalar(select(Post).where(Post.id == post_id))
     if post is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+    await require_post_visibility(post, current_user, database)
 
     comment = Comment(
         post_id=post_id,
@@ -87,23 +90,41 @@ async def create_comment(
 )
 async def list_comments(
     post_id: uuid.UUID,
+    current_user: User | None = Depends(get_optional_postgres_user),
     database: AsyncSession = Depends(get_postgres_session),
+    cursor: str | None = None,
+    limit: int = Query(default=50, ge=1, le=100),
+    response: Response = None,
 ):
-    post_exists = await database.scalar(select(Post.id).where(Post.id == post_id))
-    if post_exists is None:
+    post = await database.scalar(select(Post).where(Post.id == post_id))
+    if post is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+    await require_post_visibility(post, current_user, database)
 
+    statement = (
+        select(Comment)
+        .options(selectinload(Comment.author))
+        .join(User, User.id == Comment.author_id)
+        .where(Comment.post_id == post_id, User.is_active.is_(True))
+    )
+    if cursor is not None:
+        statement = statement.where(
+            ascending_time_uuid_clause(Comment.created_at, Comment.id, cursor)
+        )
     comments = list(
         (
             await database.scalars(
-                select(Comment)
-                .options(selectinload(Comment.author))
-                .where(Comment.post_id == post_id)
-                .order_by(Comment.created_at.asc(), Comment.id.asc())
+                statement.order_by(Comment.created_at.asc(), Comment.id.asc()).limit(limit + 1)
             )
         ).all()
     )
-    return [comment_response(comment) for comment in comments]
+    has_more = len(comments) > limit
+    page = comments[:limit]
+    if response is not None and has_more and page:
+        response.headers["X-Next-Cursor"] = time_uuid_cursor(
+            page[-1].created_at, page[-1].id
+        )
+    return [comment_response(comment) for comment in page]
 
 
 @router.patch(

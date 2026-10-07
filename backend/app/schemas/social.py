@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -14,6 +14,7 @@ class UserSummary(BaseModel):
 
 class CreatePost(BaseModel):
     content: str = Field(min_length=1, max_length=10000)
+    visibility: Literal["PUBLIC", "AUTHENTICATED", "NETWORK", "PRIVATE"] = "PUBLIC"
 
     @field_validator("content")
     @classmethod
@@ -35,6 +36,7 @@ class PostResponse(BaseModel):
     author_id: str
     author: UserSummary
     content: str
+    visibility: Literal["PUBLIC", "AUTHENTICATED", "NETWORK", "PRIVATE"]
     created_at: datetime
     updated_at: datetime
 
@@ -100,3 +102,4 @@ class FeedResponse(BaseModel):
     offset: int
     limit: int
     has_more: bool
+    next_cursor: str | None = None

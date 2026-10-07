@@ -9,8 +9,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .config import APP_ENV, APP_NAME, CORS_ORIGINS, VERSION, validate_production_config
+from .config import APP_ENV, APP_NAME, CORS_ORIGINS, RATE_LIMITS, RATE_LIMIT_ENABLED, VERSION, validate_production_config
 from .database import init_mongodb
+from .rate_limit import client_ip, get_rate_limit_store
 from .routes.general import router as general_router
 from .routes.health import router as health_router
 from .routes.account import router as account_router
@@ -31,6 +32,7 @@ from .routes.profile import router as profile_router
 from .routes.platform_admin import router as platform_admin_router
 from .routes.registration import router as registration_router
 from .routes.search import router as search_router
+from .routes.security_events import router as security_events_router
 
 
 @asynccontextmanager
@@ -71,7 +73,7 @@ if CORS_ORIGINS:
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
-        expose_headers=["X-Request-ID"],
+        expose_headers=["X-Request-ID", "X-Next-Cursor"],
     )
 
 routers = (
@@ -95,6 +97,7 @@ routers = (
     platform_admin_router,
     media_router,
     health_router,
+    security_events_router,
 )
 for route_group in routers:
     app.include_router(route_group)
@@ -138,8 +141,35 @@ async def handle_validation_error(request: Request, error: RequestValidationErro
 async def add_request_and_security_headers(request: Request, call_next):
     request_id = str(uuid.uuid4())
     request.state.request_id = request_id
+    response = None
     try:
-        response = await call_next(request)
+        if RATE_LIMIT_ENABLED:
+            path = request.url.path.removeprefix("/api/v1") or "/"
+            if path not in {"/health/live", "/health/ready", "/login"}:
+                if path == "/register":
+                    scope, limit_name = "registration:ip", "registration_ip"
+                elif path == "/account/password":
+                    scope, limit_name = "password_change:ip", "password_change_ip"
+                else:
+                    scope, limit_name = "api:ip", "api_ip"
+                limiter = get_rate_limit_store()
+                if limiter is not None:
+                    limit, window_seconds = RATE_LIMITS[limit_name]
+                    count, retry_after = await limiter.increment(
+                        scope, client_ip(request), window_seconds
+                    )
+                    if count > limit:
+                        response = JSONResponse(
+                            status_code=429,
+                            headers={"Retry-After": str(retry_after)},
+                            content={
+                                "detail": "Too many requests; try again later",
+                                "code": "http_429",
+                                "request_id": request_id,
+                            },
+                        )
+        if response is None:
+            response = await call_next(request)
     except Exception as error:
         logger.error(
             "unhandled_request_error",

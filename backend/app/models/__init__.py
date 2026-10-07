@@ -1,5 +1,6 @@
 from .comment import Comment
 from .activity import Activity
+from .account_email_token import AccountEmailToken
 from .assessment import Assessment
 from .assessment_result import AssessmentResult
 from .assessment_submission import AssessmentSubmission
@@ -13,6 +14,7 @@ from .faculty import Faculty
 from .follow import Follow
 from .institution import Institution
 from .institution_membership import InstitutionMembership
+from .institution_membership_request import InstitutionMembershipRequest
 from .exercise import Exercise
 from .exercise_submission import ExerciseSubmission
 from .lesson import Lesson
@@ -26,12 +28,15 @@ from .notification import Notification
 from .post import Post
 from .post_like import PostLike
 from .profile import Profile
+from .rate_limit_counter import RateLimitCounter
+from .security_event import SecurityEvent
 from .user import User
 
 
 __all__ = [
 	"Comment",
 	"Activity",
+	"AccountEmailToken",
 	"Assessment",
 	"AssessmentResult",
 	"AssessmentSubmission",
@@ -44,6 +49,7 @@ __all__ = [
 	"Faculty",
 			"Institution",
 			"InstitutionMembership",
+			"InstitutionMembershipRequest",
 			"Exercise",
 			"ExerciseSubmission",
 			"Lesson",
@@ -56,6 +62,8 @@ __all__ = [
 	"Post",
 	"PostLike",
 	"Profile",
+	"RateLimitCounter",
+	"SecurityEvent",
 	"Student",
 	"Teacher",
 	"User",

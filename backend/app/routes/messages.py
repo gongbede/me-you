@@ -1,13 +1,14 @@
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ..database import get_postgres_session
 from ..models import Conversation, ConversationMember, Message, Notification, User
+from ..pagination import descending_time_uuid_clause, time_uuid_cursor
 from ..schemas import CreateMessage, MessageResponse, ReadStateResponse, UpdateMessage
 from ..security import get_current_postgres_user
 from .conversations import require_member
@@ -55,10 +56,31 @@ async def send_message(conversation_id: uuid.UUID, data: CreateMessage, current_
 
 
 @router.get("/conversations/{conversation_id}/messages", response_model=list[MessageResponse], summary="List message history")
-async def list_messages(conversation_id: uuid.UUID, current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session), offset: int = Query(0, ge=0), limit: int = Query(20, ge=1, le=100)):
+async def list_messages(conversation_id: uuid.UUID, current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session), offset: int = Query(0, ge=0), limit: int = Query(20, ge=1, le=100), cursor: str | None = None, response: Response = None):
     await require_member(conversation_id, current_user.id, database)
-    messages = list((await database.scalars(select(Message).options(selectinload(Message.sender)).where(Message.conversation_id == conversation_id).order_by(Message.created_at.desc(), Message.id.desc()).offset(offset).limit(limit))).all())
-    return [message_response(message) for message in messages]
+    statement = select(Message).options(selectinload(Message.sender)).where(
+        Message.conversation_id == conversation_id
+    )
+    if cursor is not None:
+        statement = statement.where(
+            descending_time_uuid_clause(Message.created_at, Message.id, cursor)
+        )
+    else:
+        statement = statement.offset(offset)
+    messages = list(
+        (
+            await database.scalars(
+                statement.order_by(Message.created_at.desc(), Message.id.desc()).limit(limit + 1)
+            )
+        ).all()
+    )
+    has_more = len(messages) > limit
+    page = messages[:limit]
+    if response is not None and has_more and page:
+        response.headers["X-Next-Cursor"] = time_uuid_cursor(
+            page[-1].created_at, page[-1].id
+        )
+    return [message_response(message) for message in page]
 
 
 @router.post("/conversations/{conversation_id}/read", response_model=ReadStateResponse, summary="Mark a conversation as read")

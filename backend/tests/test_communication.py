@@ -129,6 +129,17 @@ class CommunicationCoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(error.exception.status_code, 404)
         self.assertEqual(error.exception.detail, "One or more users not found")
 
+    async def test_group_creation_caps_members_including_creator(self):
+        requested_members = [str(uuid.uuid4()) for _ in range(100)]
+        with self.assertRaises(HTTPException) as error:
+            await create_group(
+                CreateGroupConversation(name="Large", member_ids=requested_members),
+                self.user,
+                CommunicationSession(),
+            )
+        self.assertEqual(error.exception.status_code, 422)
+        self.assertEqual(error.exception.detail, "Groups may have at most 100 members")
+
     async def test_non_member_cannot_view_conversation(self):
         with self.assertRaises(HTTPException) as error:
             await get_conversation(self.conversation.id, self.target, CommunicationSession([None, self.conversation.id]))

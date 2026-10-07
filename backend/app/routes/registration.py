@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_postgres_session
 from ..models import User
 from ..schemas import UserCreate, UserResponse
+from ..security_audit import record_security_event
 from ..security import password_hash
 
 
@@ -16,6 +16,7 @@ router = APIRouter()
 async def register(
     user_data: UserCreate,
     database: AsyncSession = Depends(get_postgres_session),
+    request: Request = None,
 ):
     user = User(
         username=user_data.username,
@@ -25,22 +26,23 @@ async def register(
 
     database.add(user)
     try:
+        if request is not None:
+            await database.flush()
+            record_security_event(
+                database,
+                event_type="account.registered",
+                outcome="SUCCESS",
+                request=request,
+                target_user_id=user.id,
+            )
         await database.commit()
         await database.refresh(user)
     except IntegrityError:
         await database.rollback()
-        username_exists = await database.scalar(
-            select(User.id).where(User.username == user_data.username)
-        )
-        if username_exists is not None:
-            detail = "Username already exists"
-        elif await database.scalar(
-            select(User.id).where(User.email == user_data.email)
-        ) is not None:
-            detail = "Email already exists"
-        else:
-            detail = "Username or email already exists"
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail) from None
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username or email already exists",
+        ) from None
 
     return {
         "id": str(user.id),

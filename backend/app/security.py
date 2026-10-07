@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import ACCESS_TOKEN_EXPIRE_MINUTES, JWT_ALGORITHM, JWT_SECRET_KEY
-from .database import get_mongo_database, get_postgres_session
+from .database import get_postgres_session
 from .models import User
 
 
@@ -41,52 +41,26 @@ def decode_access_token(token: str) -> dict:
 		) from exc
 
 
-async def get_current_user(
-	credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-	database=Depends(get_mongo_database),
-) -> dict:
-	if credentials is None:
-		raise HTTPException(
-			status_code=status.HTTP_401_UNAUTHORIZED,
-			detail="Not authenticated",
-			headers={"WWW-Authenticate": "Bearer"},
-		)
-
-	payload = decode_access_token(credentials.credentials)
-	subject = payload.get("sub")
-	if not isinstance(subject, str) or not subject:
-		raise HTTPException(
-			status_code=status.HTTP_401_UNAUTHORIZED,
-			detail="Invalid or expired access token",
-			headers={"WWW-Authenticate": "Bearer"},
-		)
-
-	user = await database["users"].find_one({"_id": subject})
-	if user is None:
-		raise HTTPException(
-			status_code=status.HTTP_401_UNAUTHORIZED,
-			detail="Invalid or expired access token",
-			headers={"WWW-Authenticate": "Bearer"},
-		)
-
-	return {
-		"id": user["_id"],
-		"username": user["username"],
-		"email": user["email"],
-		"created_at": user["created_at"],
-	}
-
-
 async def get_current_postgres_user(
 	credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
 	database: AsyncSession = Depends(get_postgres_session),
 ) -> User:
-	if credentials is None:
+	user = await get_optional_postgres_user(credentials, database)
+	if user is None:
 		raise HTTPException(
 			status_code=status.HTTP_401_UNAUTHORIZED,
 			detail="Not authenticated",
 			headers={"WWW-Authenticate": "Bearer"},
 		)
+	return user
+
+
+async def get_optional_postgres_user(
+	credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+	database: AsyncSession = Depends(get_postgres_session),
+) -> User | None:
+	if credentials is None:
+		return None
 
 	payload = decode_access_token(credentials.credentials)
 	subject = payload.get("sub")
@@ -110,6 +84,7 @@ async def get_current_postgres_user(
 	if (
 		user is None
 		or getattr(user, "is_active", True) is False
+		or getattr(user, "deleted_at", None) is not None
 		or payload.get("ver", 0) != (getattr(user, "token_version", 0) or 0)
 	):
 		raise HTTPException(

@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime, timezone
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,8 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..database import get_postgres_session
 from ..models import Course, Department, Enrollment, Faculty, Institution, InstitutionMembership, Student, Teacher, User
 from ..permissions import course_institution_id, require_student_membership_for_institution
-from ..schemas import EnrollmentCreate, EnrollmentResponse, StudentCreate, StudentResponse, TeacherCreate, TeacherResponse
+from ..schemas import EnrollmentCreate, EnrollmentResponse, InstitutionMembershipRequestResponse, StudentCreate, StudentResponse, TeacherCreate, TeacherResponse
 from ..security import get_current_postgres_user
+from .institutions import create_membership_join_request, membership_request_response
 
 
 router = APIRouter(prefix="/education", tags=["education"])
@@ -35,53 +37,33 @@ def enrollment_response(value: Enrollment) -> dict:
     return {"id": str(value.id), "student_id": str(value.student_id), "course_id": str(value.course_id), "created_at": value.created_at, "updated_at": value.updated_at}
 
 
-@router.post("/students/me", response_model=StudentResponse, status_code=201, summary="Register as a student")
-async def register_student(data: StudentCreate, current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session)):
+@router.post("/students/me", response_model=InstitutionMembershipRequestResponse, status_code=status.HTTP_202_ACCEPTED, summary="Request student membership")
+async def register_student(data: StudentCreate, current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session), request: Request = None):
     institution_id = parse_uuid(data.institution_id, "institution_id")
-    if await database.scalar(select(Institution.id).where(Institution.id == institution_id)) is None:
-        raise HTTPException(status_code=404, detail="Institution not found")
-    value = Student(user_id=current_user.id, institution_id=institution_id, created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc))
-    database.add(value)
-    membership = await database.scalar(select(InstitutionMembership).where(InstitutionMembership.user_id == current_user.id, InstitutionMembership.institution_id == institution_id, InstitutionMembership.role == "STUDENT"))
-    if membership is None:
-        database.add(InstitutionMembership(user_id=current_user.id, institution_id=institution_id, role="STUDENT", created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc)))
-    try:
-        await database.commit()
-        await database.refresh(value)
-    except IntegrityError:
-        await database.rollback()
-        raise HTTPException(status_code=409, detail="Student membership already exists") from None
-    return student_response(value)
+    value = await create_membership_join_request(
+        institution_id, "STUDENT", current_user, database, request
+    )
+    return membership_request_response(value)
 
 
 @router.get("/students/me", response_model=list[StudentResponse], summary="List current student records")
-async def list_my_students(current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session)):
-    values = list((await database.scalars(select(Student).where(Student.user_id == current_user.id).order_by(Student.created_at.asc()))).all())
+async def list_my_students(current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session), offset: Annotated[int, Query(ge=0)] = 0, limit: Annotated[int, Query(ge=1, le=100)] = 100):
+    values = list((await database.scalars(select(Student).where(Student.user_id == current_user.id).order_by(Student.created_at.asc(), Student.id.asc()).offset(offset).limit(limit))).all())
     return [student_response(value) for value in values]
 
 
-@router.post("/teachers/me", response_model=TeacherResponse, status_code=201, summary="Register as a teacher")
-async def register_teacher(data: TeacherCreate, current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session)):
+@router.post("/teachers/me", response_model=InstitutionMembershipRequestResponse, status_code=status.HTTP_202_ACCEPTED, summary="Request teacher membership")
+async def register_teacher(data: TeacherCreate, current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session), request: Request = None):
     institution_id = parse_uuid(data.institution_id, "institution_id")
-    if await database.scalar(select(Institution.id).where(Institution.id == institution_id)) is None:
-        raise HTTPException(status_code=404, detail="Institution not found")
-    value = Teacher(user_id=current_user.id, institution_id=institution_id, created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc))
-    database.add(value)
-    membership = await database.scalar(select(InstitutionMembership).where(InstitutionMembership.user_id == current_user.id, InstitutionMembership.institution_id == institution_id, InstitutionMembership.role == "TEACHER"))
-    if membership is None:
-        database.add(InstitutionMembership(user_id=current_user.id, institution_id=institution_id, role="TEACHER", created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc)))
-    try:
-        await database.commit()
-        await database.refresh(value)
-    except IntegrityError:
-        await database.rollback()
-        raise HTTPException(status_code=409, detail="Teacher membership already exists") from None
-    return teacher_response(value)
+    value = await create_membership_join_request(
+        institution_id, "TEACHER", current_user, database, request
+    )
+    return membership_request_response(value)
 
 
 @router.get("/teachers/me", response_model=list[TeacherResponse], summary="List current teacher records")
-async def list_my_teachers(current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session)):
-    values = list((await database.scalars(select(Teacher).where(Teacher.user_id == current_user.id).order_by(Teacher.created_at.asc()))).all())
+async def list_my_teachers(current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session), offset: Annotated[int, Query(ge=0)] = 0, limit: Annotated[int, Query(ge=1, le=100)] = 100):
+    values = list((await database.scalars(select(Teacher).where(Teacher.user_id == current_user.id).order_by(Teacher.created_at.asc(), Teacher.id.asc()).offset(offset).limit(limit))).all())
     return [teacher_response(value) for value in values]
 
 
@@ -111,7 +93,7 @@ async def create_enrollment(data: EnrollmentCreate, current_user: User = Depends
 
 
 @router.get("/enrollments", response_model=list[EnrollmentResponse], summary="List current enrollments")
-async def list_my_enrollments(current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session)):
+async def list_my_enrollments(current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session), offset: Annotated[int, Query(ge=0)] = 0, limit: Annotated[int, Query(ge=1, le=100)] = 100):
     values = list(
         (
             await database.scalars(
@@ -132,7 +114,9 @@ async def list_my_enrollments(current_user: User = Depends(get_current_postgres_
                     InstitutionMembership.role == "STUDENT",
                     User.is_active.is_(True),
                 )
-                .order_by(Enrollment.created_at.desc())
+                .order_by(Enrollment.created_at.desc(), Enrollment.id.desc())
+                .offset(offset)
+                .limit(limit)
             )
         ).all()
     )

@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from fastapi.security import HTTPAuthorizationCredentials
 from pwdlib import PasswordHash
 
-from app.models import LoginThrottle, Profile, User
+from app.models import Profile, User
 from app.database import get_postgres_session
 from app.routes.account import (
     change_my_password,
@@ -77,6 +77,11 @@ class PasswordSession:
     def __init__(self):
         self.committed = False
         self.rollback_count = 0
+        self.statements = []
+
+    async def execute(self, statement):
+        self.statements.append(statement)
+        return None
 
     async def commit(self):
         self.committed = True
@@ -97,6 +102,11 @@ class ProfileFoundationTests(unittest.IsolatedAsyncioTestCase):
             password_hash=PasswordHash.recommended().hash("correct-password"),
         )
 
+    def test_legacy_mongo_authentication_helper_is_removed(self):
+        import app.security as security
+
+        self.assertFalse(hasattr(security, "get_current_user"))
+
     async def test_registration_and_login_remain_postgres_backed(self):
         registration_session = FakeSession([None])
         registered = await register(
@@ -113,7 +123,7 @@ class ProfileFoundationTests(unittest.IsolatedAsyncioTestCase):
 
         login_response = await login(
             LoginRequest(email=self.user.email, password="correct-password"),
-            FakeSession([None, self.user]),
+            FakeSession([self.user]),
         )
         self.assertEqual(login_response["token_type"], "bearer")
         self.assertEqual(login_response["id"], str(self.user.id))
@@ -199,7 +209,7 @@ class ProfileFoundationTests(unittest.IsolatedAsyncioTestCase):
             await get_my_profile(self.user, FakeSession([None]))
         self.assertEqual(missing_error.exception.status_code, 404)
 
-    async def test_profile_discovery_requires_authentication(self):
+    async def test_profile_discovery_hides_network_profiles_from_anonymous_users(self):
         test_app = FastAPI()
         test_app.include_router(profile_router)
 
@@ -210,7 +220,7 @@ class ProfileFoundationTests(unittest.IsolatedAsyncioTestCase):
         with TestClient(test_app) as client:
             response = client.get(f"/users/{self.user.id}/profile")
         test_app.dependency_overrides.clear()
-        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.status_code, 404)
 
     async def test_profile_discovery_returns_only_approved_fields_for_shared_member(self):
         target_user = User(id=uuid.uuid4(), username="target", email="target@example.com", password_hash="secret-hash")
@@ -240,6 +250,7 @@ class ProfileFoundationTests(unittest.IsolatedAsyncioTestCase):
                 "profile_picture_url",
                 "location",
                 "website",
+                "visibility",
             },
         )
         self.assertEqual(response["user_id"], str(target_user.id))
@@ -272,6 +283,26 @@ class ProfileFoundationTests(unittest.IsolatedAsyncioTestCase):
             await get_user_profile(target_user.id, self.user, cross_institution_session)
         self.assertEqual(cross_institution_error.exception.status_code, 404)
         self.assertEqual(cross_institution_session.scalar_values, [])
+
+    async def test_public_profile_can_be_viewed_without_authentication(self):
+        target_user = User(
+            id=uuid.uuid4(),
+            username="public-target",
+            email="public-target@example.com",
+            password_hash="hash",
+        )
+        public_profile = Profile(
+            user_id=target_user.id,
+            display_name="Public profile",
+            visibility="PUBLIC",
+        )
+        response = await get_user_profile(
+            target_user.id,
+            None,
+            FakeSession([target_user, public_profile]),
+        )
+        self.assertEqual(response["display_name"], "Public profile")
+        self.assertEqual(response["visibility"], "PUBLIC")
 
     async def test_profile_discovery_allows_any_shared_membership(self):
         target_user = User(id=uuid.uuid4(), username="target", email="target@example.com", password_hash="hash")
@@ -406,35 +437,48 @@ class ProfileFoundationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.user.token_version, 2)
         self.assertTrue(deactivation_session.committed)
 
-    async def test_login_uses_hashed_subjects_and_persisted_throttle(self):
-        session = FakeSession([None, None, 1])
+    async def test_login_uses_hashed_subjects_and_persisted_rate_limits(self):
+        class Limiter:
+            def __init__(self, results):
+                self.results = iter(results)
+                self.calls = []
+                self.cleared = []
+
+            async def increment(self, scope, key, window_seconds):
+                self.calls.append((scope, key, window_seconds))
+                return next(self.results)
+
+            async def clear(self, scope, key):
+                self.cleared.append((scope, key))
+
+        session = FakeSession([None])
+        limiter = Limiter([(1, 60), (1, 60), (1, 60)])
         with self.assertRaises(HTTPException) as error:
             await login(
                 LoginRequest(email="unknown@example.com", password="wrong-password"),
                 session,
+                limiter,
             )
         self.assertEqual(error.exception.status_code, 401)
         fingerprint = login_subject_hash(" Unknown@Example.com ")
         self.assertEqual(len(fingerprint), 64)
         self.assertNotEqual(fingerprint, "unknown@example.com")
-        throttle_sql = str(session.statements[-1].compile())
-        self.assertIn("ON CONFLICT", throttle_sql)
-        self.assertNotIn("unknown@example.com", str(session.statements[-1].compile().params))
+        self.assertEqual([call[0] for call in limiter.calls], ["login:ip", "login:pair", "login:email"])
+        self.assertNotIn("unknown@example.com", fingerprint)
 
-        blocked_attempt = LoginThrottle(
-            subject_hash=fingerprint,
-            failed_count=5,
-            window_started_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
-        )
-        blocked_session = FakeSession([blocked_attempt])
+        blocked_limiter = Limiter([(1, 60), (5, 42), (5, 42)])
         with self.assertRaises(HTTPException) as blocked_error:
             await login(
                 LoginRequest(email="unknown@example.com", password="wrong-password"),
-                blocked_session,
+                FakeSession([None]),
+                blocked_limiter,
             )
         self.assertEqual(blocked_error.exception.status_code, 429)
-        self.assertEqual(len(blocked_session.statements), 1)
+        self.assertEqual(blocked_error.exception.headers["Retry-After"], "42")
+        self.assertEqual(
+            [call[0] for call in blocked_limiter.calls],
+            ["login:ip", "login:pair", "login:email"],
+        )
 
 
 if __name__ == "__main__":

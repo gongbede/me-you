@@ -121,10 +121,25 @@ class EducationCoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(any(isinstance(value, Activity) for value in session.added))
 
     async def test_teacher_and_student_identity_comes_from_authenticated_user(self):
-        teacher_result = await register_teacher(TeacherCreate(institution_id=str(self.institution.id)), self.user, EducationSession([self.institution.id]))
+        teacher_session = EducationSession([self.institution.id])
+        teacher_result = await register_teacher(
+            TeacherCreate(institution_id=str(self.institution.id)),
+            self.user,
+            teacher_session,
+        )
         self.assertEqual(teacher_result["user_id"], str(self.user.id))
-        student_result = await register_student(StudentCreate(institution_id=str(self.institution.id)), self.user, EducationSession([self.institution.id]))
+        self.assertEqual(teacher_result["status"], "REQUESTED")
+        self.assertFalse(any(isinstance(value, Teacher) for value in teacher_session.added))
+
+        student_session = EducationSession([self.institution.id])
+        student_result = await register_student(
+            StudentCreate(institution_id=str(self.institution.id)),
+            self.user,
+            student_session,
+        )
         self.assertEqual(student_result["user_id"], str(self.user.id))
+        self.assertEqual(student_result["status"], "REQUESTED")
+        self.assertFalse(any(isinstance(value, Student) for value in student_session.added))
 
     async def test_enrollment_requires_current_student(self):
         session = EducationSession([self.course, self.institution.id, self.student])

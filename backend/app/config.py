@@ -38,6 +38,11 @@ def validate_production_config(
     if (environment or APP_ENV).lower() != "production":
         return
     validate_jwt_secret(secret=secret, environment="production")
+    if not RATE_LIMIT_ENABLED:
+        raise ValueError("RATE_LIMIT_ENABLED must be true in production")
+    for name, (limit, window_seconds) in RATE_LIMITS.items():
+        if limit <= 0 or window_seconds <= 0:
+            raise ValueError(f"{name} rate-limit limit and window must be positive in production")
     resolved_database_url = database_url if database_url is not None else os.getenv("ME_YOU_DATABASE_URL")
     if not resolved_database_url or not resolved_database_url.startswith("postgresql+asyncpg://"):
         raise ValueError("ME_YOU_DATABASE_URL must use postgresql+asyncpg in production")
@@ -53,3 +58,28 @@ POSTGRESQL_DATABASE_URL = os.getenv("ME_YOU_DATABASE_URL")
 JWT_SECRET_KEY = validate_jwt_secret()
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
+TRUSTED_PROXY_COUNT = max(0, int(os.getenv("TRUSTED_PROXY_COUNT", "0")))
+LOGIN_PAIR_FAILURE_LIMIT = int(os.getenv("LOGIN_PAIR_FAILURE_LIMIT", "5"))
+LOGIN_PAIR_WINDOW_SECONDS = int(os.getenv("LOGIN_PAIR_WINDOW_SECONDS", "900"))
+LOGIN_IP_ATTEMPT_LIMIT = int(os.getenv("LOGIN_IP_ATTEMPT_LIMIT", "30"))
+LOGIN_IP_WINDOW_SECONDS = int(os.getenv("LOGIN_IP_WINDOW_SECONDS", "900"))
+LOGIN_EMAIL_FAILURE_LIMIT = int(os.getenv("LOGIN_EMAIL_FAILURE_LIMIT", "50"))
+LOGIN_EMAIL_WINDOW_SECONDS = int(os.getenv("LOGIN_EMAIL_WINDOW_SECONDS", "3600"))
+REGISTRATION_IP_LIMIT = int(os.getenv("REGISTRATION_IP_LIMIT", "5"))
+REGISTRATION_WINDOW_SECONDS = int(os.getenv("REGISTRATION_WINDOW_SECONDS", "3600"))
+PASSWORD_CHANGE_IP_LIMIT = int(os.getenv("PASSWORD_CHANGE_IP_LIMIT", "5"))
+PASSWORD_CHANGE_WINDOW_SECONDS = int(os.getenv("PASSWORD_CHANGE_WINDOW_SECONDS", "3600"))
+API_IP_LIMIT = int(os.getenv("API_IP_LIMIT", "120"))
+API_WINDOW_SECONDS = int(os.getenv("API_WINDOW_SECONDS", "60"))
+RATE_LIMIT_ENABLED = os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true"
+SECURITY_EVENT_RETENTION_DAYS = int(os.getenv("SECURITY_EVENT_RETENTION_DAYS", "365"))
+APP_PUBLIC_BASE_URL = os.getenv("ME_YOU_PUBLIC_BASE_URL", "http://localhost:3000").rstrip("/")
+
+RATE_LIMITS = {
+    "login_pair": (LOGIN_PAIR_FAILURE_LIMIT, LOGIN_PAIR_WINDOW_SECONDS),
+    "login_ip": (LOGIN_IP_ATTEMPT_LIMIT, LOGIN_IP_WINDOW_SECONDS),
+    "login_email": (LOGIN_EMAIL_FAILURE_LIMIT, LOGIN_EMAIL_WINDOW_SECONDS),
+    "registration_ip": (REGISTRATION_IP_LIMIT, REGISTRATION_WINDOW_SECONDS),
+    "password_change_ip": (PASSWORD_CHANGE_IP_LIMIT, PASSWORD_CHANGE_WINDOW_SECONDS),
+    "api_ip": (API_IP_LIMIT, API_WINDOW_SECONDS),
+}

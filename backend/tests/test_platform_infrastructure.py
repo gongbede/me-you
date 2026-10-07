@@ -108,7 +108,7 @@ class PlatformInfrastructureTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("notifications.recipient_id", sql)
         self.assertIn("notifications.read_at IS NULL", sql)
         self.assertIn(2, compiled.params.values())
-        self.assertIn(1, compiled.params.values())
+        self.assertIn(2, compiled.params.values())
         self.assertIn(self.user.id, compiled.params.values())
 
     async def test_notification_owner_cannot_read_or_mark_another_users_notification(self):

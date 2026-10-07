@@ -163,6 +163,8 @@ async def create_group(data: CreateGroupConversation, current_user: User = Depen
     except ValueError:
         raise HTTPException(status_code=422, detail="member_ids must contain UUIDs") from None
     member_ids.add(current_user.id)
+    if len(member_ids) > 100:
+        raise HTTPException(status_code=422, detail="Groups may have at most 100 members")
     users = list(
         (
             await database.scalars(
@@ -208,6 +210,13 @@ async def add_group_member(conversation_id: uuid.UUID, data: AddConversationMemb
         raise HTTPException(status_code=404, detail="User not found")
     if await member_for(conversation_id, target_id, database) is not None:
         raise HTTPException(status_code=409, detail="User is already a conversation member")
+    member_count = await database.scalar(
+        select(func.count(ConversationMember.user_id)).where(
+            ConversationMember.conversation_id == conversation_id
+        )
+    )
+    if int(member_count or 0) >= 100:
+        raise HTTPException(status_code=409, detail="Groups may have at most 100 members")
     membership = ConversationMember(conversation_id=conversation_id, user_id=target_id, user=target)
     database.add(membership)
     conversation.updated_at = datetime.now(timezone.utc)

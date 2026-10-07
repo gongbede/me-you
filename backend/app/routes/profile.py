@@ -9,9 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_postgres_session
 from ..models import Profile, User
-from ..permissions import list_user_institution_ids
+from ..privacy import can_view_profile
 from ..schemas import CreateProfile, ProfileDiscoveryResponse, ProfileResponse, UpdateProfile
-from ..security import get_current_postgres_user
+from ..security import get_current_postgres_user, get_optional_postgres_user
 
 
 router = APIRouter(tags=["profile"])
@@ -25,6 +25,7 @@ def profile_response(profile: Profile) -> dict:
         "profile_picture_url": profile.profile_picture_url,
         "location": profile.location,
         "website": profile.website,
+        "visibility": getattr(profile, "visibility", "NETWORK"),
         "created_at": profile.created_at,
         "updated_at": profile.updated_at,
     }
@@ -128,19 +129,11 @@ async def update_my_profile(
 )
 async def get_user_profile(
     user_id: uuid.UUID,
-    current_user: User = Depends(get_current_postgres_user),
+    current_user: User | None = Depends(get_optional_postgres_user),
     database: AsyncSession = Depends(get_postgres_session),
 ):
-    target_exists = await database.scalar(select(User.id).where(User.id == user_id))
-    if target_exists is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Profile not found",
-        )
-
-    requester_institutions = await list_user_institution_ids(current_user.id, database)
-    target_institutions = await list_user_institution_ids(user_id, database)
-    if requester_institutions.isdisjoint(target_institutions):
+    target_user = await database.scalar(select(User).where(User.id == user_id))
+    if target_user is None or target_user.is_active is False:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Profile not found",
@@ -152,6 +145,13 @@ async def get_user_profile(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Profile not found",
         )
+    if not await can_view_profile(
+        target_user,
+        getattr(profile, "visibility", None) or "NETWORK",
+        current_user,
+        database,
+    ):
+        raise HTTPException(status_code=404, detail="Profile not found")
 
     return {
         "user_id": str(profile.user_id),
@@ -160,4 +160,5 @@ async def get_user_profile(
         "profile_picture_url": profile.profile_picture_url,
         "location": profile.location,
         "website": profile.website,
+        "visibility": getattr(profile, "visibility", None) or "NETWORK",
     }

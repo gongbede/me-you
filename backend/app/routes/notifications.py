@@ -1,13 +1,14 @@
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ..database import get_postgres_session
 from ..models import Notification, User
+from ..pagination import descending_time_uuid_clause, time_uuid_cursor
 from ..schemas import NotificationResponse, NotificationUnreadCountResponse
 from ..security import get_current_postgres_user
 from .posts import user_summary
@@ -61,6 +62,8 @@ async def list_notifications(
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=20, ge=1, le=100),
     unread_only: bool = Query(default=False),
+    cursor: str | None = None,
+    response: Response = None,
 ):
     statement = (
         select(Notification)
@@ -69,16 +72,29 @@ async def list_notifications(
     )
     if unread_only:
         statement = statement.where(Notification.read_at.is_(None))
+    if cursor is not None:
+        statement = statement.where(
+            descending_time_uuid_clause(
+                Notification.created_at, Notification.id, cursor
+            )
+        )
+    else:
+        statement = statement.offset(offset)
     notifications = list(
         (
             await database.scalars(
                 statement.order_by(Notification.created_at.desc(), Notification.id.desc())
-                .offset(offset)
-                .limit(limit)
+                .limit(limit + 1)
             )
         ).all()
     )
-    return [notification_response(notification) for notification in notifications]
+    has_more = len(notifications) > limit
+    page = notifications[:limit]
+    if response is not None and has_more and page:
+        response.headers["X-Next-Cursor"] = time_uuid_cursor(
+            page[-1].created_at, page[-1].id
+        )
+    return [notification_response(notification) for notification in page]
 
 
 @router.get(

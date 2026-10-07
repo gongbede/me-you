@@ -27,6 +27,19 @@ class PasswordConfirmationRequest(BaseModel):
     current_password: str = Field(min_length=8, max_length=128)
 
 
+class PasswordRecoveryRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=255)
+
+
+class PasswordRecoveryConfirm(BaseModel):
+    token: str = Field(min_length=32, max_length=200)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class EmailTokenConfirm(BaseModel):
+    token: str = Field(min_length=32, max_length=200)
+
+
 class AccountLifecycleResponse(BaseModel):
     message: str
 
@@ -46,4 +59,5 @@ class UserResponse(BaseModel):
     id: str
     username: str
     email: str
+    email_verified_at: datetime | None = None
     created_at: datetime

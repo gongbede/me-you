@@ -63,6 +63,10 @@ class MigrationFoundationTests(unittest.TestCase):
                 "courses", "teachers", "students", "enrollments",
                 "course_teachers", "lessons", "exercises", "exercise_submissions", "assessments",
                 "assessment_submissions", "assessment_results", "lesson_progress", "activities", "login_throttles", "media_assets",
+                "rate_limit_counters",
+                "security_events",
+                "institution_membership_requests",
+                "account_email_tokens",
             },
         )
         self.assertIs(User.__table__, Base.metadata.tables["users"])
@@ -188,6 +192,23 @@ class MigrationFoundationTests(unittest.TestCase):
         self.assertEqual(migration.down_revision, "0010_conversation_ownership")
         self.assertTrue(callable(migration.upgrade))
         self.assertTrue(callable(migration.downgrade))
+
+    def test_foundation_hardening_migrations_form_a_linear_chain(self):
+        revisions = (
+            ("0012_rate_limit_counters.py", "0012_rate_limit_counters", "0011_media_assets"),
+            ("0013_security_events.py", "0013_security_events", "0012_rate_limit_counters"),
+            ("0014_privacy_membership_requests.py", "0014_privacy_membership_requests", "0013_security_events"),
+            ("0015_education_integrity.py", "0015_education_integrity", "0014_privacy_membership_requests"),
+            ("0016_account_email_tokens.py", "0016_account_email_tokens", "0015_education_integrity"),
+        )
+        for filename, revision, down_revision in revisions:
+            migration = load_module(
+                f"me_you_{revision}", ROOT / "alembic" / "versions" / filename
+            )
+            self.assertEqual(migration.revision, revision)
+            self.assertEqual(migration.down_revision, down_revision)
+            self.assertTrue(callable(migration.upgrade))
+            self.assertTrue(callable(migration.downgrade))
 
     def test_application_does_not_create_tables_at_startup(self):
         main_source = (ROOT / "app" / "main.py").read_text()
