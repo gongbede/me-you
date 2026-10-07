@@ -1,42 +1,93 @@
-import { ArrowRight, Compass, Sparkles } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { LoaderCircle, MessageCircle } from 'lucide-react'
+import { createPost, getFeed, type Post } from '../api/social'
+import { getFriendlyErrorMessage } from '../api/client'
+import { PostComposer } from '../components/PostComposer'
+import { PostCard } from '../components/PostCard'
 import { useAuth } from '../hooks/useAuth'
 
 export function HomePage() {
   const { user } = useAuth()
+  const queryClient = useQueryClient()
+  const feedQuery = useInfiniteQuery({
+    queryKey: ['feed'],
+    queryFn: ({ pageParam }) => getFeed(pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (page) => page.has_more ? page.next_cursor ?? undefined : undefined,
+  })
+  const createMutation = useMutation({
+    mutationFn: createPost,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['feed'] })
+    },
+  })
+  const posts: Post[] = feedQuery.data?.pages.flatMap((page) => page.items) ?? []
+
+  function removePost(postId: string) {
+    queryClient.setQueryData(['feed'], (previous: typeof feedQuery.data) => previous && ({
+      ...previous,
+      pages: previous.pages.map((page) => ({
+        ...page,
+        items: page.items.filter((post) => post.id !== postId),
+      })),
+    }))
+    void queryClient.invalidateQueries({ queryKey: ['feed'] })
+  }
 
   return (
     <div className="page-stack">
-      <section className="welcome-block">
+      <section className="page-heading-row feed-heading">
         <div>
           <span className="eyebrow">YOUR COMMUNITY</span>
-          <h1>Good things grow <span>together.</span></h1>
-          <p>Welcome in, {user?.username}. Make today a little more curious.</p>
-        </div>
-        <div className="welcome-stamp" aria-hidden="true"><Sparkles size={30} /><span>learn<br />with joy</span></div>
-      </section>
-
-      <section className="home-empty" aria-labelledby="home-empty-title">
-        <div className="empty-illustration" aria-hidden="true">
-          <span className="empty-orbit empty-orbit--a" />
-          <span className="empty-orbit empty-orbit--b" />
-          <span className="empty-center"><Compass size={34} strokeWidth={1.8} /></span>
-          <span className="empty-dot empty-dot--teal" />
-          <span className="empty-dot empty-dot--amber" />
-        </div>
-        <div className="home-empty__copy">
-          <span className="eyebrow">A FRESH START</span>
-          <h2 id="home-empty-title">Your next chapter is open.</h2>
-          <p>Your learning space is ready. Add a little about yourself and make it yours.</p>
-          <Link className="button button--primary" to="/profile">Set up your profile <ArrowRight size={17} /></Link>
+          <h1>Home</h1>
+          <p>Share what you’re learning, {user?.username}.</p>
         </div>
       </section>
 
-      <section className="home-note" aria-label="Me&You tagline">
-        <span className="home-note__dot" />
-        <p><strong>Learn.</strong> <strong>Connect.</strong> <strong>Grow.</strong></p>
-        <span className="home-note__caption">One step at a time.</span>
-      </section>
+      <PostComposer
+        onPost={(content) => createMutation.mutateAsync(content).then(() => undefined)}
+        isPosting={createMutation.isPending}
+        error={createMutation.isError ? getFriendlyErrorMessage(createMutation.error) : null}
+      />
+
+      {feedQuery.isPending ? (
+        <div className="feed-list" role="status" aria-label="Loading posts">
+          {[0, 1, 2].map((key) => <div className="post-skeleton" key={key}><span /><span /><span /></div>)}
+        </div>
+      ) : feedQuery.isError && !feedQuery.data ? (
+        <div className="page-state page-state--error" role="alert">
+          <h2>We couldn’t load your feed.</h2>
+          <p>{getFriendlyErrorMessage(feedQuery.error)}</p>
+          <button className="button button--outline" type="button" onClick={() => void feedQuery.refetch()}>Retry</button>
+        </div>
+      ) : posts.length === 0 ? (
+        <div className="feed-empty">
+          <MessageCircle size={24} aria-hidden="true" />
+          <p>Nothing here yet. Be the first to post.</p>
+        </div>
+      ) : (
+        <div className="feed-list" aria-label="Your feed">
+          {posts.map((post) => <PostCard key={post.id} post={post} onDeleted={removePost} />)}
+        </div>
+      )}
+
+      {feedQuery.hasNextPage && (
+        <button
+          className="button button--outline feed-load-more"
+          type="button"
+          disabled={feedQuery.isFetchingNextPage}
+          onClick={() => void feedQuery.fetchNextPage()}
+        >
+          {feedQuery.isFetchingNextPage && <LoaderCircle size={16} className="spin" aria-hidden="true" />}
+          {feedQuery.isFetchingNextPage ? 'Loading…' : 'Load more'}
+        </button>
+      )}
+      {feedQuery.isFetchNextPageError && (
+        <div className="inline-error" role="alert">
+          <p>{getFriendlyErrorMessage(feedQuery.error)}</p>
+          <button className="button button--outline" type="button" onClick={() => void feedQuery.fetchNextPage()}>Retry</button>
+        </div>
+      )}
     </div>
   )
 }

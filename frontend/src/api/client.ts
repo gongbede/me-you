@@ -65,10 +65,15 @@ export interface ApiRequestOptions extends Omit<RequestInit, 'body' | 'method'> 
   auth?: boolean
 }
 
-export async function apiRequest<TResponse>(
+export interface ApiCursorPage<TResponse> {
+  data: TResponse
+  nextCursor: string | null
+}
+
+async function sendRequest(
   path: ApiPath | (string & {}),
-  options: ApiRequestOptions = {},
-): Promise<TResponse> {
+  options: ApiRequestOptions,
+): Promise<Response> {
   const { auth = true, body, headers: suppliedHeaders, ...requestOptions } = options
   const headers = new Headers(suppliedHeaders)
   const token = auth ? getAccessToken() : null
@@ -89,16 +94,40 @@ export async function apiRequest<TResponse>(
     window.dispatchEvent(new Event('me-you:unauthorized'))
   }
 
+  return response
+}
+
+async function throwApiError(response: Response): Promise<never> {
+  const payload: unknown = await response.json().catch(() => null)
+  const detail =
+    typeof payload === 'object' && payload !== null && 'detail' in payload
+      ? payload.detail
+      : null
+  const message = detailMessage(detail) ?? `Request failed (${response.status}). Please try again.`
+  throw new ApiError(message, response.status, response.headers.get('Retry-After'))
+}
+
+export async function apiRequest<TResponse>(
+  path: ApiPath | (string & {}),
+  options: ApiRequestOptions = {},
+): Promise<TResponse> {
+  const response = await sendRequest(path, options)
   if (!response.ok) {
-    const payload: unknown = await response.json().catch(() => null)
-    const detail =
-      typeof payload === 'object' && payload !== null && 'detail' in payload
-        ? payload.detail
-        : null
-    const message = detailMessage(detail) ?? `Request failed (${response.status}). Please try again.`
-    throw new ApiError(message, response.status, response.headers.get('Retry-After'))
+    return throwApiError(response)
   }
 
   if (response.status === 204) return undefined as TResponse
   return (await response.json()) as TResponse
+}
+
+export async function apiRequestWithCursor<TResponse>(
+  path: ApiPath | (string & {}),
+  options: ApiRequestOptions = {},
+): Promise<ApiCursorPage<TResponse>> {
+  const response = await sendRequest(path, options)
+  if (!response.ok) return throwApiError(response)
+  return {
+    data: (await response.json()) as TResponse,
+    nextCursor: response.headers.get('X-Next-Cursor'),
+  }
 }

@@ -10,6 +10,7 @@ import { LoginPage } from './pages/LoginPage'
 import { LogoutPage } from './pages/LogoutPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { ProfilePage } from './pages/ProfilePage'
+import { PublicProfilePage } from './pages/PublicProfilePage'
 import { RegisterPage } from './pages/RegisterPage'
 import { ResetPasswordPage } from './pages/ResetPasswordPage'
 import { VerifyEmailPage } from './pages/VerifyEmailPage'
@@ -37,6 +38,7 @@ export default function App() {
                 <Route element={<AppShell />}>
                   <Route index element={<HomePage />} />
                   <Route path="profile" element={<ProfilePage />} />
+                  <Route path="users/:userId" element={<PublicProfilePage />} />
                 </Route>
               </Route>
               <Route path="*" element={<NotFoundPage />} />
