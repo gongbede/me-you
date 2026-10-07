@@ -1,6 +1,6 @@
 import { House, LogOut, UserRound } from 'lucide-react'
 import { NavLink, Outlet } from 'react-router-dom'
-import { Brand } from './Brand'
+import { Logo } from './Logo'
 import { useAuth } from '../hooks/useAuth'
 
 const tabs = [
@@ -14,7 +14,7 @@ export function AppShell() {
   return (
     <div className="app-shell">
       <aside className="sidebar" aria-label="Main navigation">
-        <Brand />
+        <Logo variant="horizontal-white" size={38} />
         <div className="sidebar__section-label">YOUR SPACE</div>
         <nav className="sidebar__nav">
           {tabs.map(({ to, label, icon: Icon, end }) => (
@@ -37,7 +37,7 @@ export function AppShell() {
 
       <div className="app-column">
         <header className="topbar">
-          <div className="topbar__mobile-brand"><Brand compact /></div>
+          <div className="topbar__mobile-brand"><Logo variant="mark" size={36} /></div>
           <span className="topbar__greeting">A brighter day to learn something.</span>
           <span className="topbar__spark" aria-hidden="true">✦</span>
         </header>

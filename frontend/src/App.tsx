@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { AppErrorBoundary } from './components/AppErrorBoundary'
 import { AppShell } from './components/AppShell'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { AuthProvider } from './hooks/useAuth'
@@ -24,21 +25,23 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <BrowserRouter>
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/register" element={<RegisterPage />} />
-            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-            <Route path="/reset-password" element={<ResetPasswordPage />} />
-            <Route path="/verify-email" element={<VerifyEmailPage />} />
-            <Route element={<ProtectedRoute />}>
-              <Route path="/logout" element={<LogoutPage />} />
-              <Route element={<AppShell />}>
-                <Route index element={<HomePage />} />
-                <Route path="profile" element={<ProfilePage />} />
+          <AppErrorBoundary>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
+              <Route path="/verify-email" element={<VerifyEmailPage />} />
+              <Route element={<ProtectedRoute />}>
+                <Route path="/logout" element={<LogoutPage />} />
+                <Route element={<AppShell />}>
+                  <Route index element={<HomePage />} />
+                  <Route path="profile" element={<ProfilePage />} />
+                </Route>
               </Route>
-            </Route>
-            <Route path="*" element={<NotFoundPage />} />
-          </Routes>
+              <Route path="*" element={<NotFoundPage />} />
+            </Routes>
+          </AppErrorBoundary>
         </BrowserRouter>
       </AuthProvider>
     </QueryClientProvider>

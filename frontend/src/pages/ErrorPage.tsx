@@ -1,13 +1,12 @@
 import { Link } from 'react-router-dom'
 import { Logo } from '../components/Logo'
 
-export function NotFoundPage() {
+export function ErrorPage() {
   return (
-    <main className="not-found">
+    <main className="not-found" role="alert">
       <Logo variant="mark" size={68} />
-      <span className="not-found__code">404</span>
-      <h1>This page wandered off.</h1>
-      <p>That address doesn’t lead anywhere just yet.</p>
+      <h1>Something went sideways.</h1>
+      <p>We couldn’t finish loading this page. Please try again.</p>
       <Link className="button button--primary" to="/">Back home</Link>
     </main>
   )

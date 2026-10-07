@@ -1,6 +1,7 @@
 .env
 .env.*
 !.env.example
+/backend/.venv/
 __pycache__/
 *.py[cod]
 me_you.db
