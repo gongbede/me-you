@@ -8,3 +8,5 @@ PyJWT==2.15.1
 pymongo==4.18.2
 python-dotenv==1.2.4
 httpx==0.28.1
+boto3==1.43.108
+moto[s3]==5.2.3

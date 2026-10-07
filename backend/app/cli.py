@@ -1,13 +1,16 @@
 import argparse
 import asyncio
+from datetime import datetime, timedelta, timezone
 from getpass import getpass, getuser
 from typing import Any
 
 from sqlalchemy import select
 
 from .account_tokens import purge_expired_account_email_tokens
+from .config import MEDIA_ORPHAN_UPLOAD_HOURS
 from .database import PostgresSessionLocal
-from .models import User
+from .models import MediaAsset, User
+from .providers import get_provider_registry, provider_or_503
 from .rate_limit import purge_expired_counters
 from .security import password_hash
 from .security_audit import purge_expired_security_events, record_security_event
@@ -156,6 +159,37 @@ async def revoke_platform_admin(email: str, session_factory: Any = None) -> bool
     return changed
 
 
+async def purge_orphan_uploads(
+    session_factory: Any = None,
+    *,
+    older_than_hours: int | None = None,
+    storage: Any = None,
+) -> int:
+    factory = _resolve_session_factory(session_factory)
+    storage = storage or provider_or_503(get_provider_registry(), "storage")
+    cutoff = datetime.now(timezone.utc) - timedelta(
+        hours=MEDIA_ORPHAN_UPLOAD_HOURS if older_than_hours is None else older_than_hours
+    )
+    async with factory() as session:
+        assets = list(
+            (
+                await session.scalars(
+                    select(MediaAsset)
+                    .where(
+                        MediaAsset.status == "UPLOAD_PENDING",
+                        MediaAsset.created_at < cutoff,
+                    )
+                    .order_by(MediaAsset.created_at.asc(), MediaAsset.id.asc())
+                )
+            ).all()
+        )
+        for asset in assets:
+            await storage.delete_object(asset.storage_key)
+            await session.delete(asset)
+        await session.commit()
+        return len(assets)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="python -m app.cli")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -165,6 +199,7 @@ def main() -> None:
     revoke_parser = commands.add_parser("revoke-platform-admin", help="Revoke platform-admin access")
     revoke_parser.add_argument("email")
     commands.add_parser("purge-expired", help="Delete expired rate-limit counter rows")
+    commands.add_parser("purge-orphan-uploads", help="Delete stale, incomplete media uploads")
     commands.add_parser("purge-security-events", help="Delete old security audit events")
     arguments = parser.parse_args()
 
@@ -188,6 +223,9 @@ def main() -> None:
         elif arguments.command == "purge-security-events":
             deleted = asyncio.run(purge_expired_security_events())
             print(f"Deleted {deleted} expired security events")
+        elif arguments.command == "purge-orphan-uploads":
+            deleted = asyncio.run(purge_orphan_uploads())
+            print(f"Deleted {deleted} orphan media uploads")
     except ValueError as error:
         parser.error(str(error))
 

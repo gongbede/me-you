@@ -20,6 +20,13 @@ from .registry import (
     provider_or_503,
     require_provider,
 )
+from .storage import (
+    LocalDiskStorageProvider,
+    S3CompatibleStorageProvider,
+    StorageObjectTooLarge,
+    StorageTokenError,
+    sniff_content_type,
+)
 
 
 __all__ = [
@@ -30,15 +37,20 @@ __all__ = [
     "EmailProvider",
     "EmailRequest",
     "MediaProcessingProvider",
+    "LocalDiskStorageProvider",
     "ObjectStorageProvider",
     "PaymentProvider",
     "ProviderNotConfiguredError",
     "ProviderRegistry",
     "ProviderSettings",
+    "S3CompatibleStorageProvider",
+    "StorageObjectTooLarge",
+    "StorageTokenError",
     "RealtimeEventProvider",
     "StoredObjectMetadata",
     "UploadIntent",
     "get_provider_registry",
     "provider_or_503",
     "require_provider",
+    "sniff_content_type",
 ]

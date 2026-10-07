@@ -26,6 +26,7 @@ class ProviderSettings:
     conferencing: str | None = None
     payments: str | None = None
     ai: str | None = None
+    storage_backend: str = "local"
 
     @classmethod
     def from_environment(cls) -> ProviderSettings:
@@ -37,6 +38,7 @@ class ProviderSettings:
             conferencing=os.getenv("ME_YOU_CONFERENCING_PROVIDER"),
             payments=os.getenv("ME_YOU_PAYMENT_PROVIDER"),
             ai=os.getenv("ME_YOU_AI_PROVIDER"),
+            storage_backend=os.getenv("STORAGE_BACKEND", "local").strip().lower(),
         )
 
 
@@ -53,7 +55,26 @@ class ProviderRegistry:
 
 
 def get_provider_registry() -> ProviderRegistry:
-    return ProviderRegistry(settings=ProviderSettings.from_environment())
+    settings = ProviderSettings.from_environment()
+    from ..config import JWT_SECRET_KEY, S3_BUCKET, S3_ENDPOINT_URL, S3_REGION, STORAGE_LOCAL_DIR
+    from .storage import LocalDiskStorageProvider, S3CompatibleStorageProvider
+
+    storage: ObjectStorageProvider | None = None
+    if settings.storage_backend == "local":
+        storage = LocalDiskStorageProvider(STORAGE_LOCAL_DIR, JWT_SECRET_KEY)
+    elif settings.storage_backend == "s3":
+        access_key = os.getenv("AWS_ACCESS_KEY_ID")
+        secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+        if access_key and secret_key and S3_BUCKET:
+            storage = S3CompatibleStorageProvider(
+                bucket=S3_BUCKET,
+                region=S3_REGION,
+                endpoint_url=S3_ENDPOINT_URL,
+                access_key=access_key,
+                secret_key=secret_key,
+                session_token=os.getenv("AWS_SESSION_TOKEN"),
+            )
+    return ProviderRegistry(settings=settings, storage=storage)
 
 
 def require_provider(registry: ProviderRegistry, capability: str):

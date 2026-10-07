@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, Text, Uuid
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
@@ -18,6 +18,7 @@ class Profile(Base):
             "visibility IN ('PUBLIC', 'AUTHENTICATED', 'NETWORK', 'PRIVATE')",
             name="ck_profiles_visibility",
         ),
+        Index("ix_profiles_avatar_asset_id", "avatar_asset_id"),
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
@@ -28,6 +29,9 @@ class Profile(Base):
     display_name: Mapped[str] = mapped_column(String(100), nullable=False)
     bio: Mapped[str | None] = mapped_column(Text, nullable=True)
     profile_picture_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    avatar_asset_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("media_assets.id", ondelete="SET NULL"), nullable=True
+    )
     location: Mapped[str | None] = mapped_column(String(200), nullable=True)
     website: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     visibility: Mapped[str] = mapped_column(

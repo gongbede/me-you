@@ -16,6 +16,7 @@ MediaStatus = Literal["UPLOAD_PENDING", "READY", "FAILED"]
 
 class MediaUploadIntentCreate(BaseModel):
     purpose: MediaPurpose
+    institution_id: str | None = Field(default=None, min_length=36, max_length=36)
     content_type: str = Field(min_length=1, max_length=120)
     byte_size: int = Field(gt=0, le=1_000_000_000)
     original_filename: str = Field(min_length=1, max_length=255)
@@ -43,6 +44,7 @@ class MediaUploadIntentCreate(BaseModel):
 class MediaAssetResponse(BaseModel):
     id: str
     purpose: MediaPurpose
+    institution_id: str | None = None
     status: MediaStatus
     content_type: str
     byte_size: int
@@ -62,3 +64,7 @@ class MediaDownloadResponse(BaseModel):
     asset: MediaAssetResponse
     download_url: str
     expires_in_seconds: int
+
+
+class MediaAvatarSet(BaseModel):
+    asset_id: str = Field(min_length=36, max_length=36)

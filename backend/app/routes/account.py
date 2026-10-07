@@ -19,6 +19,7 @@ from ..models import (
     Comment,
     ExerciseSubmission,
     Message,
+    MediaAsset,
     Post,
     Profile,
     Student,
@@ -316,6 +317,7 @@ async def delete_account(
     current_user: User = Depends(get_current_postgres_user),
     database: AsyncSession = Depends(get_postgres_session),
     request: Request = None,
+    providers: ProviderRegistry = Depends(get_provider_registry),
 ):
     await confirm_current_password(data, current_user)
     await ensure_account_can_be_deactivated(
@@ -323,6 +325,17 @@ async def delete_account(
         database,
         is_platform_admin=bool(getattr(current_user, "is_platform_admin", False)),
     )
+    media_assets = list(
+        (
+            await database.scalars(
+                select(MediaAsset).where(MediaAsset.owner_id == current_user.id)
+            )
+        ).all()
+    )
+    if media_assets:
+        storage = provider_or_503(providers, "storage")
+        for asset in media_assets:
+            await storage.delete_object(asset.storage_key)
     now = datetime.now(timezone.utc)
     anonymous_id = uuid.uuid4().hex
     current_user.username = f"deleted-{anonymous_id}"
@@ -361,6 +374,9 @@ async def delete_account(
     )
     await database.execute(
         delete(AccountEmailToken).where(AccountEmailToken.user_id == current_user.id)
+    )
+    await database.execute(
+        delete(MediaAsset).where(MediaAsset.owner_id == current_user.id)
     )
     if request is not None:
         record_security_event(

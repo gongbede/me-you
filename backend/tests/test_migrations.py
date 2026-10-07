@@ -200,6 +200,7 @@ class MigrationFoundationTests(unittest.TestCase):
             ("0014_privacy_membership_requests.py", "0014_privacy_membership_requests", "0013_security_events"),
             ("0015_education_integrity.py", "0015_education_integrity", "0014_privacy_membership_requests"),
             ("0016_account_email_tokens.py", "0016_account_email_tokens", "0015_education_integrity"),
+            ("0017_media_storage.py", "0017_media_storage", "0016_account_email_tokens"),
         )
         for filename, revision, down_revision in revisions:
             migration = load_module(

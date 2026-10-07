@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -34,6 +35,11 @@ def validate_production_config(
     secret: str | None = None,
     database_url: str | None = None,
     cors_origins: tuple[str, ...] | None = None,
+    storage_backend: str | None = None,
+    s3_bucket: str | None = None,
+    s3_endpoint_url: str | None = None,
+    s3_access_key: str | None = None,
+    s3_secret_key: str | None = None,
 ) -> None:
     if (environment or APP_ENV).lower() != "production":
         return
@@ -49,6 +55,22 @@ def validate_production_config(
     resolved_origins = cors_origins if cors_origins is not None else CORS_ORIGINS
     if not resolved_origins or "*" in resolved_origins:
         raise ValueError("ME_YOU_CORS_ORIGINS must contain explicit origins in production")
+    resolved_storage_backend = storage_backend or os.getenv("STORAGE_BACKEND", "local").lower()
+    if resolved_storage_backend != "s3":
+        raise ValueError("STORAGE_BACKEND must be s3 in production")
+    if not (s3_bucket if s3_bucket is not None else os.getenv("S3_BUCKET", "me-you-media")):
+        raise ValueError("S3_BUCKET is required when STORAGE_BACKEND=s3")
+    if not (
+        s3_access_key if s3_access_key is not None else os.getenv("AWS_ACCESS_KEY_ID")
+    ) or not (
+        s3_secret_key if s3_secret_key is not None else os.getenv("AWS_SECRET_ACCESS_KEY")
+    ):
+        raise ValueError("S3 credentials must be supplied through environment variables")
+    resolved_endpoint = (
+        s3_endpoint_url if s3_endpoint_url is not None else os.getenv("S3_ENDPOINT_URL")
+    )
+    if resolved_endpoint and resolved_endpoint.startswith("http://"):
+        raise ValueError("S3_ENDPOINT_URL must use HTTPS in production")
 
 
 APP_NAME = "Me&You"
@@ -74,6 +96,26 @@ API_WINDOW_SECONDS = int(os.getenv("API_WINDOW_SECONDS", "60"))
 RATE_LIMIT_ENABLED = os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true"
 SECURITY_EVENT_RETENTION_DAYS = int(os.getenv("SECURITY_EVENT_RETENTION_DAYS", "365"))
 APP_PUBLIC_BASE_URL = os.getenv("ME_YOU_PUBLIC_BASE_URL", "http://localhost:3000").rstrip("/")
+STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "local").strip().lower()
+if STORAGE_BACKEND not in {"local", "s3"}:
+    raise ValueError("STORAGE_BACKEND must be local or s3")
+STORAGE_LOCAL_DIR = Path(
+    os.getenv("STORAGE_LOCAL_DIR", str(Path(__file__).resolve().parents[1] / ".media"))
+).expanduser()
+S3_ENDPOINT_URL = os.getenv("S3_ENDPOINT_URL") or None
+S3_BUCKET = os.getenv("S3_BUCKET", "me-you-media")
+S3_REGION = os.getenv("S3_REGION", "us-east-1")
+STORAGE_SIGNED_URL_LIFETIME_SECONDS = int(
+    os.getenv("STORAGE_SIGNED_URL_LIFETIME_SECONDS", "300")
+)
+MEDIA_USER_QUOTA_BYTES = int(os.getenv("MEDIA_USER_QUOTA_BYTES", "2000000000"))
+MEDIA_ORPHAN_UPLOAD_HOURS = int(os.getenv("MEDIA_ORPHAN_UPLOAD_HOURS", "24"))
+if STORAGE_SIGNED_URL_LIFETIME_SECONDS < 1 or STORAGE_SIGNED_URL_LIFETIME_SECONDS > 604800:
+    raise ValueError("STORAGE_SIGNED_URL_LIFETIME_SECONDS must be between 1 and 604800")
+if MEDIA_USER_QUOTA_BYTES < 1:
+    raise ValueError("MEDIA_USER_QUOTA_BYTES must be positive")
+if MEDIA_ORPHAN_UPLOAD_HOURS < 1:
+    raise ValueError("MEDIA_ORPHAN_UPLOAD_HOURS must be positive")
 
 RATE_LIMITS = {
     "login_pair": (LOGIN_PAIR_FAILURE_LIMIT, LOGIN_PAIR_WINDOW_SECONDS),

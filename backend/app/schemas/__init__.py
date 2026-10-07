@@ -75,6 +75,7 @@ from .platform import SearchResponse, SearchResult
 from .administration import PlatformAdminUserResponse
 from .media import (
 	MediaAssetResponse,
+	MediaAvatarSet,
 	MediaDownloadResponse,
 	MediaUploadIntentCreate,
 	MediaUploadIntentResponse,
@@ -158,6 +159,7 @@ __all__ = [
 	"PasswordChangeResponse",
 	"MessageResponse",
 	"MediaAssetResponse",
+	"MediaAvatarSet",
 	"MediaDownloadResponse",
 	"MediaUploadIntentCreate",
 	"MediaUploadIntentResponse",

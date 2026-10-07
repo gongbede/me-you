@@ -1562,11 +1562,14 @@ def test_account_email_token_downgrade_preserves_lifecycle_data(postgres_databas
 
 
 def test_account_email_tokens_logout_and_anonymizing_deletion(postgres_database_url):
+    from datetime import datetime, timedelta, timezone
     import hashlib
+    import tempfile
     from urllib.parse import parse_qs, urlparse
 
     from fastapi.security import HTTPAuthorizationCredentials
-    from app.models import AccountEmailToken, Comment, Conversation, Message, Post, Profile, SecurityEvent
+    from app.models import AccountEmailToken, Comment, Conversation, MediaAsset, Message, Post, Profile, SecurityEvent
+    from app.providers import LocalDiskStorageProvider
     from app.providers import ProviderRegistry, ProviderSettings
     from app.routes.account import (
         confirm_email_verification,
@@ -1595,9 +1598,15 @@ def test_account_email_tokens_logout_and_anonymizing_deletion(postgres_database_
     async def verify():
         engine = create_async_engine(postgres_database_url)
         session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        media_directory = tempfile.TemporaryDirectory()
+        storage = LocalDiskStorageProvider(
+            media_directory.name, "account-deletion-storage-signing-key"
+        )
         email = TestEmailProvider()
         providers = ProviderRegistry(
-            settings=ProviderSettings(email="test-adapter"), email=email
+            settings=ProviderSettings(email="test-adapter", storage="local"),
+            email=email,
+            storage=storage,
         )
         request = Request(
             {
@@ -1719,7 +1728,35 @@ def test_account_email_tokens_logout_and_anonymizing_deletion(postgres_database_
                     sender_id=user_id,
                     content="private message",
                 )
-                session.add(message)
+                avatar_key = f"users/{user_id}/{uuid.uuid4()}"
+                avatar_intent = await storage.create_upload_intent(
+                    object_key=avatar_key,
+                    content_type="image/png",
+                    max_bytes=12,
+                    expires_in_seconds=60,
+                )
+                avatar_token = urlparse(avatar_intent.upload_url).path.rsplit("/", 1)[-1]
+
+                async def avatar_chunks():
+                    yield b"\x89PNG\r\n\x1a\nxxxx"
+
+                await storage.accept_upload(
+                    avatar_token, "image/png", avatar_chunks()
+                )
+                avatar_asset = MediaAsset(
+                    owner_id=user_id,
+                    purpose="PROFILE_IMAGE",
+                    status="READY",
+                    storage_provider="local",
+                    storage_key=avatar_key,
+                    content_type="image/png",
+                    byte_size=12,
+                    original_filename="avatar.png",
+                    upload_expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
+                )
+                session.add_all([message, avatar_asset])
+                await session.flush()
+                profile.avatar_asset_id = avatar_asset.id
                 await session.commit()
                 comment_id = comment.id
                 post_id = post.id
@@ -1731,6 +1768,7 @@ def test_account_email_tokens_logout_and_anonymizing_deletion(postgres_database_
                     current_user,
                     session,
                     request,
+                    providers,
                 )
 
                 assert current_user.deleted_at is not None
@@ -1760,6 +1798,7 @@ def test_account_email_tokens_logout_and_anonymizing_deletion(postgres_database_
                     )
                 )
                 assert retained_student is not None
+                assert await storage.inspect_object(avatar_key) is None
                 events = list(
                     (
                         await session.scalars(
@@ -1776,6 +1815,7 @@ def test_account_email_tokens_logout_and_anonymizing_deletion(postgres_database_
                 assert verification_raw not in details_text
         finally:
             await engine.dispose()
+            media_directory.cleanup()
 
     asyncio.run(verify())
 
@@ -2099,5 +2139,232 @@ def test_search_cursor_pagination_remains_institution_scoped(postgres_database_u
                 assert empty.json()["items"] == []
         finally:
             await engine.dispose()
+
+    asyncio.run(verify())
+
+
+def test_media_download_scope_and_avatar_profile_visibility(postgres_database_url):
+    from datetime import datetime, timedelta, timezone
+    import tempfile
+
+    from app.models import MediaAsset, Profile
+    from app.providers import LocalDiskStorageProvider, ProviderRegistry, ProviderSettings
+    from app.routes.media import create_media_download_url
+    from app.routes.profile import (
+        clear_my_profile_avatar,
+        get_user_profile,
+        set_my_profile_avatar,
+    )
+    from app.schemas import MediaAvatarSet
+
+    async def verify():
+        engine = create_async_engine(postgres_database_url)
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        try:
+            with tempfile.TemporaryDirectory() as directory:
+                storage = LocalDiskStorageProvider(
+                    directory, "integration-storage-signing-key"
+                )
+                providers = ProviderRegistry(
+                    settings=ProviderSettings(storage="local"), storage=storage
+                )
+                async with session_factory() as session:
+                    owner = await create_user(session)
+                    same_institution_user = await create_user(session)
+                    outsider = await create_user(session)
+                    institution_a = await create_institution(session)
+                    institution_b = await create_institution(session)
+                    session.add_all(
+                        [
+                            InstitutionMembership(
+                                user_id=owner.id,
+                                institution_id=institution_a.id,
+                                role="TEACHER",
+                            ),
+                            InstitutionMembership(
+                                user_id=same_institution_user.id,
+                                institution_id=institution_a.id,
+                                role="STUDENT",
+                            ),
+                            InstitutionMembership(
+                                user_id=outsider.id,
+                                institution_id=institution_b.id,
+                                role="STUDENT",
+                            ),
+                        ]
+                    )
+                    now = datetime.now(timezone.utc)
+                    profile = Profile(
+                        user_id=owner.id,
+                        display_name="Media owner",
+                        visibility="NETWORK",
+                    )
+                    avatar = MediaAsset(
+                        owner_id=owner.id,
+                        purpose="PROFILE_IMAGE",
+                        status="READY",
+                        storage_provider="local",
+                        storage_key=f"users/{owner.id}/{uuid.uuid4()}",
+                        content_type="image/png",
+                        byte_size=32,
+                        original_filename="avatar.png",
+                        upload_expires_at=now + timedelta(minutes=5),
+                    )
+                    course_asset = MediaAsset(
+                        owner_id=owner.id,
+                        institution_id=institution_a.id,
+                        purpose="COURSE_MEDIA",
+                        status="READY",
+                        storage_provider="local",
+                        storage_key=f"users/{owner.id}/{uuid.uuid4()}",
+                        content_type="application/pdf",
+                        byte_size=64,
+                        original_filename="course.pdf",
+                        upload_expires_at=now + timedelta(minutes=5),
+                    )
+                    session.add_all([profile, avatar, course_asset])
+                    await session.commit()
+
+                    with pytest.raises(HTTPException) as cross_institution:
+                        await create_media_download_url(
+                            course_asset.id, outsider, session, providers
+                        )
+                    assert cross_institution.value.status_code == 404
+                    shared_download = await create_media_download_url(
+                        course_asset.id, same_institution_user, session, providers
+                    )
+                    assert shared_download["expires_in_seconds"] == 300
+
+                    with pytest.raises(HTTPException) as private_avatar:
+                        await create_media_download_url(
+                            avatar.id, outsider, session, providers
+                        )
+                    assert private_avatar.value.status_code == 404
+                    await set_my_profile_avatar(
+                        MediaAvatarSet(asset_id=str(avatar.id)),
+                        owner,
+                        session,
+                        providers,
+                    )
+                    visible_profile = await get_user_profile(
+                        owner.id, same_institution_user, session, providers
+                    )
+                    assert visible_profile["profile_picture_url"].startswith(
+                        "/api/v1/media/local-download/"
+                    )
+                    with pytest.raises(HTTPException):
+                        await set_my_profile_avatar(
+                            MediaAvatarSet(asset_id=str(avatar.id)),
+                            outsider,
+                            session,
+                            providers,
+                        )
+
+                    profile.visibility = "AUTHENTICATED"
+                    public_to_authenticated = await create_media_download_url(
+                        avatar.id, outsider, session, providers
+                    )
+                    assert public_to_authenticated["download_url"].startswith(
+                        "/api/v1/media/local-download/"
+                    )
+                    profile.visibility = "PUBLIC"
+                    public_avatar = await create_media_download_url(
+                        avatar.id, None, session, providers
+                    )
+                    assert public_avatar["download_url"].startswith(
+                        "/api/v1/media/local-download/"
+                    )
+                    cleared = await clear_my_profile_avatar(owner, session)
+                    assert cleared["profile_picture_url"] is None
+        finally:
+            await engine.dispose()
+
+    asyncio.run(verify())
+
+
+def test_orphan_upload_purge_and_asset_delete_remove_objects(postgres_database_url):
+    import tempfile
+    from datetime import datetime, timedelta, timezone
+    from urllib.parse import urlparse
+
+    from app.cli import purge_orphan_uploads
+    from app.models import MediaAsset
+    from app.providers import LocalDiskStorageProvider, ProviderRegistry, ProviderSettings
+    from app.routes.media import delete_media_asset
+
+    async def verify():
+        engine = create_async_engine(postgres_database_url)
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        with tempfile.TemporaryDirectory() as directory:
+            storage = LocalDiskStorageProvider(
+                directory, "orphan-upload-storage-signing-key"
+            )
+            providers = ProviderRegistry(
+                settings=ProviderSettings(storage="local"), storage=storage
+            )
+            try:
+                async with session_factory() as session:
+                    user = await create_user(session)
+                    now = datetime.now(timezone.utc)
+                    pending_key = f"users/{user.id}/{uuid.uuid4()}"
+                    ready_key = f"users/{user.id}/{uuid.uuid4()}"
+                    assets = []
+                    for key in (pending_key, ready_key):
+                        intent = await storage.create_upload_intent(
+                            object_key=key,
+                            content_type="image/png",
+                            max_bytes=12,
+                            expires_in_seconds=60,
+                        )
+                        token = urlparse(intent.upload_url).path.rsplit("/", 1)[-1]
+
+                        async def chunks():
+                            yield b"\x89PNG\r\n\x1a\nxxxx"
+
+                        await storage.accept_upload(token, "image/png", chunks())
+                    pending = MediaAsset(
+                        owner_id=user.id,
+                        purpose="PROFILE_IMAGE",
+                        status="UPLOAD_PENDING",
+                        storage_provider="local",
+                        storage_key=pending_key,
+                        content_type="image/png",
+                        byte_size=12,
+                        original_filename="pending.png",
+                        upload_expires_at=now - timedelta(hours=1),
+                        created_at=now - timedelta(days=2),
+                    )
+                    ready = MediaAsset(
+                        owner_id=user.id,
+                        purpose="PROFILE_IMAGE",
+                        status="READY",
+                        storage_provider="local",
+                        storage_key=ready_key,
+                        content_type="image/png",
+                        byte_size=12,
+                        original_filename="ready.png",
+                        upload_expires_at=now + timedelta(minutes=5),
+                    )
+                    session.add_all([pending, ready])
+                    await session.commit()
+                    user_id = user.id
+                    pending_id = pending.id
+                    ready_id = ready.id
+
+                assert await purge_orphan_uploads(
+                    session_factory, older_than_hours=24, storage=storage
+                ) == 1
+                assert await storage.inspect_object(pending_key) is None
+                async with session_factory() as session:
+                    assert await session.get(MediaAsset, pending_id) is None
+                    ready = await session.get(MediaAsset, ready_id)
+                    user = await session.get(User, user_id)
+                    assert ready is not None
+                    await delete_media_asset(ready_id, user, session, providers)
+                assert await storage.inspect_object(ready_key) is None
+                async with session_factory() as session:
+                    assert await session.get(MediaAsset, ready_id) is None
+            finally:
+                await engine.dispose()
 
     asyncio.run(verify())

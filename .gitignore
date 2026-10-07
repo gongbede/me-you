@@ -4,5 +4,6 @@
 __pycache__/
 *.py[cod]
 me_you.db
+backend/.media/
 __pycache__/
 *.pyc

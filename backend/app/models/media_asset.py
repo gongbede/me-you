@@ -35,11 +35,15 @@ class MediaAsset(Base):
         UniqueConstraint("storage_key", name="uq_media_assets_storage_key"),
         Index("ix_media_assets_owner_created", "owner_id", "created_at"),
         Index("ix_media_assets_status_expires", "status", "upload_expires_at"),
+        Index("ix_media_assets_institution_status", "institution_id", "status"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     owner_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    institution_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("institutions.id", ondelete="SET NULL"), nullable=True
     )
     purpose: Mapped[str] = mapped_column(String(32), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="UPLOAD_PENDING")

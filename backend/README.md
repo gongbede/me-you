@@ -22,6 +22,10 @@ Run `python -m app.cli create-platform-admin` from `backend/` to create the firs
 
 `POST /account/logout` revokes the current JWT version. Account deletion is an anonymizing soft-delete: identifiers are replaced, profiles and authored social content are removed, messages/submission text is redacted, and academic/audit references remain. Password recovery and email verification require an installed `EmailProvider`; no local fake sender is provided. Tokens are random, single-use, expire, and only their SHA-256 digests are stored.
 
+## Media storage
+
+`STORAGE_BACKEND=local` stores UUID-keyed objects under `STORAGE_LOCAL_DIR` for development and tests. Set `STORAGE_BACKEND=s3` with `S3_BUCKET`, `S3_REGION`, and optional `S3_ENDPOINT_URL` for AWS S3 or an S3-compatible service. Supply `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` through the process environment; production requires S3 and HTTPS. Signed URLs default to five minutes. Per-user stored media defaults to 2 GB. Run `python -m app.cli purge-orphan-uploads` to remove incomplete uploads older than `MEDIA_ORPHAN_UPLOAD_HOURS` (24 by default). Start local MinIO with `docker compose up -d minio` when the image registry is reachable.
+
 ## Tests
 
 Run the backend suite from any directory with:

@@ -45,6 +45,10 @@ class OperationsTests(unittest.TestCase):
             secret="a" * 48,
             database_url="postgresql+asyncpg://user:pass@db/me_you",
             cors_origins=("https://app.example.com",),
+            storage_backend="s3",
+            s3_bucket="media",
+            s3_access_key="access-key",
+            s3_secret_key="secret-key",
         )
         for configuration in (
             {"secret": "short", "database_url": "postgresql+asyncpg://db/me_you", "cors_origins": ("https://app.example.com",)},

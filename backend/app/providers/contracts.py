@@ -37,6 +37,7 @@ class StoredObjectMetadata:
     content_type: str
     byte_size: int
     checksum_sha256: str | None
+    detected_content_type: str | None = None
 
 
 class ObjectStorageProvider(Protocol):
