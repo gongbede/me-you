@@ -13,6 +13,11 @@ import { ProfilePage } from './pages/ProfilePage'
 import { PublicProfilePage } from './pages/PublicProfilePage'
 import { RegisterPage } from './pages/RegisterPage'
 import { ResetPasswordPage } from './pages/ResetPasswordPage'
+import { CoursePage } from './pages/CoursePage'
+import { LessonPage } from './pages/LessonPage'
+import { MyCoursesPage } from './pages/MyCoursesPage'
+import { SchoolDetailPage } from './pages/SchoolDetailPage'
+import { SchoolsPage } from './pages/SchoolsPage'
 import { VerifyEmailPage } from './pages/VerifyEmailPage'
 
 const queryClient = new QueryClient({
@@ -38,6 +43,11 @@ export default function App() {
                 <Route element={<AppShell />}>
                   <Route index element={<HomePage />} />
                   <Route path="profile" element={<ProfilePage />} />
+                  <Route path="schools" element={<SchoolsPage />} />
+                  <Route path="schools/:institutionId" element={<SchoolDetailPage />} />
+                  <Route path="my-courses" element={<MyCoursesPage />} />
+                  <Route path="courses/:courseId" element={<CoursePage />} />
+                  <Route path="lessons/:lessonId" element={<LessonPage />} />
                   <Route path="users/:userId" element={<PublicProfilePage />} />
                 </Route>
               </Route>

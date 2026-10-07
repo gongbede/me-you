@@ -1543,3 +1543,739 @@ button:disabled {
     animation: none;
   }
 }
+
+.learning-page {
+  gap: 20px;
+}
+
+.learning-heading h1 {
+  margin-bottom: 6px;
+}
+
+.learning-section,
+.learning-school-banner,
+.learning-course-banner,
+.learning-enroll-panel,
+.learning-progress-section,
+.learning-lesson-content,
+.learning-empty--large {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 3px 14px color-mix(in srgb, var(--navy) 5%, transparent);
+}
+
+.learning-section__heading,
+.learning-progress-copy,
+.learning-school-banner,
+.learning-course-banner,
+.learning-enroll-panel {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.learning-section__heading {
+  align-items: center;
+  margin-bottom: 17px;
+  color: var(--royal-blue);
+}
+
+.learning-section__heading h2,
+.learning-section__heading p,
+.learning-course-copy h4,
+.learning-course-copy p,
+.learning-department h3,
+.learning-school-list h3,
+.learning-school-list p,
+.learning-enroll-panel h2,
+.learning-enroll-panel p,
+.learning-lesson-content h1,
+.learning-lesson-content p {
+  margin-bottom: 0;
+}
+
+.learning-section__heading p,
+.learning-school-list p,
+.learning-course-copy p,
+.learning-enroll-panel p,
+.learning-school-banner p,
+.learning-course-banner p {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.learning-section__heading > div > p {
+  margin-top: 4px;
+  font-size: 0.88rem;
+}
+
+.learning-inline-form,
+.learning-join-form,
+.learning-submission-form,
+.learning-row-actions {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.learning-inline-form input,
+.learning-join-form input {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  padding: 11px 13px;
+  border: 1px solid var(--royal-blue-100);
+  border-radius: 8px;
+  color: var(--ink);
+  background: #fbfdff;
+}
+
+.learning-inline-form input:focus-visible,
+.learning-join-form input:focus-visible {
+  outline: 3px solid var(--royal-blue);
+  outline-offset: 2px;
+}
+
+.learning-inline-form .button,
+.learning-join-form .button {
+  flex: 0 0 auto;
+}
+
+.learning-join-form {
+  align-items: flex-end;
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid var(--line);
+}
+
+.learning-join-form .field {
+  flex: 1;
+}
+
+.learning-result-list,
+.learning-school-list,
+.learning-invitation-list,
+.learning-course-list,
+.learning-enrolled-list,
+.learning-lesson-list,
+.learning-attempt-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.learning-result-list li,
+.learning-school-list > li,
+.learning-invitation-list > li,
+.learning-course-list > li,
+.learning-enrolled-list > li,
+.learning-lesson-list > li {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 13px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+
+.learning-result-list li:first-child,
+.learning-school-list > li:first-child,
+.learning-invitation-list > li:first-child,
+.learning-course-list > li:first-child,
+.learning-enrolled-list > li:first-child,
+.learning-lesson-list > li:first-child {
+  border-top: 0;
+}
+
+.learning-school-list > li,
+.learning-invitation-list > li,
+.learning-course-list > li,
+.learning-enrolled-list > li {
+  justify-content: space-between;
+}
+
+.learning-school-list > li > div:first-child,
+.learning-invitation-list > li > div:first-child,
+.learning-course-copy {
+  min-width: 0;
+}
+
+.learning-school-list h3 {
+  color: var(--navy);
+  font-size: 1.08rem;
+}
+
+.learning-school-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.learning-school-meta .button {
+  min-height: 40px;
+  padding-inline: 12px;
+  font-size: 0.82rem;
+}
+
+.status-label,
+.learning-kicker,
+.learning-course-code {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: var(--canvas);
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+
+.status-label--active {
+  color: #146c43;
+  border-color: #a7e1c1;
+  background: #eaf8f0;
+}
+
+.learning-kicker {
+  padding: 0;
+  border: 0;
+  color: var(--royal-blue);
+  background: transparent;
+  letter-spacing: 0.04em;
+}
+
+.learning-invitation-list > li > div:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.learning-invitation-list > li > div:first-child span {
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.learning-row-actions {
+  align-items: center;
+}
+
+.learning-row-actions .button {
+  min-height: 40px;
+  padding-inline: 11px;
+  font-size: 0.82rem;
+}
+
+.learning-empty,
+.learning-loading {
+  margin: 0;
+  padding: 16px;
+  border-radius: 8px;
+  color: var(--muted);
+  background: var(--canvas);
+  line-height: 1.5;
+}
+
+.learning-empty--compact {
+  padding: 12px 0;
+  background: transparent;
+}
+
+.learning-empty--large {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  color: var(--royal-blue);
+}
+
+.learning-empty--large h2,
+.learning-empty--large p {
+  margin: 0;
+}
+
+.learning-empty--large p {
+  max-width: 48ch;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.learning-school-banner {
+  align-items: center;
+  justify-content: flex-start;
+  gap: 15px;
+  background: linear-gradient(110deg, var(--surface) 0%, var(--teal-50) 100%);
+}
+
+.learning-school-banner h1,
+.learning-course-banner h1 {
+  margin-bottom: 6px;
+  font-size: 1.75rem;
+  overflow-wrap: anywhere;
+}
+
+.learning-school-banner p,
+.learning-course-banner p {
+  margin: 0;
+}
+
+.learning-school-banner__icon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--navy);
+  background: var(--amber-50);
+}
+
+.learning-school-banner__count {
+  display: grid;
+  flex: 0 0 auto;
+  justify-items: center;
+  margin-left: auto;
+  color: var(--navy);
+}
+
+.learning-school-banner__count strong {
+  font-size: 1.45rem;
+}
+
+.learning-school-banner__count span {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.learning-department {
+  margin-top: 14px;
+}
+
+.learning-department h3 {
+  margin: 0 0 6px;
+  font-size: 0.98rem;
+}
+
+.learning-course-list li {
+  align-items: flex-start;
+}
+
+.learning-course-code {
+  min-width: 84px;
+  justify-content: center;
+  border-color: var(--royal-blue-100);
+  color: var(--royal-blue-600);
+  background: var(--royal-blue-50);
+}
+
+.learning-course-copy h4 {
+  color: var(--navy);
+  font-size: 0.98rem;
+}
+
+.learning-course-copy p {
+  margin-top: 4px;
+  font-size: 0.84rem;
+}
+
+.icon-link {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--royal-blue);
+  background: white;
+}
+
+.icon-link:hover {
+  border-color: var(--royal-blue-100);
+  background: var(--royal-blue-50);
+}
+
+.learning-back-link {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.learning-course-banner {
+  align-items: center;
+  color: var(--royal-blue);
+  background: linear-gradient(115deg, white 0%, var(--amber-50) 100%);
+}
+
+.learning-course-banner > div {
+  min-width: 0;
+}
+
+.learning-course-banner > svg {
+  flex: 0 0 auto;
+  color: var(--navy);
+}
+
+.learning-course-banner .learning-kicker {
+  margin-top: 12px;
+}
+
+.learning-enroll-panel {
+  align-items: center;
+  background: var(--teal-50);
+}
+
+.learning-enroll-panel h2 {
+  font-size: 1.12rem;
+}
+
+.learning-enroll-panel p {
+  margin-top: 4px;
+  font-size: 0.88rem;
+}
+
+.learning-rule-note {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 8px 11px;
+  padding: 15px;
+  border: 1px solid #f4d48a;
+  border-radius: 8px;
+  color: var(--navy);
+  background: var(--amber-50);
+}
+
+.learning-rule-note p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.learning-rule-note a {
+  grid-column: 2;
+  width: fit-content;
+  font-weight: 850;
+}
+
+.learning-progress-copy {
+  align-items: center;
+  margin-bottom: 11px;
+}
+
+.learning-progress-copy h2 {
+  margin: 3px 0 0;
+  font-size: 1.08rem;
+}
+
+.learning-progress-copy > strong {
+  color: var(--royal-blue-600);
+  font-size: 1.2rem;
+}
+
+.learning-progress-section progress {
+  display: block;
+  width: 100%;
+  height: 11px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  background: var(--royal-blue-50);
+  accent-color: var(--teal);
+}
+
+.learning-progress-section progress::-webkit-progress-bar {
+  border-radius: 999px;
+  background: var(--royal-blue-50);
+}
+
+.learning-progress-section progress::-webkit-progress-value {
+  border-radius: 999px;
+  background: var(--teal);
+}
+
+.learning-progress-section progress::-moz-progress-bar {
+  border-radius: 999px;
+  background: var(--teal);
+}
+
+.learning-lesson-list > li {
+  gap: 11px;
+}
+
+.learning-lesson-list > li > a {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  color: var(--navy);
+}
+
+.learning-lesson-list > li > a span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.learning-lesson-list > li > svg {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+.learning-lesson-status {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--muted);
+  background: var(--canvas);
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.learning-lesson-status.is-done {
+  border-color: #a7e1c1;
+  color: #146c43;
+  background: #eaf8f0;
+}
+
+.learning-lesson-status.is-progress {
+  border-color: #f4d48a;
+  color: #865b00;
+  background: var(--amber-50);
+}
+
+.learning-lesson-content {
+  display: grid;
+  justify-items: start;
+  gap: 15px;
+}
+
+.learning-lesson-content h1 {
+  font-size: 1.8rem;
+  overflow-wrap: anywhere;
+}
+
+.learning-rich-text {
+  width: 100%;
+  white-space: pre-wrap;
+  color: var(--ink);
+  line-height: 1.75;
+}
+
+.learning-exercise-list {
+  display: grid;
+  gap: 14px;
+}
+
+.learning-exercise {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.learning-exercise__heading h3 {
+  margin: 4px 0 7px;
+  font-size: 1.05rem;
+}
+
+.learning-exercise > p {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.learning-attempt-list {
+  margin: 0 0 14px;
+}
+
+.learning-attempt-list > li {
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+.learning-attempt-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+}
+
+.learning-attempt-meta time {
+  color: var(--muted);
+}
+
+.learning-attempt-list > li > p {
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.learning-attempt-list blockquote {
+  display: grid;
+  gap: 4px;
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--teal);
+  color: var(--ink);
+  background: var(--teal-50);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.learning-submission-form {
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.learning-submission-form .field {
+  flex: 1 1 240px;
+}
+
+.learning-enrolled-list > li {
+  align-items: center;
+}
+
+.learning-enrolled-list h2 {
+  margin: 3px 0;
+  font-size: 1.05rem;
+}
+
+.learning-enrolled-list p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.learning-enrolled-list .learning-course-code {
+  flex: 0 0 84px;
+}
+
+.learning-enrolled-list .learning-course-copy {
+  flex: 1;
+}
+
+.mobile-tabs {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.mobile-tab {
+  min-width: 0;
+  padding-inline: 2px;
+  font-size: 0.62rem;
+}
+
+@media (min-width: 700px) {
+  .learning-page {
+    gap: 24px;
+  }
+
+  .learning-section,
+  .learning-school-banner,
+  .learning-course-banner,
+  .learning-enroll-panel,
+  .learning-progress-section,
+  .learning-lesson-content {
+    padding: 24px 28px;
+  }
+
+  .learning-school-banner h1,
+  .learning-course-banner h1,
+  .learning-lesson-content h1 {
+    font-size: 2rem;
+  }
+
+  .learning-school-list > li {
+    gap: 18px;
+  }
+
+  .learning-course-list li {
+    align-items: center;
+  }
+
+  .learning-lesson-list > li > a {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .learning-exercise {
+    padding: 20px;
+  }
+}
+
+@media (max-width: 420px) {
+  .learning-section,
+  .learning-school-banner,
+  .learning-course-banner,
+  .learning-enroll-panel,
+  .learning-progress-section,
+  .learning-lesson-content {
+    padding: 16px;
+  }
+
+  .learning-inline-form,
+  .learning-join-form,
+  .learning-enroll-panel {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .learning-inline-form .button,
+  .learning-join-form .button,
+  .learning-enroll-panel .button {
+    width: 100%;
+  }
+
+  .learning-school-list > li,
+  .learning-invitation-list > li {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .learning-school-meta {
+    justify-content: flex-start;
+  }
+
+  .learning-row-actions {
+    width: 100%;
+  }
+
+  .learning-row-actions .button:first-child {
+    flex: 1;
+  }
+
+  .learning-course-list > li {
+    gap: 9px;
+  }
+
+  .learning-course-code {
+    min-width: 72px;
+    padding-inline: 6px;
+    font-size: 0.66rem;
+  }
+
+  .desktop-action-label {
+    display: none;
+  }
+
+  .learning-enrolled-list .learning-course-code {
+    flex-basis: 72px;
+  }
+}

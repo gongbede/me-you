@@ -174,6 +174,86 @@ def test_database_rejects_duplicate_username_and_email(postgres_database_url):
     asyncio.run(verify())
 
 
+def test_seed_demo_is_idempotent(postgres_database_url, monkeypatch):
+    from app.cli import seed_demo
+    from app.models import (
+        Course,
+        CourseTeacher,
+        Department,
+        Enrollment,
+        Exercise,
+        Faculty,
+        Institution,
+        InstitutionMembership,
+        InstitutionMembershipRequest,
+        Lesson,
+        Student,
+        Teacher,
+        User,
+    )
+
+    monkeypatch.setenv("ME_YOU_ENV", "development")
+
+    async def verify():
+        engine = create_async_engine(postgres_database_url)
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        try:
+            async with session_factory() as session:
+                models = (
+                    Institution,
+                    Faculty,
+                    Department,
+                    Course,
+                    CourseTeacher,
+                    Lesson,
+                    Exercise,
+                    InstitutionMembership,
+                    InstitutionMembershipRequest,
+                    Teacher,
+                    Student,
+                    Enrollment,
+                    User,
+                )
+                before_counts = {
+                    model.__tablename__: await session.scalar(
+                        select(func.count()).select_from(model)
+                    )
+                    for model in models
+                }
+            first_credentials = await seed_demo(session_factory)
+            second_credentials = await seed_demo(session_factory)
+
+            async with session_factory() as session:
+                counts = {
+                    model.__tablename__: await session.scalar(
+                        select(func.count()).select_from(model)
+                    )
+                    for model in models
+                }
+
+            assert len(first_credentials) == 4
+            assert second_credentials == []
+            assert {name: counts[name] - before_counts[name] for name in counts} == {
+                "institutions": 1,
+                "faculties": 1,
+                "departments": 1,
+                "courses": 2,
+                "course_teachers": 2,
+                "lessons": 8,
+                "exercises": 16,
+                "institution_memberships": 3,
+                "institution_membership_requests": 1,
+                "teachers": 1,
+                "students": 1,
+                "enrollments": 1,
+                "users": 4,
+            }
+        finally:
+            await engine.dispose()
+
+    asyncio.run(verify())
+
+
 def test_database_rejects_duplicate_exercise_submission_number(postgres_database_url):
     async def verify():
         async with database_session(postgres_database_url) as session:

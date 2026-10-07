@@ -1,15 +1,20 @@
-import { House, LogOut, UserRound } from 'lucide-react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { BookOpen, Building2, House, LogOut, UserRound } from 'lucide-react'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { Logo } from './Logo'
 import { useAuth } from '../hooks/useAuth'
 
 const tabs = [
   { to: '/', label: 'Home', icon: House, end: true },
+  { to: '/schools', label: 'Schools', icon: Building2, end: false },
+  { to: '/my-courses', label: 'My Courses', icon: BookOpen, end: false },
   { to: '/profile', label: 'Profile', icon: UserRound, end: false },
 ]
 
 export function AppShell() {
   const { user } = useAuth()
+  const location = useLocation()
+  const learningPath = location.pathname.startsWith('/courses/') || location.pathname.startsWith('/lessons/')
+  const learningTabIsActive = (to: string, isActive: boolean) => isActive || (to === '/my-courses' && learningPath)
 
   return (
     <div className="app-shell">
@@ -18,7 +23,7 @@ export function AppShell() {
         <div className="sidebar__section-label">YOUR SPACE</div>
         <nav className="sidebar__nav">
           {tabs.map(({ to, label, icon: Icon, end }) => (
-            <NavLink className={({ isActive }) => `nav-link ${isActive ? 'is-active' : ''}`} end={end} key={to} to={to}>
+            <NavLink className={({ isActive }) => `nav-link ${learningTabIsActive(to, isActive) ? 'is-active' : ''}`} end={end} key={to} to={to}>
               <Icon size={19} strokeWidth={2} aria-hidden="true" />
               <span>{label}</span>
             </NavLink>
@@ -46,7 +51,7 @@ export function AppShell() {
 
       <nav className="mobile-tabs" aria-label="Mobile navigation">
         {tabs.map(({ to, label, icon: Icon, end }) => (
-          <NavLink className={({ isActive }) => `mobile-tab ${isActive ? 'is-active' : ''}`} end={end} key={to} to={to}>
+          <NavLink className={({ isActive }) => `mobile-tab ${learningTabIsActive(to, isActive) ? 'is-active' : ''}`} end={end} key={to} to={to}>
             <Icon size={21} aria-hidden="true" />
             <span>{label}</span>
           </NavLink>
