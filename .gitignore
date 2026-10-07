@@ -4,3 +4,5 @@
 __pycache__/
 *.py[cod]
 me_you.db
+__pycache__/
+*.pyc
