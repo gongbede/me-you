@@ -5,6 +5,7 @@ import sys
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
+from unittest.mock import Mock
 
 import asyncpg
 import pytest
@@ -281,6 +282,212 @@ def test_auth_identity_migration_up_and_down(postgres_database_url):
             assert await migration_state() == (False, False)
         finally:
             await drop_database()
+
+    asyncio.run(verify())
+
+
+def test_google_sign_in_creates_user_from_verified_claims(postgres_database_url, monkeypatch):
+    import app.routes.auth_google as auth_google
+    from app.security import password_hash
+
+    claims = {
+        "sub": "google-new-user",
+        "email": "New.User@example.com",
+        "email_verified": True,
+    }
+    verifier = Mock(return_value=claims)
+    monkeypatch.setenv("ME_YOU_GOOGLE_CLIENT_ID", "google-test-client")
+    monkeypatch.setattr(auth_google.id_token, "verify_oauth2_token", verifier)
+
+    async def verify():
+        async with database_session(postgres_database_url) as session:
+            response = await auth_google.google_sign_in(
+                auth_google.GoogleSignInRequest(id_token="signed-google-token"),
+                session,
+            )
+            user = await session.scalar(
+                select(User).where(User.email == "new.user@example.com")
+            )
+            identity = await session.scalar(
+                select(AuthIdentity).where(
+                    AuthIdentity.provider == "google",
+                    AuthIdentity.provider_subject == "google-new-user",
+                )
+            )
+            assert user is not None
+            assert identity is not None
+            assert identity.user_id == user.id
+            assert user.email_verified_at is not None
+            assert response["id"] == str(user.id)
+            assert response["token_type"] == "bearer"
+            assert not password_hash.verify("", user.password_hash)
+            assert verifier.call_args.args[2] == "google-test-client"
+            await session.delete(user)
+            await session.commit()
+
+    asyncio.run(verify())
+
+
+def test_google_sign_in_uses_existing_identity(postgres_database_url, monkeypatch):
+    import app.routes.auth_google as auth_google
+
+    monkeypatch.setenv("ME_YOU_GOOGLE_CLIENT_ID", "google-test-client")
+    monkeypatch.setattr(
+        auth_google.id_token,
+        "verify_oauth2_token",
+        Mock(
+            return_value={
+                "sub": "google-existing-subject",
+                "email": "changed@example.com",
+                "email_verified": True,
+            }
+        ),
+    )
+
+    async def verify():
+        async with database_session(postgres_database_url) as session:
+            user = await create_user(session)
+            session.add(
+                AuthIdentity(
+                    user_id=user.id,
+                    provider="google",
+                    provider_subject="google-existing-subject",
+                )
+            )
+            await session.commit()
+            response = await auth_google.google_sign_in(
+                auth_google.GoogleSignInRequest(id_token="signed-google-token"),
+                session,
+            )
+            assert response["id"] == str(user.id)
+            assert response["email"] == user.email
+            await session.delete(user)
+            await session.commit()
+
+    asyncio.run(verify())
+
+
+def test_google_sign_in_links_matching_verified_email(postgres_database_url, monkeypatch):
+    import app.routes.auth_google as auth_google
+
+    claims = {
+        "sub": "google-link-subject",
+        "email": "EXISTING@example.com",
+        "email_verified": True,
+    }
+    monkeypatch.setenv("ME_YOU_GOOGLE_CLIENT_ID", "google-test-client")
+    monkeypatch.setattr(auth_google.id_token, "verify_oauth2_token", Mock(return_value=claims))
+
+    async def verify():
+        async with database_session(postgres_database_url) as session:
+            user = await create_user(session, email="existing@example.com")
+            original_password_hash = user.password_hash
+            await session.commit()
+            response = await auth_google.google_sign_in(
+                auth_google.GoogleSignInRequest(id_token="signed-google-token"),
+                session,
+            )
+            identity = await session.scalar(
+                select(AuthIdentity).where(
+                    AuthIdentity.provider == "google",
+                    AuthIdentity.provider_subject == "google-link-subject",
+                )
+            )
+            assert response["id"] == str(user.id)
+            assert identity is not None and identity.user_id == user.id
+            assert user.password_hash == original_password_hash
+            await session.delete(user)
+            await session.commit()
+
+    asyncio.run(verify())
+
+
+def test_google_sign_in_rejects_bad_audience(postgres_database_url, monkeypatch):
+    import app.routes.auth_google as auth_google
+
+    verifier = Mock(side_effect=ValueError("Audience mismatch"))
+    monkeypatch.setenv("ME_YOU_GOOGLE_CLIENT_ID", "expected-google-client")
+    monkeypatch.setattr(auth_google.id_token, "verify_oauth2_token", verifier)
+
+    async def verify():
+        async with database_session(postgres_database_url) as session:
+            with pytest.raises(HTTPException) as error:
+                await auth_google.google_sign_in(
+                    auth_google.GoogleSignInRequest(id_token="wrong-audience-token"),
+                    session,
+                )
+            assert error.value.status_code == 401
+            verifier.assert_called_once()
+            assert verifier.call_args.args[2] == "expected-google-client"
+
+    asyncio.run(verify())
+
+
+def test_google_sign_in_rejects_unverified_email(postgres_database_url, monkeypatch):
+    import app.routes.auth_google as auth_google
+
+    monkeypatch.setenv("ME_YOU_GOOGLE_CLIENT_ID", "google-test-client")
+    monkeypatch.setattr(
+        auth_google.id_token,
+        "verify_oauth2_token",
+        Mock(
+            return_value={
+                "sub": "google-unverified-subject",
+                "email": "unverified@example.com",
+                "email_verified": False,
+            }
+        ),
+    )
+
+    async def verify():
+        async with database_session(postgres_database_url) as session:
+            with pytest.raises(HTTPException) as error:
+                await auth_google.google_sign_in(
+                    auth_google.GoogleSignInRequest(id_token="unverified-token"),
+                    session,
+                )
+            assert error.value.status_code == 401
+            assert "not verified" in error.value.detail
+
+    asyncio.run(verify())
+
+
+def test_google_sign_in_rejects_expired_token(postgres_database_url, monkeypatch):
+    import app.routes.auth_google as auth_google
+
+    monkeypatch.setenv("ME_YOU_GOOGLE_CLIENT_ID", "google-test-client")
+    monkeypatch.setattr(
+        auth_google.id_token,
+        "verify_oauth2_token",
+        Mock(side_effect=ValueError("Token expired")),
+    )
+
+    async def verify():
+        async with database_session(postgres_database_url) as session:
+            with pytest.raises(HTTPException) as error:
+                await auth_google.google_sign_in(
+                    auth_google.GoogleSignInRequest(id_token="expired-token"),
+                    session,
+                )
+            assert error.value.status_code == 401
+            assert "expired" in error.value.detail
+
+    asyncio.run(verify())
+
+
+def test_google_sign_in_returns_503_when_unconfigured(postgres_database_url, monkeypatch):
+    import app.routes.auth_google as auth_google
+
+    monkeypatch.delenv("ME_YOU_GOOGLE_CLIENT_ID", raising=False)
+
+    async def verify():
+        async with database_session(postgres_database_url) as session:
+            with pytest.raises(HTTPException) as error:
+                await auth_google.google_sign_in(
+                    auth_google.GoogleSignInRequest(id_token="token"), session
+                )
+            assert error.value.status_code == 503
+            assert "not configured" in error.value.detail
 
     asyncio.run(verify())
 
@@ -928,7 +1135,11 @@ def test_auth_security_events_persist_without_secrets(postgres_database_url):
                 details_text = json.dumps([event.details for event in events])
                 for secret in (correct_password, wrong_password, logged_in["access_token"]):
                     assert secret not in details_text
-                assert all(event.details == {} for event in events)
+                assert all(event.details == {} for event in events), [
+                    (event.event_type, event.details)
+                    for event in events
+                    if event.details != {}
+                ]
         finally:
             await engine.dispose()
 

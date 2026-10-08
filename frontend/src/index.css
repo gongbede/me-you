@@ -367,6 +367,20 @@ button:disabled {
   flex-wrap: wrap;
 }
 
+.google-sign-in {
+  width: 100%;
+  margin-top: 16px;
+}
+
+.google-sign-in > div {
+  width: 100%;
+  min-width: 0;
+}
+
+.google-sign-in iframe {
+  max-width: 100%;
+}
+
 .auth-story__copy {
   position: relative;
   margin-top: auto;

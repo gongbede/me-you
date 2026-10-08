@@ -10,6 +10,16 @@ export async function login(input: ApiSchemas['LoginRequest']): Promise<ApiSchem
   return response
 }
 
+export async function googleLogin(idToken: string): Promise<ApiSchemas['LoginResponse']> {
+  const response = await apiRequest<ApiSchemas['LoginResponse']>('/api/v1/auth/google', {
+    method: 'POST',
+    body: { id_token: idToken },
+    auth: false,
+  })
+  storeAccessToken(response.access_token)
+  return response
+}
+
 export function register(input: ApiSchemas['UserCreate']): Promise<ApiSchemas['UserResponse']> {
   return apiRequest<ApiSchemas['UserResponse']>('/api/v1/register', {
     method: 'POST',

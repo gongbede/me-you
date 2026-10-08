@@ -30,6 +30,20 @@ def create_access_token(
 	return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
 
 
+def auth_token_response(user: User) -> dict[str, str]:
+	return {
+		"message": "Login successful",
+		"access_token": create_access_token(
+			user.id,
+			token_version=getattr(user, "token_version", 0) or 0,
+		),
+		"token_type": "bearer",
+		"id": str(user.id),
+		"username": user.username,
+		"email": user.email,
+	}
+
+
 def decode_access_token(token: str) -> dict:
 	try:
 		return jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])

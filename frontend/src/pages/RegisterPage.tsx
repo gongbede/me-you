@@ -3,10 +3,11 @@ import { Link, useNavigate } from 'react-router-dom'
 import { getFriendlyErrorMessage } from '../api/client'
 import { AuthFrame } from '../components/AuthFrame'
 import { Field } from '../components/Field'
+import { GoogleSignInButton } from '../components/GoogleSignInButton'
 import { useAuth } from '../hooks/useAuth'
 
 export function RegisterPage() {
-  const { register } = useAuth()
+  const { loginWithGoogle, register } = useAuth()
   const navigate = useNavigate()
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -36,6 +37,19 @@ export function RegisterPage() {
     }
   }
 
+  async function signInWithGoogle(idToken: string) {
+    setError(null)
+    setLoading(true)
+    try {
+      await loginWithGoogle(idToken)
+      navigate('/', { replace: true })
+    } catch (reason) {
+      setError(getFriendlyErrorMessage(reason))
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <AuthFrame eyebrow="Make a little space" title="Start with a hello." intro="Create an account and find your people.">
       <form className="auth-form" onSubmit={(event) => void submit(event)}>
@@ -48,6 +62,7 @@ export function RegisterPage() {
           {loading ? 'Creating your account…' : 'Create account'}
         </button>
       </form>
+      <GoogleSignInButton onSignIn={signInWithGoogle} />
       <div className="auth-links"><span>Already have an account? <Link to="/login">Sign in</Link></span></div>
     </AuthFrame>
   )

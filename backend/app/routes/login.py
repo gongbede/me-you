@@ -8,7 +8,7 @@ from ..models import User
 from ..rate_limit import RateLimitStore, client_ip, get_rate_limit_store, hash_rate_limit_key
 from ..schemas import LoginRequest, LoginResponse
 from ..security_audit import record_security_event
-from ..security import create_access_token, password_hash
+from ..security import auth_token_response, password_hash
 
 
 router = APIRouter()
@@ -123,17 +123,7 @@ async def login(
         )
         await database.commit()
 
-    return {
-        "message": "Login successful",
-        "access_token": create_access_token(
-            user.id,
-            token_version=getattr(user, "token_version", 0) or 0,
-        ),
-        "token_type": "bearer",
-        "id": str(user.id),
-        "username": user.username,
-        "email": user.email,
-    }
+    return auth_token_response(user)
 
 
 def login_throttled(retry_after: int) -> HTTPException:

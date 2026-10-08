@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import { login as loginRequest, logout as logoutRequest, register as registerRequest } from '../api/auth'
+import { googleLogin as googleLoginRequest, login as loginRequest, logout as logoutRequest, register as registerRequest } from '../api/auth'
 import { apiRequest, clearAccessToken, getAccessToken, type ApiSchemas } from '../api/client'
 
 export type AuthUser = Pick<ApiSchemas['LoginResponse'], 'id' | 'username' | 'email'>
@@ -9,6 +9,7 @@ interface AuthContextValue {
   user: AuthUser | null
   isLoading: boolean
   login: (input: ApiSchemas['LoginRequest']) => Promise<void>
+  loginWithGoogle: (idToken: string) => Promise<void>
   register: (input: ApiSchemas['UserCreate']) => Promise<ApiSchemas['UserResponse']>
   logout: () => Promise<void>
 }
@@ -53,6 +54,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser({ id: response.id, username: response.username, email: response.email })
   }
 
+  async function loginWithGoogle(idToken: string) {
+    const response = await googleLoginRequest(idToken)
+    setUser({ id: response.id, username: response.username, email: response.email })
+  }
+
   async function register(input: ApiSchemas['UserCreate']) {
     return registerRequest(input)
   }
@@ -66,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, login, loginWithGoogle, register, logout }}>
       {children}
     </AuthContext.Provider>
   )
