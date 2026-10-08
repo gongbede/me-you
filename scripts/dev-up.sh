@@ -8,8 +8,8 @@ PID_FILE="${TMPDIR:-/tmp}/me-you-uvicorn.pid"
 LOG_FILE="${TMPDIR:-/tmp}/me-you-uvicorn.log"
 
 if [[ ! -f "$BACKEND_DIR/.env" ]]; then
-  printf 'Missing %s; copy backend/.env.example and configure local values first.\n' "$BACKEND_DIR/.env" >&2
-  exit 1
+  cp "$BACKEND_DIR/.env.example" "$BACKEND_DIR/.env"
+  printf 'backend/.env was missing; copied backend/.env.example to backend/.env.\n'
 fi
 
 if [[ ! -x "$VENV_BIN/alembic" || ! -x "$VENV_BIN/uvicorn" ]]; then
