@@ -28,6 +28,7 @@ from .teacher import Teacher
 from .notification import Notification
 from .post import Post
 from .post_like import PostLike
+from .phone_login_code import PhoneLoginCode
 from .profile import Profile
 from .rate_limit_counter import RateLimitCounter
 from .security_event import SecurityEvent
@@ -63,6 +64,7 @@ __all__ = [
 	"Notification",
 	"Post",
 	"PostLike",
+	"PhoneLoginCode",
 	"Profile",
 	"RateLimitCounter",
 	"SecurityEvent",

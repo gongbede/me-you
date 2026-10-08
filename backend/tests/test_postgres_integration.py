@@ -4,6 +4,7 @@ import subprocess
 import sys
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -488,6 +489,311 @@ def test_google_sign_in_returns_503_when_unconfigured(postgres_database_url, mon
                 )
             assert error.value.status_code == 503
             assert "not configured" in error.value.detail
+
+    asyncio.run(verify())
+
+
+def test_phone_code_request_and_verify_creates_user(postgres_database_url, monkeypatch):
+    import app.routes.auth_phone as auth_phone
+    from app.models import PhoneLoginCode
+    from app.security import decode_access_token, password_hash
+
+    class CapturingSMSProvider:
+        def __init__(self):
+            self.codes = []
+
+        async def send_code(self, *, phone_number, code):
+            self.codes.append((phone_number, code))
+
+    class TestLimiter:
+        async def increment(self, _scope, _key, _window_seconds):
+            return 1, 60
+
+    provider = CapturingSMSProvider()
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "scheme": "http",
+            "path": "/auth/phone/request",
+            "raw_path": b"/auth/phone/request",
+            "query_string": b"",
+            "headers": [],
+            "client": ("192.0.2.41", 1234),
+            "server": ("test", 80),
+        }
+    )
+    monkeypatch.setenv("ME_YOU_ENV", "development")
+
+    async def verify():
+        async with database_session(postgres_database_url) as session:
+            requested = await auth_phone.request_phone_code(
+                auth_phone.PhoneCodeRequest(phone_number="+1 (415) 555-2671"),
+                request,
+                session,
+                provider,
+                TestLimiter(),
+            )
+            assert requested["message"] == auth_phone.REQUEST_MESSAGE
+            phone_number, code = provider.codes[0]
+            stored = await session.scalar(
+                select(PhoneLoginCode).where(PhoneLoginCode.phone_number == phone_number)
+            )
+            assert stored is not None and stored.code_hash != code
+            assert stored.code_hash == auth_phone.hash_phone_code(phone_number, code)
+
+        async with database_session(postgres_database_url) as session:
+            response = await auth_phone.verify_phone_code(
+                auth_phone.PhoneCodeVerify(phone_number=phone_number, code=code),
+                session,
+                provider,
+            )
+            user = await session.scalar(
+                select(User).where(User.phone_number == phone_number)
+            )
+            identity = await session.scalar(
+                select(AuthIdentity).where(
+                    AuthIdentity.provider == "phone",
+                    AuthIdentity.provider_subject == phone_number,
+                )
+            )
+            assert user is not None and identity is not None
+            assert identity.user_id == user.id
+            assert response["id"] == str(user.id)
+            assert decode_access_token(response["access_token"])["sub"] == str(user.id)
+            assert not password_hash.verify("", user.password_hash)
+            with pytest.raises(HTTPException) as second_verify:
+                await auth_phone.verify_phone_code(
+                    auth_phone.PhoneCodeVerify(phone_number=phone_number, code=code),
+                    session,
+                    provider,
+                )
+            assert second_verify.value.status_code == 401
+            await session.delete(user)
+            await session.commit()
+
+    asyncio.run(verify())
+
+
+def test_phone_code_verification_reuses_existing_identity(postgres_database_url):
+    import app.routes.auth_phone as auth_phone
+    from app.models import PhoneLoginCode
+
+    class TestProvider:
+        async def send_code(self, *, phone_number, code):
+            return None
+
+    phone_number = "+14155552672"
+    code = "123456"
+
+    async def verify():
+        async with database_session(postgres_database_url) as session:
+            user = await create_user(session)
+            user.phone_number = phone_number
+            session.add(
+                AuthIdentity(
+                    user_id=user.id,
+                    provider="phone",
+                    provider_subject=phone_number,
+                )
+            )
+            session.add(
+                PhoneLoginCode(
+                    phone_number=phone_number,
+                    code_hash=auth_phone.hash_phone_code(phone_number, code),
+                    attempts=0,
+                    created_at=auth_phone.utcnow(),
+                    expires_at=auth_phone.utcnow() + timedelta(minutes=10),
+                )
+            )
+            await session.commit()
+            user_id = user.id
+            response = await auth_phone.verify_phone_code(
+                auth_phone.PhoneCodeVerify(phone_number=phone_number, code=code),
+                session,
+                TestProvider(),
+            )
+            assert response["id"] == str(user_id)
+            assert await session.scalar(
+                select(func.count()).select_from(User).where(User.phone_number == phone_number)
+            ) == 1
+            await session.delete(user)
+            await session.commit()
+
+    asyncio.run(verify())
+
+
+def test_phone_code_request_has_same_response_for_existing_and_new_numbers(
+    postgres_database_url,
+):
+    import app.routes.auth_phone as auth_phone
+
+    class CapturingSMSProvider:
+        def __init__(self):
+            self.codes = []
+
+        async def send_code(self, *, phone_number, code):
+            self.codes.append((phone_number, code))
+
+    class TestLimiter:
+        async def increment(self, _scope, _key, _window_seconds):
+            return 1, 60
+
+    provider = CapturingSMSProvider()
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "scheme": "http",
+            "path": "/auth/phone/request",
+            "raw_path": b"/auth/phone/request",
+            "query_string": b"",
+            "headers": [],
+            "client": ("192.0.2.42", 1234),
+            "server": ("test", 80),
+        }
+    )
+
+    async def verify():
+        async with database_session(postgres_database_url) as session:
+            existing_user = await create_user(session)
+            existing_user.phone_number = "+12025550121"
+            await session.commit()
+            known = await auth_phone.request_phone_code(
+                auth_phone.PhoneCodeRequest(phone_number="+12025550121"),
+                request,
+                session,
+                provider,
+                TestLimiter(),
+            )
+            unknown = await auth_phone.request_phone_code(
+                auth_phone.PhoneCodeRequest(phone_number="+12025550122"),
+                request,
+                session,
+                provider,
+                TestLimiter(),
+            )
+            assert known == unknown == {"message": auth_phone.REQUEST_MESSAGE}
+            assert len(provider.codes) == 2
+            await session.delete(existing_user)
+            await session.commit()
+
+    asyncio.run(verify())
+
+
+def test_phone_code_request_cooldown_suppresses_resend(postgres_database_url, monkeypatch):
+    import app.routes.auth_phone as auth_phone
+    from app.models import PhoneLoginCode
+
+    class CapturingSMSProvider:
+        def __init__(self):
+            self.codes = []
+
+        async def send_code(self, *, phone_number, code):
+            self.codes.append(code)
+
+    class TestLimiter:
+        async def increment(self, _scope, _key, _window_seconds):
+            return 1, 60
+
+    now = datetime.now(timezone.utc)
+    monkeypatch.setattr(auth_phone, "utcnow", lambda: now)
+    provider = CapturingSMSProvider()
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "scheme": "http",
+            "path": "/auth/phone/request",
+            "raw_path": b"/auth/phone/request",
+            "query_string": b"",
+            "headers": [],
+            "client": ("192.0.2.43", 1234),
+            "server": ("test", 80),
+        }
+    )
+
+    async def verify():
+        async with database_session(postgres_database_url) as session:
+            data = auth_phone.PhoneCodeRequest(phone_number="+12025550131")
+            first = await auth_phone.request_phone_code(
+                data, request, session, provider, TestLimiter()
+            )
+            row = await session.scalar(
+                select(PhoneLoginCode).where(PhoneLoginCode.phone_number == data.phone_number)
+            )
+            first_created_at = row.created_at
+            second = await auth_phone.request_phone_code(
+                data, request, session, provider, TestLimiter()
+            )
+            assert first == second == {"message": auth_phone.REQUEST_MESSAGE}
+            assert len(provider.codes) == 1
+            assert row.created_at == first_created_at
+            await session.delete(row)
+            await session.commit()
+
+    asyncio.run(verify())
+
+
+def test_phone_code_expires_and_five_wrong_attempts_invalidate(postgres_database_url, monkeypatch):
+    import app.routes.auth_phone as auth_phone
+    from app.models import PhoneLoginCode
+
+    class TestProvider:
+        async def send_code(self, *, phone_number, code):
+            return None
+
+    monkeypatch.setattr(
+        auth_phone.secrets,
+        "randbelow",
+        lambda _limit: 12345,
+    )
+    now = datetime.now(timezone.utc)
+
+    async def verify():
+        async with database_session(postgres_database_url) as session:
+            expired_number = "+12025550141"
+            expired = PhoneLoginCode(
+                phone_number=expired_number,
+                code_hash=auth_phone.hash_phone_code(expired_number, "012345"),
+                attempts=0,
+                created_at=now - timedelta(minutes=11),
+                expires_at=now - timedelta(minutes=1),
+            )
+            attempts_number = "+12025550142"
+            active = PhoneLoginCode(
+                phone_number=attempts_number,
+                code_hash=auth_phone.hash_phone_code(attempts_number, "012345"),
+                attempts=0,
+                created_at=now,
+                expires_at=now + timedelta(minutes=10),
+            )
+            session.add_all([expired, active])
+            await session.commit()
+            monkeypatch.setattr(auth_phone, "utcnow", lambda: now)
+
+            with pytest.raises(HTTPException) as expiry:
+                await auth_phone.verify_phone_code(
+                    auth_phone.PhoneCodeVerify(phone_number=expired_number, code="012345"),
+                    session,
+                    TestProvider(),
+                )
+            assert expiry.value.status_code == 401
+            assert expired.invalidated_at == now
+
+            for _ in range(5):
+                with pytest.raises(HTTPException) as invalid:
+                    await auth_phone.verify_phone_code(
+                        auth_phone.PhoneCodeVerify(phone_number=attempts_number, code="999999"),
+                        session,
+                        TestProvider(),
+                    )
+                assert invalid.value.status_code == 401
+            assert active.attempts == 5
+            assert active.invalidated_at == now
+            await session.delete(expired)
+            await session.delete(active)
+            await session.commit()
 
     asyncio.run(verify())
 

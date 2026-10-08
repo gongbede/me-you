@@ -16,6 +16,7 @@ from .routes.general import router as general_router
 from .routes.health import router as health_router
 from .routes.account import router as account_router
 from .routes.auth_google import router as auth_google_router
+from .routes.auth_phone import router as auth_phone_router
 from .routes.comments import router as comments_router
 from .routes.conversations import router as conversations_router
 from .routes.education import router as education_router
@@ -85,6 +86,7 @@ routers = (
     profile_router,
     account_router,
     auth_google_router,
+    auth_phone_router,
     posts_router,
     comments_router,
     likes_router,

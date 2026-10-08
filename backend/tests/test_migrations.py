@@ -24,6 +24,7 @@ from app.models import (
     Notification,
     Post,
     PostLike,
+    PhoneLoginCode,
     Profile,
     Institution,
     InstitutionMembership,
@@ -69,6 +70,7 @@ class MigrationFoundationTests(unittest.TestCase):
                 "institution_membership_requests",
                 "account_email_tokens",
                 "auth_identities",
+                "phone_login_codes",
             },
         )
         self.assertIs(User.__table__, Base.metadata.tables["users"])
@@ -105,6 +107,7 @@ class MigrationFoundationTests(unittest.TestCase):
         self.assertIs(MediaAsset.__table__, Base.metadata.tables["media_assets"])
         self.assertIs(Activity.__table__, Base.metadata.tables["activities"])
         self.assertIs(AuthIdentity.__table__, Base.metadata.tables["auth_identities"])
+        self.assertIs(PhoneLoginCode.__table__, Base.metadata.tables["phone_login_codes"])
         self.assertIn(
             "uq_auth_identities_provider_subject",
             {constraint.name for constraint in AuthIdentity.__table__.constraints},
@@ -209,6 +212,7 @@ class MigrationFoundationTests(unittest.TestCase):
             ("0016_account_email_tokens.py", "0016_account_email_tokens", "0015_education_integrity"),
             ("0017_media_storage.py", "0017_media_storage", "0016_account_email_tokens"),
             ("0018_auth_identities.py", "0018_auth_identities", "0017_media_storage"),
+            ("0019_phone_login_codes.py", "0019_phone_login_codes", "0018_auth_identities"),
         )
         for filename, revision, down_revision in revisions:
             migration = load_module(

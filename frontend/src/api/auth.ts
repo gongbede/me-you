@@ -20,6 +20,27 @@ export async function googleLogin(idToken: string): Promise<ApiSchemas['LoginRes
   return response
 }
 
+export function requestPhoneLoginCode(phoneNumber: string): Promise<{ message: string }> {
+  return apiRequest('/api/v1/auth/phone/request', {
+    method: 'POST',
+    body: { phone_number: phoneNumber },
+    auth: false,
+  })
+}
+
+export async function verifyPhoneLoginCode(
+  phoneNumber: string,
+  code: string,
+): Promise<ApiSchemas['LoginResponse']> {
+  const response = await apiRequest<ApiSchemas['LoginResponse']>('/api/v1/auth/phone/verify', {
+    method: 'POST',
+    body: { phone_number: phoneNumber, code },
+    auth: false,
+  })
+  storeAccessToken(response.access_token)
+  return response
+}
+
 export function register(input: ApiSchemas['UserCreate']): Promise<ApiSchemas['UserResponse']> {
   return apiRequest<ApiSchemas['UserResponse']>('/api/v1/register', {
     method: 'POST',
