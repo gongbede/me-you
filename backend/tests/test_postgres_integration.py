@@ -19,6 +19,7 @@ from starlette.requests import Request
 from app.database import get_postgres_session
 from app.main import app
 from app.models import (
+    AuthIdentity,
     Course,
     CourseTeacher,
     Department,
@@ -170,6 +171,116 @@ def test_database_rejects_duplicate_username_and_email(postgres_database_url):
             session.add(User(username="other-name", email=existing_email, password_hash="test-hash"))
             with pytest.raises(IntegrityError):
                 await session.flush()
+
+    asyncio.run(verify())
+
+
+def test_auth_identity_constraints_and_multiple_identities(postgres_database_url):
+    async def verify():
+        async with database_session(postgres_database_url) as session:
+            first_user = await create_user(session)
+            second_user = await create_user(session)
+            second_user_id = second_user.id
+            first_user.phone_number = "+12025550111"
+            session.add_all(
+                [
+                    AuthIdentity(
+                        user_id=first_user.id,
+                        provider="google",
+                        provider_subject="google-subject-1",
+                    ),
+                    AuthIdentity(
+                        user_id=first_user.id,
+                        provider="phone",
+                        provider_subject="+12025550111",
+                    ),
+                ]
+            )
+            await session.commit()
+
+            session.add(
+                User(
+                    username="duplicate-phone",
+                    email="duplicate-phone@example.com",
+                    password_hash="test-hash",
+                    phone_number=first_user.phone_number,
+                )
+            )
+            with pytest.raises(IntegrityError):
+                await session.flush()
+            await session.rollback()
+
+            session.add(
+                AuthIdentity(
+                    user_id=second_user_id,
+                    provider="google",
+                    provider_subject="google-subject-1",
+                )
+            )
+            with pytest.raises(IntegrityError):
+                await session.flush()
+
+    asyncio.run(verify())
+
+
+def test_auth_identity_migration_up_and_down(postgres_database_url):
+    base_url = make_url(postgres_database_url)
+    database_name = f"me_you_auth_migration_{uuid.uuid4().hex}"
+    migration_url = base_url.set(database=database_name).render_as_string(
+        hide_password=False
+    )
+    admin_connect = {
+        "user": base_url.username,
+        "password": base_url.password,
+        "host": base_url.host,
+        "port": base_url.port or 5432,
+        "database": "postgres",
+    }
+
+    async def create_database():
+        connection = await asyncpg.connect(**admin_connect)
+        try:
+            await connection.execute(f'CREATE DATABASE "{database_name}"')
+        finally:
+            await connection.close()
+
+    async def migration_state():
+        connection = await asyncpg.connect(**{**admin_connect, "database": database_name})
+        try:
+            phone_exists = await connection.fetchval(
+                "SELECT EXISTS (SELECT 1 FROM information_schema.columns "
+                "WHERE table_name = 'users' AND column_name = 'phone_number')"
+            )
+            identities_exist = await connection.fetchval(
+                "SELECT to_regclass('public.auth_identities') IS NOT NULL"
+            )
+            return phone_exists, identities_exist
+        finally:
+            await connection.close()
+
+    async def drop_database():
+        connection = await asyncpg.connect(**admin_connect)
+        try:
+            await connection.execute(f'DROP DATABASE IF EXISTS "{database_name}"')
+        finally:
+            await connection.close()
+
+    async def verify():
+        await create_database()
+        try:
+            result = _alembic(migration_url, "upgrade", "0017_media_storage")
+            assert result.returncode == 0, result.stdout + result.stderr
+            assert await migration_state() == (False, False)
+
+            result = _alembic(migration_url, "upgrade", "head")
+            assert result.returncode == 0, result.stdout + result.stderr
+            assert await migration_state() == (True, True)
+
+            result = _alembic(migration_url, "downgrade", "0017_media_storage")
+            assert result.returncode == 0, result.stdout + result.stderr
+            assert await migration_state() == (False, False)
+        finally:
+            await drop_database()
 
     asyncio.run(verify())
 

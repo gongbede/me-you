@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, Integer, String, Uuid
+from sqlalchemy import Boolean, DateTime, Integer, String, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
@@ -12,10 +12,14 @@ if TYPE_CHECKING:
     from .student import Student
     from .teacher import Teacher
     from .profile import Profile
+    from .auth_identity import AuthIdentity
 
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (
+        UniqueConstraint("phone_number", name="uq_users_phone_number"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
@@ -23,6 +27,7 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    phone_number: Mapped[str | None] = mapped_column(String(16), nullable=True)
     token_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
     is_platform_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
@@ -40,5 +45,10 @@ class User(Base):
         passive_deletes=True,
     )
     memberships: Mapped[list["InstitutionMembership"]] = relationship(back_populates="user", cascade="all, delete-orphan", passive_deletes=True)
+    auth_identities: Mapped[list["AuthIdentity"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
     teacher_records: Mapped[list["Teacher"]] = relationship(back_populates="user")
     student_records: Mapped[list["Student"]] = relationship(back_populates="user")

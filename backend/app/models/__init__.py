@@ -1,6 +1,7 @@
 from .comment import Comment
 from .activity import Activity
 from .account_email_token import AccountEmailToken
+from .auth_identity import AuthIdentity
 from .assessment import Assessment
 from .assessment_result import AssessmentResult
 from .assessment_submission import AssessmentSubmission
@@ -37,6 +38,7 @@ __all__ = [
 	"Comment",
 	"Activity",
 	"AccountEmailToken",
+	"AuthIdentity",
 	"Assessment",
 	"AssessmentResult",
 	"AssessmentSubmission",

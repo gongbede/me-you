@@ -5,6 +5,7 @@ from pathlib import Path
 from app.database import Base
 from app.models import (
     Activity,
+    AuthIdentity,
     Comment,
     Assessment,
     AssessmentResult,
@@ -67,6 +68,7 @@ class MigrationFoundationTests(unittest.TestCase):
                 "security_events",
                 "institution_membership_requests",
                 "account_email_tokens",
+                "auth_identities",
             },
         )
         self.assertIs(User.__table__, Base.metadata.tables["users"])
@@ -102,6 +104,11 @@ class MigrationFoundationTests(unittest.TestCase):
         self.assertIs(LoginThrottle.__table__, Base.metadata.tables["login_throttles"])
         self.assertIs(MediaAsset.__table__, Base.metadata.tables["media_assets"])
         self.assertIs(Activity.__table__, Base.metadata.tables["activities"])
+        self.assertIs(AuthIdentity.__table__, Base.metadata.tables["auth_identities"])
+        self.assertIn(
+            "uq_auth_identities_provider_subject",
+            {constraint.name for constraint in AuthIdentity.__table__.constraints},
+        )
 
     def test_initial_migration_has_upgrade_and_downgrade(self):
         migration = load_module(
@@ -201,6 +208,7 @@ class MigrationFoundationTests(unittest.TestCase):
             ("0015_education_integrity.py", "0015_education_integrity", "0014_privacy_membership_requests"),
             ("0016_account_email_tokens.py", "0016_account_email_tokens", "0015_education_integrity"),
             ("0017_media_storage.py", "0017_media_storage", "0016_account_email_tokens"),
+            ("0018_auth_identities.py", "0018_auth_identities", "0017_media_storage"),
         )
         for filename, revision, down_revision in revisions:
             migration = load_module(
