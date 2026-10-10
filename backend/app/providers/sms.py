@@ -23,7 +23,8 @@ class ConsoleSMSProvider:
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Console SMS is available only in development",
             )
-        logger.info("Development SMS code for %s: %s", phone_number, code)
+        if os.getenv("ME_YOU_SMS_DEV_LOG", "false").strip().lower() == "true":
+            logger.info("Development SMS code for %s: %s", phone_number, code)
 
 
 class RealSMSProvider:
