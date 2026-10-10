@@ -574,6 +574,254 @@ button:disabled {
   gap: 25px;
 }
 
+.teaching-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.teaching-heading h1 {
+  margin-bottom: 7px;
+}
+
+.teaching-heading p,
+.teaching-course__copy small,
+.lesson-row__main p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.teaching-course-list,
+.lesson-list {
+  display: grid;
+  gap: 11px;
+}
+
+.teaching-course,
+.lesson-row,
+.teaching-editor,
+.teaching-empty {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.teaching-course {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  color: var(--ink);
+}
+
+.teaching-course:hover {
+  border-color: #b9ccea;
+  text-decoration: none;
+}
+
+.teaching-course__icon {
+  display: grid;
+  width: 42px;
+  aspect-ratio: 1;
+  place-items: center;
+  border-radius: 10px;
+  color: #08666a;
+  background: var(--teal-50);
+}
+
+.teaching-course__copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.teaching-course__copy strong {
+  overflow-wrap: anywhere;
+  color: var(--navy);
+}
+
+.teaching-course__unavailable {
+  grid-column: 2;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.teaching-empty {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 32px 20px;
+  text-align: center;
+}
+
+.teaching-empty > svg {
+  color: var(--royal-blue);
+}
+
+.teaching-empty h2,
+.teaching-empty p {
+  margin: 0;
+}
+
+.teaching-empty p {
+  max-width: 34rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.teaching-back {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 7px;
+  font-weight: 800;
+}
+
+.teaching-editor {
+  display: grid;
+  gap: 18px;
+  padding: 18px;
+}
+
+.teaching-editor h2,
+.lesson-row__editor h2 {
+  margin-bottom: 0;
+  font-size: 1.1rem;
+}
+
+.teaching-form {
+  display: grid;
+  gap: 15px;
+}
+
+.teaching-form__limit {
+  justify-self: end;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.teaching-form__order {
+  width: min(100%, 170px);
+}
+
+.teaching-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+}
+
+.teaching-actions .button {
+  min-height: 42px;
+  padding-inline: 14px;
+  border-radius: 9px;
+  font-size: 0.87rem;
+}
+
+.lesson-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px;
+}
+
+.lesson-row__main {
+  display: grid;
+  min-width: 0;
+  justify-items: start;
+  gap: 7px;
+}
+
+.lesson-row__main h2 {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 1.08rem;
+}
+
+.lesson-badge {
+  display: inline-flex;
+  min-height: 25px;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 5px;
+  color: #6a4b00;
+  background: var(--amber-50);
+  font-size: 0.75rem;
+  font-weight: 900;
+}
+
+.lesson-badge--published {
+  color: #08666a;
+  background: var(--teal-50);
+}
+
+.lesson-row__actions {
+  justify-content: flex-end;
+}
+
+.lesson-row__editor {
+  display: grid;
+  width: 100%;
+  gap: 15px;
+}
+
+.icon-button {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--ink);
+  background: white;
+}
+
+.icon-button--danger {
+  color: var(--danger);
+}
+
+.icon-button--danger:hover:not(:disabled) {
+  border-color: #f4c5bd;
+  background: #fff4f1;
+}
+
+@media (max-width: 620px) {
+  .teaching-heading {
+    align-items: flex-start;
+  }
+
+  .teaching-heading > .button {
+    width: 46px;
+    min-width: 46px;
+    padding: 0;
+    overflow: hidden;
+    gap: 0;
+    color: transparent;
+    font-size: 0;
+  }
+
+  .teaching-heading > .button svg {
+    flex: 0 0 auto;
+    color: white;
+  }
+
+  .lesson-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .lesson-row__actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
 .feed-heading h1 {
   margin-bottom: 7px;
 }

@@ -1,9 +1,11 @@
 import { BookOpen, Building2, House, LogOut, UserRound } from 'lucide-react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { Logo } from './Logo'
 import { useAuth } from '../hooks/useAuth'
+import { getTeachingCourses } from '../api/education'
 
-const tabs = [
+const baseTabs = [
   { to: '/', label: 'Home', icon: House, end: true },
   { to: '/schools', label: 'Schools', icon: Building2, end: false },
   { to: '/my-courses', label: 'My Courses', icon: BookOpen, end: false },
@@ -13,8 +15,15 @@ const tabs = [
 export function AppShell() {
   const { user } = useAuth()
   const location = useLocation()
+  const teachingQuery = useQuery({ queryKey: ['teaching', 'courses'], queryFn: getTeachingCourses })
+  const tabs = [
+    ...baseTabs.slice(0, 3),
+    ...(teachingQuery.data?.length ? [{ to: '/teaching', label: 'Teaching', icon: BookOpen, end: false }] : []),
+    baseTabs[3],
+  ]
   const learningPath = location.pathname.startsWith('/courses/') || location.pathname.startsWith('/lessons/')
-  const learningTabIsActive = (to: string, isActive: boolean) => isActive || (to === '/my-courses' && learningPath)
+  const learningTabIsActive = (to: string, isActive: boolean) =>
+    isActive || (to === '/my-courses' && learningPath) || (to === '/teaching' && location.pathname.startsWith('/teaching'))
 
   return (
     <div className="app-shell">
@@ -49,7 +58,7 @@ export function AppShell() {
         <main className="app-main"><Outlet /></main>
       </div>
 
-      <nav className="mobile-tabs" aria-label="Mobile navigation">
+      <nav className="mobile-tabs" aria-label="Mobile navigation" style={{ gridTemplateColumns: `repeat(${tabs.length + 1}, minmax(0, 1fr))` }}>
         {tabs.map(({ to, label, icon: Icon, end }) => (
           <NavLink className={({ isActive }) => `mobile-tab ${learningTabIsActive(to, isActive) ? 'is-active' : ''}`} end={end} key={to} to={to}>
             <Icon size={21} aria-hidden="true" />

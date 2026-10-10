@@ -7,6 +7,7 @@ export type Department = ApiSchemas['DepartmentResponse']
 export type Course = ApiSchemas['CourseResponse']
 export type Enrollment = ApiSchemas['EnrollmentResponse']
 export type Lesson = ApiSchemas['LessonResponse']
+export type LessonInput = Pick<Lesson, 'title' | 'content' | 'position' | 'is_published'>
 export type LessonProgress = ApiSchemas['LessonProgressResponse']
 export type CourseProgress = ApiSchemas['CourseProgressResponse']
 export type Exercise = ApiSchemas['ExerciseResponse']
@@ -162,4 +163,54 @@ export function submitExercise(
     method: 'POST',
     body: { attempt_number: attemptNumber, answer_text: answerText },
   })
+}
+
+export async function getTeachingCourses(): Promise<Course[]> {
+  const teachers = await listMyTeachers()
+  const teacherIdsByInstitution = new Map<string, Set<string>>()
+  for (const teacher of teachers) {
+    const teacherIds = teacherIdsByInstitution.get(teacher.institution_id) ?? new Set<string>()
+    teacherIds.add(teacher.id)
+    teacherIdsByInstitution.set(teacher.institution_id, teacherIds)
+  }
+
+  const coursesByInstitution = await Promise.all([...teacherIdsByInstitution].map(async ([institutionId, teacherIds]) => {
+    const catalog = await getInstitutionCatalog(institutionId)
+    const courses = catalog.faculties.flatMap(({ departments }) =>
+      departments.flatMap(({ courses: departmentCourses }) => departmentCourses),
+    )
+    const assignments = await Promise.all(courses.map(async (course) => ({
+      course,
+      teachers: await apiRequest<Array<{ teacher_id: string }>>(
+        `/api/v1/education/courses/${course.id}/teachers?limit=100`,
+      ),
+    })))
+    return assignments
+      .filter(({ teachers: assigned }) => assigned.some(({ teacher_id }) => teacherIds.has(teacher_id)))
+      .map(({ course }) => course)
+  }))
+
+  return coursesByInstitution.flat()
+}
+
+export function getCourseLessons(courseId: string): Promise<Lesson[]> {
+  return listLessons(courseId)
+}
+
+export function createLesson(courseId: string, lesson: LessonInput): Promise<Lesson> {
+  return apiRequest(`/api/v1/education/courses/${courseId}/lessons`, {
+    method: 'POST',
+    body: lesson,
+  })
+}
+
+export function updateLesson(lessonId: string, updates: Partial<LessonInput>): Promise<Lesson> {
+  return apiRequest(`/api/v1/education/lessons/${lessonId}`, {
+    method: 'PATCH',
+    body: updates,
+  })
+}
+
+export function deleteLesson(lessonId: string): Promise<void> {
+  return apiRequest(`/api/v1/education/lessons/${lessonId}`, { method: 'DELETE' })
 }
