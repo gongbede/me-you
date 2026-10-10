@@ -20,7 +20,7 @@ class PhoneLoginCode(Base):
     phone_number: Mapped[str] = mapped_column(String(16), nullable=False)
     code_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
