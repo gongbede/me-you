@@ -14,6 +14,10 @@ export type Exercise = ApiSchemas['ExerciseResponse']
 export type ExerciseInput = Pick<Exercise, 'title' | 'instructions' | 'position' | 'exercise_type' | 'is_published'>
 export type ExerciseSubmission = ApiSchemas['ExerciseSubmissionResponse']
 export type ExerciseSubmissionInboxItem = ApiSchemas['ExerciseSubmissionInboxResponse']
+export type ClassSession = ApiSchemas['ClassSessionResponse']
+export type ClassSessionAttendance = ApiSchemas['ClassSessionAttendanceResponse']
+export type ClassSessionMessage = ApiSchemas['ClassSessionMessageResponse']
+export type ClassSessionMessageType = ClassSessionMessage['message_type']
 export type Student = ApiSchemas['StudentResponse']
 export type Teacher = ApiSchemas['TeacherResponse']
 export type SearchResult = ApiSchemas['SearchResponse']['items'][number]
@@ -258,4 +262,63 @@ export function updateLesson(lessonId: string, updates: Partial<LessonInput>): P
 
 export function deleteLesson(lessonId: string): Promise<void> {
   return apiRequest(`/api/v1/education/lessons/${lessonId}`, { method: 'DELETE' })
+}
+
+export function listClassSessions(courseId: string): Promise<ClassSession[]> {
+  return apiRequest(`/api/v1/education/courses/${courseId}/class-sessions?limit=100`)
+}
+
+export function createClassSession(
+  courseId: string,
+  input: Pick<ClassSession, 'title' | 'description' | 'starts_at' | 'ends_at'>,
+): Promise<ClassSession> {
+  return apiRequest(`/api/v1/education/courses/${courseId}/class-sessions`, {
+    method: 'POST',
+    body: input,
+  })
+}
+
+export function updateClassSession(
+  sessionId: string,
+  updates: Partial<Pick<ClassSession, 'title' | 'description' | 'starts_at' | 'ends_at'>>,
+): Promise<ClassSession> {
+  return apiRequest(`/api/v1/education/class-sessions/${sessionId}`, { method: 'PATCH', body: updates })
+}
+
+export function changeClassSessionState(sessionId: string, action: 'start' | 'end' | 'cancel'): Promise<ClassSession> {
+  return apiRequest(`/api/v1/education/class-sessions/${sessionId}/${action}`, { method: 'POST' })
+}
+
+export function joinClassSession(sessionId: string): Promise<{ session_id: string; user_id: string; status: 'PRESENT' | 'LATE'; joined_at: string }> {
+  return apiRequest(`/api/v1/education/class-sessions/${sessionId}/join`, { method: 'POST' })
+}
+
+export function getClassSessionAttendance(sessionId: string): Promise<ClassSessionAttendance[]> {
+  return apiRequest(`/api/v1/education/class-sessions/${sessionId}/attendance`)
+}
+
+export function markClassSessionAttendance(
+  sessionId: string,
+  userId: string,
+  attendanceStatus: ClassSessionAttendance['status'],
+): Promise<ClassSessionAttendance> {
+  return apiRequest(`/api/v1/education/class-sessions/${sessionId}/attendance`, {
+    method: 'PATCH',
+    body: { user_id: userId, status: attendanceStatus },
+  })
+}
+
+export function listClassSessionMessages(sessionId: string): Promise<ClassSessionMessage[]> {
+  return apiRequest(`/api/v1/education/class-sessions/${sessionId}/messages?limit=100`)
+}
+
+export function sendClassSessionMessage(
+  sessionId: string,
+  content: string,
+  messageType: ClassSessionMessageType,
+): Promise<ClassSessionMessage> {
+  return apiRequest(`/api/v1/education/class-sessions/${sessionId}/messages`, {
+    method: 'POST',
+    body: { content, message_type: messageType },
+  })
 }

@@ -20,6 +20,7 @@ import { SchoolDetailPage } from './pages/SchoolDetailPage'
 import { SchoolsPage } from './pages/SchoolsPage'
 import { VerifyEmailPage } from './pages/VerifyEmailPage'
 import { TeachingPage } from './pages/TeachingPage'
+import { ClassroomsPage } from './pages/ClassroomsPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -48,9 +49,13 @@ export default function App() {
                   <Route path="schools/:institutionId" element={<SchoolDetailPage />} />
                   <Route path="my-courses" element={<MyCoursesPage />} />
                   <Route path="courses/:courseId" element={<CoursePage />} />
+                  <Route path="courses/:courseId/classrooms" element={<ClassroomsPage />} />
+                  <Route path="courses/:courseId/classrooms/:sessionId" element={<ClassroomsPage />} />
                   <Route path="lessons/:lessonId" element={<LessonPage />} />
                   <Route path="teaching" element={<TeachingPage />} />
                   <Route path="teaching/courses/:courseId" element={<TeachingPage />} />
+                  <Route path="teaching/courses/:courseId/classrooms" element={<ClassroomsPage />} />
+                  <Route path="teaching/courses/:courseId/classrooms/:sessionId" element={<ClassroomsPage />} />
                   <Route path="teaching/courses/:courseId/reviews" element={<TeachingPage />} />
                   <Route path="teaching/courses/:courseId/submissions/:submissionId" element={<TeachingPage />} />
                   <Route path="teaching/lessons/:lessonId" element={<TeachingPage />} />

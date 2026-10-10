@@ -8,6 +8,7 @@ from .assessment_submission import AssessmentSubmission
 from .conversation import Conversation
 from .conversation_member import ConversationMember
 from .course_teacher import CourseTeacher
+from .class_session import ClassSession, ClassSessionAttendance, ClassSessionMessage
 from .course import Course
 from .department import Department
 from .enrollment import Enrollment
@@ -46,6 +47,9 @@ __all__ = [
 	"Conversation",
 	"ConversationMember",
 	"CourseTeacher",
+	"ClassSession",
+	"ClassSessionAttendance",
+	"ClassSessionMessage",
 	"Course",
 	"Department",
 	"Enrollment",

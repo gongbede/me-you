@@ -13,6 +13,9 @@ from app.models import (
     Conversation,
     ConversationMember,
     CourseTeacher,
+    ClassSession,
+    ClassSessionAttendance,
+    ClassSessionMessage,
     Course,
     Department,
     Enrollment,
@@ -64,6 +67,7 @@ class MigrationFoundationTests(unittest.TestCase):
                 "institutions", "institution_memberships", "faculties", "departments",
                 "courses", "teachers", "students", "enrollments",
                 "course_teachers", "lessons", "exercises", "exercise_submissions", "assessments",
+                "class_sessions", "class_session_attendance", "class_session_messages",
                 "assessment_submissions", "assessment_results", "lesson_progress", "activities", "login_throttles", "media_assets",
                 "rate_limit_counters",
                 "security_events",
@@ -96,6 +100,9 @@ class MigrationFoundationTests(unittest.TestCase):
         self.assertIs(Student.__table__, Base.metadata.tables["students"])
         self.assertIs(Enrollment.__table__, Base.metadata.tables["enrollments"])
         self.assertIs(CourseTeacher.__table__, Base.metadata.tables["course_teachers"])
+        self.assertIs(ClassSession.__table__, Base.metadata.tables["class_sessions"])
+        self.assertIs(ClassSessionAttendance.__table__, Base.metadata.tables["class_session_attendance"])
+        self.assertIs(ClassSessionMessage.__table__, Base.metadata.tables["class_session_messages"])
         self.assertIs(Lesson.__table__, Base.metadata.tables["lessons"])
         self.assertIs(Exercise.__table__, Base.metadata.tables["exercises"])
         self.assertIs(ExerciseSubmission.__table__, Base.metadata.tables["exercise_submissions"])
@@ -214,6 +221,7 @@ class MigrationFoundationTests(unittest.TestCase):
             ("0018_auth_identities.py", "0018_auth_identities", "0017_media_storage"),
             ("0019_phone_login_codes.py", "0019_phone_login_codes", "0018_auth_identities"),
             ("0020_exercise_publication.py", "0020_exercise_publication", "0019_phone_login_codes"),
+            ("0021_live_classrooms.py", "0021_live_classrooms", "0020_exercise_publication"),
         )
         for filename, revision, down_revision in revisions:
             migration = load_module(

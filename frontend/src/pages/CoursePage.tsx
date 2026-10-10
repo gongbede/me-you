@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, ArrowRight, BookOpen, Check, CircleAlert } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BookOpen, CalendarClock, Check, CircleAlert } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import { getFriendlyErrorMessage } from '../api/client'
 import {
@@ -90,10 +90,13 @@ export function CoursePage() {
       ) : !isEnrolled ? (
         <section className="learning-enroll-panel"><div><h2>Not enrolled yet</h2><p>Students with an active school membership can enroll themselves in this course.</p></div><button className="button button--primary" type="button" disabled={enrollMutation.isPending} onClick={() => enrollMutation.mutate()}>{enrollMutation.isPending ? 'Enrolling…' : 'Enroll in course'} <ArrowRight size={16} aria-hidden="true" /></button></section>
       ) : (
-        <section className="learning-progress-section" aria-labelledby="course-progress-heading">
-          <div className="learning-progress-copy"><div><span className="learning-kicker">COURSE PROGRESS</span><h2 id="course-progress-heading">{courseProgress ? `${courseProgress.completed_lessons} of ${courseProgress.published_lessons} lessons done` : 'Your progress'}</h2></div><strong>{Math.round(courseProgress?.progress_percent ?? 0)}%</strong></div>
-          <progress aria-label="Course progress" max={100} value={courseProgress?.progress_percent ?? 0} />
-        </section>
+        <>
+          <section className="learning-progress-section" aria-labelledby="course-progress-heading">
+            <div className="learning-progress-copy"><div><span className="learning-kicker">COURSE PROGRESS</span><h2 id="course-progress-heading">{courseProgress ? `${courseProgress.completed_lessons} of ${courseProgress.published_lessons} lessons done` : 'Your progress'}</h2></div><strong>{Math.round(courseProgress?.progress_percent ?? 0)}%</strong></div>
+            <progress aria-label="Course progress" max={100} value={courseProgress?.progress_percent ?? 0} />
+          </section>
+          <Link className="student-classroom-link" to={`/courses/${courseId}/classrooms`}><CalendarClock size={20} aria-hidden="true" /><span><strong>Live classrooms</strong><small>See upcoming classes and join a live session</small></span><ArrowRight size={17} aria-hidden="true" /></Link>
+        </>
       )}
 
       {enrollMutation.isError && <p className="form-alert" role="alert">{learningAccessMessage(enrollMutation.error)} If the membership is active, ask a school administrator to check your student record.</p>}

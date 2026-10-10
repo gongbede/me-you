@@ -23,6 +23,16 @@ from .education_learning import (
 	SubmissionResponse,
 	SubmissionUpdate,
 )
+from .classroom import (
+	ClassSessionAttendanceResponse,
+	ClassSessionAttendanceUpdate,
+	ClassSessionCreate,
+	ClassSessionJoinResponse,
+	ClassSessionMessageCreate,
+	ClassSessionMessageResponse,
+	ClassSessionResponse,
+	ClassSessionUpdate,
+)
 from .education import (
 	CourseCreate,
 	CourseResponse,
@@ -101,6 +111,14 @@ __all__ = [
 	"CourseCreate",
 	"CourseResponse",
 	"CourseProgressResponse",
+	"ClassSessionAttendanceResponse",
+	"ClassSessionAttendanceUpdate",
+	"ClassSessionCreate",
+	"ClassSessionJoinResponse",
+	"ClassSessionMessageCreate",
+	"ClassSessionMessageResponse",
+	"ClassSessionResponse",
+	"ClassSessionUpdate",
 	"CourseTeacherCreate",
 	"CourseTeacherResponse",
 		"DepartmentCreate",

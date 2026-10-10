@@ -1,5 +1,5 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, BookOpen, CircleAlert, ClipboardList, Clock3, LoaderCircle, Plus, Save, Trash2, UserRound } from 'lucide-react'
+import { ArrowLeft, BookOpen, CalendarClock, CircleAlert, ClipboardList, Clock3, LoaderCircle, Plus, Save, Trash2, UserRound } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { ApiError, getFriendlyErrorMessage } from '../api/client'
@@ -208,6 +208,7 @@ function CourseLessons({ courseId }: { courseId: string }) {
       <section className="page-heading-row teaching-heading">
         <div><span className="eyebrow">{course.code}</span><h1>{course.name}</h1><p>Manage lesson content and visibility.</p></div>
         <div className="teaching-actions">
+          <Link className="button button--outline" to={`/teaching/courses/${course.id}/classrooms`}><CalendarClock size={17} aria-hidden="true" /> Live classrooms</Link>
           <Link className="button button--outline" to={`/teaching/courses/${course.id}/reviews`}><ClipboardList size={17} aria-hidden="true" /> Review inbox</Link>
           {!creating && <button className="button button--primary" type="button" onClick={() => { setActionError(null); setCreating(true) }}><Plus size={18} aria-hidden="true" /> New lesson</button>}
         </div>
