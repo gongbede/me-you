@@ -17,6 +17,7 @@ from ..database import get_postgres_session
 from ..models import AuthIdentity, User
 from ..schemas import LoginResponse
 from ..security import auth_token_response, password_hash
+from ..security_audit import record_security_event
 
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
@@ -90,8 +91,15 @@ async def google_sign_in(
         user = await database.get(User, identity.user_id)
     else:
         user = await database.scalar(
-            select(User).where(func.lower(User.email) == email)
+            select(User).where(func.lower(User.email) == email).with_for_update()
         )
+        if user is not None and (
+            not user.is_active or user.deleted_at is not None
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Google account is not available",
+            )
         if user is None:
             username_prefix = re.sub(r"[^a-z0-9_-]", "-", email.partition("@")[0])
             username = f"{username_prefix[:36] or 'google-user'}-{uuid.uuid4().hex[:8]}"
@@ -103,6 +111,17 @@ async def google_sign_in(
             )
             database.add(user)
             await database.flush()
+        elif user.email_verified_at is None:
+            user.email_verified_at = datetime.now(timezone.utc)
+            user.password_hash = password_hash.hash(secrets.token_urlsafe(48))
+            user.token_version = (user.token_version or 0) + 1
+            record_security_event(
+                database,
+                event_type="auth.google_linked_unverified_account",
+                outcome="SUCCESS",
+                actor_user_id=user.id,
+                target_user_id=user.id,
+            )
         database.add(
             AuthIdentity(
                 user_id=user.id,

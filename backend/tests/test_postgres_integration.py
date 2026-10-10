@@ -32,6 +32,7 @@ from app.models import (
     Institution,
     InstitutionMembership,
     Lesson,
+    SecurityEvent,
     Student,
     Teacher,
     User,
@@ -382,6 +383,7 @@ def test_google_sign_in_links_matching_verified_email(postgres_database_url, mon
     async def verify():
         async with database_session(postgres_database_url) as session:
             user = await create_user(session, email="existing@example.com")
+            user.email_verified_at = datetime.now(timezone.utc)
             original_password_hash = user.password_hash
             await session.commit()
             response = await auth_google.google_sign_in(
@@ -397,6 +399,98 @@ def test_google_sign_in_links_matching_verified_email(postgres_database_url, mon
             assert response["id"] == str(user.id)
             assert identity is not None and identity.user_id == user.id
             assert user.password_hash == original_password_hash
+            await session.delete(user)
+            await session.commit()
+
+    asyncio.run(verify())
+
+
+def test_google_sign_in_protects_unverified_matching_account_and_revokes_sessions(postgres_database_url, monkeypatch):
+    import app.routes.auth_google as auth_google
+    from fastapi.security import HTTPAuthorizationCredentials
+    from app.security import create_access_token, get_current_postgres_user, password_hash
+
+    claims = {
+        "sub": "google-unverified-account-link",
+        "email": "unverified-link@example.com",
+        "email_verified": True,
+    }
+    monkeypatch.setenv("ME_YOU_GOOGLE_CLIENT_ID", "google-test-client")
+    monkeypatch.setattr(auth_google.id_token, "verify_oauth2_token", Mock(return_value=claims))
+
+    async def verify():
+        async with database_session(postgres_database_url) as session:
+            user = await create_user(session, email="unverified-link@example.com")
+            user.password_hash = password_hash.hash("prior-password-value")
+            await session.commit()
+            original_password_hash = user.password_hash
+            old_token = create_access_token(user.id, token_version=user.token_version)
+
+            response = await auth_google.google_sign_in(
+                auth_google.GoogleSignInRequest(id_token="signed-google-token"),
+                session,
+            )
+            await session.refresh(user)
+            identity = await session.scalar(
+                select(AuthIdentity).where(
+                    AuthIdentity.provider == "google",
+                    AuthIdentity.provider_subject == "google-unverified-account-link",
+                )
+            )
+            event = await session.scalar(
+                select(SecurityEvent).where(
+                    SecurityEvent.event_type == "auth.google_linked_unverified_account",
+                    SecurityEvent.target_user_id == user.id,
+                )
+            )
+            assert response["id"] == str(user.id)
+            assert identity is not None and identity.user_id == user.id
+            assert user.email_verified_at is not None
+            assert user.password_hash != original_password_hash
+            assert not password_hash.verify("prior-password-value", user.password_hash)
+            assert user.token_version == 1
+            assert event is not None and event.details == {}
+            with pytest.raises(HTTPException) as error:
+                await get_current_postgres_user(
+                    HTTPAuthorizationCredentials(scheme="Bearer", credentials=old_token),
+                    session,
+                )
+            assert error.value.status_code == 401
+            await session.delete(user)
+            await session.commit()
+
+    asyncio.run(verify())
+
+
+def test_google_sign_in_refuses_deactivated_matching_account(postgres_database_url, monkeypatch):
+    import app.routes.auth_google as auth_google
+
+    claims = {
+        "sub": "google-deactivated-link",
+        "email": "deactivated-link@example.com",
+        "email_verified": True,
+    }
+    monkeypatch.setenv("ME_YOU_GOOGLE_CLIENT_ID", "google-test-client")
+    monkeypatch.setattr(auth_google.id_token, "verify_oauth2_token", Mock(return_value=claims))
+
+    async def verify():
+        async with database_session(postgres_database_url) as session:
+            user = await create_user(session, email="deactivated-link@example.com")
+            user.is_active = False
+            await session.commit()
+            with pytest.raises(HTTPException) as error:
+                await auth_google.google_sign_in(
+                    auth_google.GoogleSignInRequest(id_token="signed-google-token"),
+                    session,
+                )
+            assert error.value.status_code == 401
+            identity = await session.scalar(
+                select(AuthIdentity).where(
+                    AuthIdentity.provider == "google",
+                    AuthIdentity.provider_subject == "google-deactivated-link",
+                )
+            )
+            assert identity is None
             await session.delete(user)
             await session.commit()
 
