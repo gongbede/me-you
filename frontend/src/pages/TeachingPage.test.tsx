@@ -1,9 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { apiRequest } from '../api/client'
-import { LessonForm, TeachingPage } from './TeachingPage'
+import { ExerciseForm, LessonForm, TeachingPage } from './TeachingPage'
 
 vi.mock('../api/client', () => ({
   apiRequest: vi.fn(),
@@ -23,6 +23,7 @@ function renderTeaching(path = '/teaching') {
         <Routes>
           <Route path="/teaching" element={<TeachingPage />} />
           <Route path="/teaching/courses/:courseId" element={<TeachingPage />} />
+          <Route path="/teaching/lessons/:lessonId" element={<TeachingPage />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -30,6 +31,7 @@ function renderTeaching(path = '/teaching') {
 }
 
 describe('Teaching area', () => {
+  afterEach(() => cleanup())
   beforeEach(() => request.mockReset())
 
   it('rejects blank lesson title/content and negative order', async () => {
@@ -74,5 +76,44 @@ describe('Teaching area', () => {
     request.mockResolvedValueOnce([] as never)
     renderTeaching()
     expect(await screen.findByRole('heading', { name: 'No courses assigned yet' })).toBeInTheDocument()
+  })
+
+  it('validates exercise title, instructions, and order against the API limits', async () => {
+    const save = vi.fn()
+    render(<ExerciseForm isSaving={false} onSave={save} />)
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'x'.repeat(201) } })
+    fireEvent.change(screen.getByLabelText('Instructions'), { target: { value: 'Instructions' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create draft' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Add a title and instructions')
+    expect(save).not.toHaveBeenCalled()
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Reflection' } })
+    fireEvent.change(screen.getByLabelText('Order'), { target: { value: '-1' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create draft' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('order of 0 or greater')
+    expect(save).not.toHaveBeenCalled()
+  })
+
+  it('confirms exercise publication and persists the publish flag', async () => {
+    request.mockImplementation(async (path) => {
+      if (path === '/api/v1/education/teachers/me?limit=100') return [teacher] as never
+      if (path === '/api/v1/institutions/school-1') return { id: 'school-1', name: 'School' } as never
+      if (path === '/api/v1/institutions/school-1/faculties?limit=100') return [{ id: 'faculty-1' }] as never
+      if (path === '/api/v1/institutions/faculties/faculty-1/departments?limit=100') return [{ id: 'department-1' }] as never
+      if (path === '/api/v1/institutions/departments/department-1/courses?limit=100') return [course] as never
+      if (path === '/api/v1/education/courses/course-1/teachers?limit=100') return [{ teacher_id: 'teacher-1' }] as never
+      if (path === '/api/v1/education/lessons/lesson-1') return { id: 'lesson-1', course_id: 'course-1', title: 'Cells', content: 'Cell basics', position: 0, is_published: true } as never
+      if (path === '/api/v1/education/lessons/lesson-1/exercises?limit=100') return [{ id: 'exercise-1', lesson_id: 'lesson-1', title: 'Explain', instructions: 'Explain cells', position: 0, exercise_type: 'WRITTEN', is_published: false }] as never
+      if (path === '/api/v1/education/exercises/exercise-1') return { id: 'exercise-1', lesson_id: 'lesson-1', title: 'Explain', instructions: 'Explain cells', position: 0, exercise_type: 'WRITTEN', is_published: true } as never
+      return undefined as never
+    })
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    renderTeaching('/teaching/lessons/lesson-1')
+    fireEvent.click(await screen.findByRole('button', { name: 'Publish' }))
+    expect(confirm).toHaveBeenCalledWith('Publish this exercise for students?')
+    await waitFor(() => expect(request).toHaveBeenCalledWith('/api/v1/education/exercises/exercise-1', expect.objectContaining({
+      method: 'PATCH',
+      body: { is_published: true },
+    })))
+    confirm.mockRestore()
   })
 })

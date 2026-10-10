@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, Text, Uuid
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, Text, Uuid, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
@@ -27,6 +27,7 @@ class Exercise(Base):
     instructions: Mapped[str] = mapped_column(Text, nullable=False)
     position: Mapped[int] = mapped_column(nullable=False, default=0)
     exercise_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    is_published: Mapped[bool] = mapped_column(nullable=False, default=False, server_default=text("false"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 

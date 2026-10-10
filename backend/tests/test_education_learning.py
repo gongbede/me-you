@@ -11,6 +11,8 @@ from app.models import Assessment, AssessmentResult, AssessmentSubmission, Cours
 from app.routes.education_learning import (
     assign_teacher,
     create_assessment,
+    create_exercise,
+    create_exercise_submission,
     create_lesson,
     create_submission,
     create_result,
@@ -18,11 +20,12 @@ from app.routes.education_learning import (
     delete_exercise,
     delete_lesson,
     get_course_progress,
+    list_exercises,
     update_assessment,
     update_progress,
     update_submission,
 )
-from app.schemas import AssessmentCreate, AssessmentUpdate, CourseTeacherCreate, LessonCreate, LessonProgressUpdate, SubmissionCreate, SubmissionUpdate
+from app.schemas import AssessmentCreate, AssessmentUpdate, CourseTeacherCreate, ExerciseCreate, ExerciseSubmissionCreate, ExerciseUpdate, LessonCreate, LessonProgressUpdate, SubmissionCreate, SubmissionUpdate
 
 
 class Result:
@@ -98,6 +101,53 @@ class EducationLearningTests(unittest.IsolatedAsyncioTestCase):
             LessonCreate(title="Lesson", content="Body", position=-1)
         with self.assertRaises(ValidationError):
             LessonCreate(title="Lesson", content="   ")
+
+    async def test_assigned_teacher_lists_draft_exercises_and_creates_a_draft(self):
+        exercise = Exercise(
+            id=uuid.uuid4(), lesson_id=self.lesson.id, title="Draft", instructions="Try this",
+            position=0, exercise_type="WRITTEN", is_published=False,
+        )
+        session = LearningSession([self.lesson, self.teacher], [[exercise]])
+        listed = await list_exercises(self.lesson.id, self.user, session)
+        self.assertEqual(listed[0]["is_published"], False)
+        list_query = str(session.statements[-1].compile()).lower()
+        self.assertNotIn("where exercises.is_published", list_query)
+
+        create_session = LearningSession([self.lesson, self.teacher])
+        created = await create_exercise(
+            self.lesson.id,
+            ExerciseCreate(title="Exercise", instructions="Write an answer", exercise_type="WRITTEN"),
+            self.user,
+            create_session,
+        )
+        self.assertFalse(created["is_published"])
+
+    async def test_students_only_list_published_exercises(self):
+        session = LearningSession([self.lesson, None, self.student], [[]])
+        await list_exercises(self.lesson.id, self.student_user, session)
+        list_query = str(session.statements[-1].compile()).lower()
+        self.assertIn("exercises.is_published is true", list_query)
+
+    async def test_student_cannot_submit_to_unpublished_exercise(self):
+        exercise = Exercise(
+            id=uuid.uuid4(), lesson_id=self.lesson.id, title="Draft", instructions="Try this",
+            position=0, exercise_type="WRITTEN", is_published=False,
+        )
+        with self.assertRaises(HTTPException) as error:
+            await create_exercise_submission(
+                exercise.id,
+                ExerciseSubmissionCreate(attempt_number=1, answer_text="Answer"),
+                self.student_user,
+                LearningSession([exercise, self.lesson]),
+            )
+        self.assertEqual(error.exception.status_code, 404)
+
+    async def test_exercise_schema_enforces_database_title_limit_and_publication(self):
+        with self.assertRaises(ValidationError):
+            ExerciseCreate(title="x" * 201, instructions="Body", exercise_type="WRITTEN")
+        with self.assertRaises(ValidationError):
+            ExerciseUpdate(position=-1)
+        self.assertFalse(ExerciseCreate(title="Task", instructions="Body", exercise_type="WRITTEN").is_published)
 
     async def test_course_teacher_assignment_requires_matching_institution_and_identity(self):
         admin_membership = type("Membership", (), {"id": uuid.uuid4(), "user_id": self.user.id, "institution_id": self.teacher.institution_id, "role": "ADMIN"})()

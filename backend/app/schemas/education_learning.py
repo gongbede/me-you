@@ -59,19 +59,21 @@ class LessonResponse(BaseModel):
 
 
 class ExerciseCreate(BaseModel):
-    title: str = Field(min_length=1, max_length=300)
+    title: str = Field(min_length=1, max_length=200)
     instructions: str = Field(min_length=1, max_length=20000)
     position: int = Field(default=0, ge=0)
     exercise_type: ExerciseType
+    is_published: bool = False
     _title_not_blank = field_validator("title")(non_blank)
     _instructions_not_blank = field_validator("instructions")(non_blank)
 
 
 class ExerciseUpdate(BaseModel):
-    title: str | None = Field(default=None, min_length=1, max_length=300)
+    title: str | None = Field(default=None, min_length=1, max_length=200)
     instructions: str | None = Field(default=None, min_length=1, max_length=20000)
     position: int | None = Field(default=None, ge=0)
     exercise_type: ExerciseType | None = None
+    is_published: bool | None = None
     _title_not_blank = field_validator("title")(lambda value: non_blank(value) if value is not None else value)
     _instructions_not_blank = field_validator("instructions")(lambda value: non_blank(value) if value is not None else value)
 
@@ -83,6 +85,7 @@ class ExerciseResponse(BaseModel):
     instructions: str
     position: int
     exercise_type: ExerciseType
+    is_published: bool
     created_at: datetime
     updated_at: datetime
 

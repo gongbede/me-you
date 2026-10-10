@@ -145,7 +145,7 @@ def lesson_response(value: Lesson) -> dict:
 
 
 def exercise_response(value: Exercise) -> dict:
-    return response_value(value, ("id", "lesson_id", "title", "instructions", "position", "exercise_type", "created_at", "updated_at"))
+    return response_value(value, ("id", "lesson_id", "title", "instructions", "position", "exercise_type", "is_published", "created_at", "updated_at"))
 
 
 def exercise_submission_response(value: ExerciseSubmission) -> dict:
@@ -299,8 +299,11 @@ async def create_exercise(lesson_id: uuid.UUID, data: ExerciseCreate, current_us
 @router.get("/lessons/{lesson_id}/exercises", response_model=list[ExerciseResponse], summary="List lesson exercises")
 async def list_exercises(lesson_id: uuid.UUID, current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session), offset: Annotated[int, Query(ge=0)] = 0, limit: Annotated[int, Query(ge=1, le=100)] = 100):
     lesson = await lesson_or_404(lesson_id, database)
-    await accessible_lesson(lesson, current_user.id, database)
-    values = list((await database.scalars(select(Exercise).where(Exercise.lesson_id == lesson_id).order_by(Exercise.position.asc(), Exercise.id.asc()).offset(offset).limit(limit))).all())
+    statement = select(Exercise).where(Exercise.lesson_id == lesson_id)
+    if not await has_course_teacher_access(lesson.course_id, current_user.id, database):
+        await accessible_lesson(lesson, current_user.id, database)
+        statement = statement.where(Exercise.is_published.is_(True))
+    values = list((await database.scalars(statement.order_by(Exercise.position.asc(), Exercise.id.asc()).offset(offset).limit(limit))).all())
     return [exercise_response(value) for value in values]
 
 
@@ -308,10 +311,10 @@ async def list_exercises(lesson_id: uuid.UUID, current_user: User = Depends(get_
 async def get_exercise(exercise_id: uuid.UUID, current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session)):
     value = await exercise_or_404(exercise_id, database)
     lesson = await lesson_or_404(value.lesson_id, database)
-    if lesson.is_published:
+    if not await has_course_teacher_access(lesson.course_id, current_user.id, database):
         await accessible_lesson(lesson, current_user.id, database)
-    else:
-        await assigned_teacher(lesson.course_id, current_user.id, database)
+        if not value.is_published:
+            raise HTTPException(status_code=404, detail="Exercise not found")
     return exercise_response(value)
 
 
@@ -345,7 +348,7 @@ async def delete_exercise(exercise_id: uuid.UUID, current_user: User = Depends(g
 async def create_exercise_submission(exercise_id: uuid.UUID, data: ExerciseSubmissionCreate, current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session)):
     exercise = await exercise_or_404(exercise_id, database)
     lesson = await lesson_or_404(exercise.lesson_id, database)
-    if not lesson.is_published:
+    if not lesson.is_published or not exercise.is_published:
         raise HTTPException(status_code=404, detail="Exercise not found")
     student = await student_for_course(lesson.course_id, current_user.id, database)
     value = ExerciseSubmission(
@@ -396,7 +399,7 @@ async def list_exercise_submissions(exercise_id: uuid.UUID, current_user: User =
     lesson = await lesson_or_404(exercise.lesson_id, database)
     statement = select(ExerciseSubmission).where(ExerciseSubmission.exercise_id == exercise.id)
     if not await has_course_teacher_access(lesson.course_id, current_user.id, database):
-        if not lesson.is_published:
+        if not lesson.is_published or not exercise.is_published:
             raise HTTPException(status_code=404, detail="Exercise not found")
         student = await student_for_course(lesson.course_id, current_user.id, database)
         statement = statement.where(ExerciseSubmission.student_id == student.id)

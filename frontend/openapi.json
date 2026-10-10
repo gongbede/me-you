@@ -879,6 +879,11 @@
             "title": "Instructions",
             "type": "string"
           },
+          "is_published": {
+            "default": false,
+            "title": "Is Published",
+            "type": "boolean"
+          },
           "position": {
             "default": 0,
             "minimum": 0.0,
@@ -886,7 +891,7 @@
             "type": "integer"
           },
           "title": {
-            "maxLength": 300,
+            "maxLength": 200,
             "minLength": 1,
             "title": "Title",
             "type": "string"
@@ -925,6 +930,10 @@
             "title": "Instructions",
             "type": "string"
           },
+          "is_published": {
+            "title": "Is Published",
+            "type": "boolean"
+          },
           "lesson_id": {
             "title": "Lesson Id",
             "type": "string"
@@ -950,6 +959,7 @@
           "instructions",
           "position",
           "exercise_type",
+          "is_published",
           "created_at",
           "updated_at"
         ],
@@ -1115,6 +1125,17 @@
             ],
             "title": "Instructions"
           },
+          "is_published": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Published"
+          },
           "position": {
             "anyOf": [
               {
@@ -1130,7 +1151,7 @@
           "title": {
             "anyOf": [
               {
-                "maxLength": 300,
+                "maxLength": 200,
                 "minLength": 1,
                 "type": "string"
               },
@@ -1276,6 +1297,21 @@
           "username"
         ],
         "title": "FollowUserResponse",
+        "type": "object"
+      },
+      "GoogleSignInRequest": {
+        "properties": {
+          "id_token": {
+            "maxLength": 10000,
+            "minLength": 1,
+            "title": "Id Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id_token"
+        ],
+        "title": "GoogleSignInRequest",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -2361,6 +2397,55 @@
           "email"
         ],
         "title": "PasswordRecoveryRequest",
+        "type": "object"
+      },
+      "PhoneCodeRequest": {
+        "properties": {
+          "phone_number": {
+            "maxLength": 40,
+            "minLength": 3,
+            "title": "Phone Number",
+            "type": "string"
+          }
+        },
+        "required": [
+          "phone_number"
+        ],
+        "title": "PhoneCodeRequest",
+        "type": "object"
+      },
+      "PhoneCodeRequestResponse": {
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "title": "PhoneCodeRequestResponse",
+        "type": "object"
+      },
+      "PhoneCodeVerify": {
+        "properties": {
+          "code": {
+            "pattern": "^\\d{6}$",
+            "title": "Code",
+            "type": "string"
+          },
+          "phone_number": {
+            "maxLength": 40,
+            "minLength": 3,
+            "title": "Phone Number",
+            "type": "string"
+          }
+        },
+        "required": [
+          "phone_number",
+          "code"
+        ],
+        "title": "PhoneCodeVerify",
         "type": "object"
       },
       "PlatformAdminUserResponse": {
@@ -4218,6 +4303,148 @@
         "summary": "Revoke all current account sessions",
         "tags": [
           "account"
+        ]
+      }
+    },
+    "/api/v1/auth/google": {
+      "post": {
+        "operationId": "google_sign_in_api_v1_auth_google_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoogleSignInRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Google Sign In",
+        "tags": [
+          "authentication"
+        ]
+      }
+    },
+    "/api/v1/auth/google/config": {
+      "get": {
+        "operationId": "google_sign_in_config_api_v1_auth_google_config_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Google Sign In Config",
+        "tags": [
+          "authentication"
+        ]
+      }
+    },
+    "/api/v1/auth/phone/request": {
+      "post": {
+        "operationId": "request_phone_code_api_v1_auth_phone_request_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PhoneCodeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhoneCodeRequestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Request Phone Code",
+        "tags": [
+          "authentication"
+        ]
+      }
+    },
+    "/api/v1/auth/phone/verify": {
+      "post": {
+        "operationId": "verify_phone_code_api_v1_auth_phone_verify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PhoneCodeVerify"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Verify Phone Code",
+        "tags": [
+          "authentication"
         ]
       }
     },
@@ -11356,6 +11583,148 @@
         "summary": "Get a profile in your institution network",
         "tags": [
           "profile"
+        ]
+      }
+    },
+    "/auth/google": {
+      "post": {
+        "operationId": "google_sign_in_auth_google_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoogleSignInRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Google Sign In",
+        "tags": [
+          "authentication"
+        ]
+      }
+    },
+    "/auth/google/config": {
+      "get": {
+        "operationId": "google_sign_in_config_auth_google_config_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Google Sign In Config",
+        "tags": [
+          "authentication"
+        ]
+      }
+    },
+    "/auth/phone/request": {
+      "post": {
+        "operationId": "request_phone_code_auth_phone_request_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PhoneCodeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhoneCodeRequestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Request Phone Code",
+        "tags": [
+          "authentication"
+        ]
+      }
+    },
+    "/auth/phone/verify": {
+      "post": {
+        "operationId": "verify_phone_code_auth_phone_verify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PhoneCodeVerify"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Verify Phone Code",
+        "tags": [
+          "authentication"
         ]
       }
     },

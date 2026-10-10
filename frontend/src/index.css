@@ -643,7 +643,7 @@ button:disabled {
   color: var(--navy);
 }
 
-.teaching-course__unavailable {
+.teaching-course__meta {
   grid-column: 2;
   color: var(--muted);
   font-size: 0.78rem;
@@ -705,6 +705,16 @@ button:disabled {
 
 .teaching-form__order {
   width: min(100%, 170px);
+}
+
+.teaching-form__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 170px) minmax(0, 1fr);
+  gap: 15px;
+}
+
+.teaching-button-label {
+  display: inline;
 }
 
 .teaching-actions {
@@ -796,19 +806,18 @@ button:disabled {
     align-items: flex-start;
   }
 
-  .teaching-heading > .button {
+  .teaching-heading > .button[aria-label='New exercise'] {
     width: 46px;
     min-width: 46px;
     padding: 0;
-    overflow: hidden;
-    gap: 0;
-    color: transparent;
-    font-size: 0;
   }
 
-  .teaching-heading > .button svg {
-    flex: 0 0 auto;
-    color: white;
+  .teaching-heading > .button[aria-label='New exercise'] .teaching-button-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
   }
 
   .lesson-row {
