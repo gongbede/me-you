@@ -25,6 +25,7 @@ from ..models import (
     Lesson,
     LessonProgress,
     Notification,
+    Profile,
     Student,
     Teacher,
     User,
@@ -46,6 +47,7 @@ from ..schemas import (
     ExerciseCreate,
     ExerciseResponse,
     ExerciseSubmissionCreate,
+    ExerciseSubmissionInboxResponse,
     ExerciseSubmissionResponse,
     ExerciseSubmissionReview,
     ExerciseUpdate,
@@ -411,6 +413,46 @@ async def list_exercise_submissions(exercise_id: uuid.UUID, current_user: User =
         ).all()
     )
     return [exercise_submission_response(value) for value in values]
+
+
+@router.get("/courses/{course_id}/exercise-submissions", response_model=list[ExerciseSubmissionInboxResponse], summary="List course exercise submissions for review")
+async def list_course_exercise_submissions(course_id: uuid.UUID, current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session), offset: Annotated[int, Query(ge=0)] = 0, limit: Annotated[int, Query(ge=1, le=100)] = 100):
+    await assigned_teacher(course_id, current_user.id, database)
+    rows = (
+        await database.execute(
+            select(
+                ExerciseSubmission,
+                Lesson.id,
+                Lesson.title,
+                Exercise.title,
+                Profile.display_name,
+                User.username,
+            )
+            .join(Exercise, Exercise.id == ExerciseSubmission.exercise_id)
+            .join(Lesson, Lesson.id == Exercise.lesson_id)
+            .join(Student, Student.id == ExerciseSubmission.student_id)
+            .join(User, User.id == Student.user_id)
+            .outerjoin(Profile, Profile.user_id == User.id)
+            .where(Lesson.course_id == course_id)
+            .order_by(
+                ExerciseSubmission.reviewed_at.asc().nullsfirst(),
+                ExerciseSubmission.submitted_at.desc(),
+                ExerciseSubmission.id.asc(),
+            )
+            .offset(offset)
+            .limit(limit)
+        )
+    ).all()
+    results = []
+    for submission, lesson_id, lesson_title, exercise_title, display_name, username in rows:
+        results.append({
+            **exercise_submission_response(submission),
+            "student_name": display_name or username,
+            "lesson_id": str(lesson_id),
+            "lesson_title": lesson_title,
+            "exercise_title": exercise_title,
+        })
+    return results
 
 
 @router.get("/exercise-submissions/{submission_id}", response_model=ExerciseSubmissionResponse, summary="Get an exercise attempt")

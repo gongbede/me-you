@@ -51,6 +51,8 @@ export default function App() {
                   <Route path="lessons/:lessonId" element={<LessonPage />} />
                   <Route path="teaching" element={<TeachingPage />} />
                   <Route path="teaching/courses/:courseId" element={<TeachingPage />} />
+                  <Route path="teaching/courses/:courseId/reviews" element={<TeachingPage />} />
+                  <Route path="teaching/courses/:courseId/submissions/:submissionId" element={<TeachingPage />} />
                   <Route path="teaching/lessons/:lessonId" element={<TeachingPage />} />
                   <Route path="users/:userId" element={<PublicProfilePage />} />
                 </Route>

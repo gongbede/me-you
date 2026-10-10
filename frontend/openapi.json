@@ -987,6 +987,114 @@
         "title": "ExerciseSubmissionCreate",
         "type": "object"
       },
+      "ExerciseSubmissionInboxResponse": {
+        "properties": {
+          "answer_text": {
+            "title": "Answer Text",
+            "type": "string"
+          },
+          "attempt_number": {
+            "title": "Attempt Number",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "exercise_id": {
+            "title": "Exercise Id",
+            "type": "string"
+          },
+          "exercise_title": {
+            "title": "Exercise Title",
+            "type": "string"
+          },
+          "feedback": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feedback"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "lesson_id": {
+            "title": "Lesson Id",
+            "type": "string"
+          },
+          "lesson_title": {
+            "title": "Lesson Title",
+            "type": "string"
+          },
+          "reviewed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed At"
+          },
+          "reviewer_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewer Id"
+          },
+          "student_id": {
+            "title": "Student Id",
+            "type": "string"
+          },
+          "student_name": {
+            "title": "Student Name",
+            "type": "string"
+          },
+          "submitted_at": {
+            "format": "date-time",
+            "title": "Submitted At",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "exercise_id",
+          "student_id",
+          "attempt_number",
+          "answer_text",
+          "feedback",
+          "reviewer_id",
+          "submitted_at",
+          "reviewed_at",
+          "created_at",
+          "updated_at",
+          "student_name",
+          "lesson_id",
+          "lesson_title",
+          "exercise_title"
+        ],
+        "title": "ExerciseSubmissionInboxResponse",
+        "type": "object"
+      },
       "ExerciseSubmissionResponse": {
         "properties": {
           "answer_text": {
@@ -5512,6 +5620,81 @@
           }
         ],
         "summary": "Create an assessment",
+        "tags": [
+          "education-learning"
+        ]
+      }
+    },
+    "/api/v1/education/courses/{course_id}/exercise-submissions": {
+      "get": {
+        "operationId": "list_course_exercise_submissions_api_v1_education_courses__course_id__exercise_submissions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "course_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Course Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ExerciseSubmissionInboxResponse"
+                  },
+                  "title": "Response List Course Exercise Submissions Api V1 Education Courses  Course Id  Exercise Submissions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List course exercise submissions for review",
         "tags": [
           "education-learning"
         ]
@@ -12792,6 +12975,81 @@
           }
         ],
         "summary": "Create an assessment",
+        "tags": [
+          "education-learning"
+        ]
+      }
+    },
+    "/education/courses/{course_id}/exercise-submissions": {
+      "get": {
+        "operationId": "list_course_exercise_submissions_education_courses__course_id__exercise_submissions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "course_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Course Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ExerciseSubmissionInboxResponse"
+                  },
+                  "title": "Response List Course Exercise Submissions Education Courses  Course Id  Exercise Submissions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List course exercise submissions for review",
         "tags": [
           "education-learning"
         ]

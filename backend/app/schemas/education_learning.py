@@ -114,6 +114,13 @@ class ExerciseSubmissionResponse(BaseModel):
     updated_at: datetime
 
 
+class ExerciseSubmissionInboxResponse(ExerciseSubmissionResponse):
+    student_name: str
+    lesson_id: str
+    lesson_title: str
+    exercise_title: str
+
+
 class AssessmentCreate(BaseModel):
     title: str = Field(min_length=1, max_length=300)
     instructions: str = Field(min_length=1, max_length=20000)

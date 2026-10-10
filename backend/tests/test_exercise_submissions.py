@@ -12,6 +12,7 @@ from app.models import Activity, Course, Exercise, ExerciseSubmission, Lesson, N
 from app.routes.education_learning import (
     create_exercise_submission,
     get_exercise_submission,
+    list_course_exercise_submissions,
     list_exercise_submissions,
     review_exercise_submission,
     router,
@@ -36,6 +37,7 @@ class ExerciseSession:
         self.added = []
         self.committed = False
         self.rolled_back = False
+        self.executed = []
 
     async def scalar(self, statement):
         self.statements.append(statement)
@@ -43,6 +45,10 @@ class ExerciseSession:
 
     async def scalars(self, statement):
         self.statements.append(statement)
+        return Rows(self.scalar_rows.pop(0) if self.scalar_rows else [])
+
+    async def execute(self, statement):
+        self.executed.append(statement)
         return Rows(self.scalar_rows.pop(0) if self.scalar_rows else [])
 
     def add(self, value):
@@ -79,7 +85,7 @@ class ExerciseSubmissionTests(unittest.IsolatedAsyncioTestCase):
         self.teacher_user = User(id=uuid.uuid4(), username="teacher", email="teacher@example.com", password_hash="hash")
         self.course = Course(id=uuid.uuid4(), department_id=uuid.uuid4(), code="CS101", name="Programming")
         self.lesson = Lesson(id=uuid.uuid4(), course_id=self.course.id, title="Lesson", content="Content", is_published=True)
-        self.exercise = Exercise(id=uuid.uuid4(), lesson_id=self.lesson.id, title="Exercise", instructions="Solve it", exercise_type="WRITTEN")
+        self.exercise = Exercise(id=uuid.uuid4(), lesson_id=self.lesson.id, title="Exercise", instructions="Solve it", exercise_type="WRITTEN", is_published=True)
         self.student = Student(id=uuid.uuid4(), user_id=self.student_user.id, institution_id=uuid.uuid4())
         self.teacher = Teacher(id=uuid.uuid4(), user_id=self.teacher_user.id, institution_id=self.student.institution_id)
         self.attempt = ExerciseSubmission(
@@ -219,6 +225,31 @@ class ExerciseSubmissionTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("institution_memberships.role", teacher_authorization_sql)
         self.assertIn("users.is_active", teacher_authorization_sql)
         self.assertNotIn("exercise_submissions.student_id =", str(teacher_session.statements[-1].compile()))
+
+    async def test_course_inbox_is_teacher_only_and_returns_student_names(self):
+        reviewed_at = datetime.now(timezone.utc)
+        self.attempt.reviewed_at = reviewed_at
+        pending_attempt = ExerciseSubmission(
+            id=uuid.uuid4(), exercise_id=self.exercise.id, student_id=self.student.id,
+            attempt_number=2, answer_text="Pending", submitted_at=datetime.now(timezone.utc),
+        )
+        pending_row = (pending_attempt, self.lesson.id, self.lesson.title, self.exercise.title, "Student Name", "student")
+        reviewed_row = (self.attempt, self.lesson.id, self.lesson.title, self.exercise.title, None, "student")
+        session = ExerciseSession([self.teacher], [[pending_row, reviewed_row]])
+
+        results = await list_course_exercise_submissions(self.course.id, self.teacher_user, session)
+        self.assertEqual([item["student_name"] for item in results], ["Student Name", "student"])
+        self.assertEqual([item["reviewed_at"] for item in results], [None, reviewed_at])
+        query = str(session.executed[0].compile()).lower()
+        self.assertIn("profiles.display_name", query)
+        self.assertIn("institution_memberships.role", str(session.statements[0].compile()).lower())
+        self.assertIn("nulls first", query)
+
+        forbidden_session = ExerciseSession([None])
+        with self.assertRaises(HTTPException) as error:
+            await list_course_exercise_submissions(self.course.id, self.student_user, forbidden_session)
+        self.assertEqual(error.exception.status_code, 403)
+        self.assertEqual(forbidden_session.executed, [])
 
     async def test_invalid_submission_input_and_unauthenticated_endpoint(self):
         with self.assertRaises(ValidationError):

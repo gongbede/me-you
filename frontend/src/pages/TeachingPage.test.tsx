@@ -3,7 +3,9 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { apiRequest } from '../api/client'
-import { ExerciseForm, LessonForm, TeachingPage } from './TeachingPage'
+import { ExerciseForm, LessonForm, ReviewForm, TeachingPage } from './TeachingPage'
+import type { ExerciseSubmissionInboxItem } from '../api/education'
+import { filterReviewSubmissions } from './teachingHelpers'
 
 vi.mock('../api/client', () => ({
   apiRequest: vi.fn(),
@@ -115,5 +117,36 @@ describe('Teaching area', () => {
       body: { is_published: true },
     })))
     confirm.mockRestore()
+  })
+
+  it('saves feedback without inventing a review status choice', async () => {
+    const save = vi.fn().mockResolvedValue(undefined)
+    const submission: ExerciseSubmissionInboxItem = {
+      id: 'submission-1', exercise_id: 'exercise-1', student_id: 'student-1',
+      attempt_number: 1, answer_text: 'My answer', feedback: null, reviewer_id: null,
+      submitted_at: '2026-10-09T12:00:00Z', reviewed_at: null, created_at: '2026-10-09T12:00:00Z',
+      updated_at: '2026-10-09T12:00:00Z', student_name: 'Student One', lesson_id: 'lesson-1',
+      lesson_title: 'Cells', exercise_title: 'Explain',
+    }
+    render(<ReviewForm submission={submission} isSaving={false} saved={false} saveError={null} onSave={save} />)
+    const feedback = screen.getByLabelText('Feedback')
+    expect(feedback).toHaveAttribute('maxLength', '20000')
+    fireEvent.change(feedback, { target: { value: 'Clear explanation.' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save review' }))
+    await waitFor(() => expect(save).toHaveBeenCalledWith('Clear explanation.'))
+  })
+
+  it('filters inbox rows using reviewed_at', () => {
+    const base: ExerciseSubmissionInboxItem = {
+      id: 'submission-1', exercise_id: 'exercise-1', student_id: 'student-1',
+      attempt_number: 1, answer_text: 'My answer', feedback: null, reviewer_id: null,
+      submitted_at: '2026-10-09T12:00:00Z', reviewed_at: null, created_at: '2026-10-09T12:00:00Z',
+      updated_at: '2026-10-09T12:00:00Z', student_name: 'Student One', lesson_id: 'lesson-1',
+      lesson_title: 'Cells', exercise_title: 'Explain',
+    }
+    const reviewed = { ...base, id: 'submission-2', reviewed_at: '2026-10-09T13:00:00Z' }
+    expect(filterReviewSubmissions([base, reviewed], 'NEEDS_REVIEW')).toEqual([base])
+    expect(filterReviewSubmissions([base, reviewed], 'REVIEWED')).toEqual([reviewed])
+    expect(filterReviewSubmissions([base, reviewed], 'ALL')).toHaveLength(2)
   })
 })

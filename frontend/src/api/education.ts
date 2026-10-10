@@ -13,6 +13,7 @@ export type CourseProgress = ApiSchemas['CourseProgressResponse']
 export type Exercise = ApiSchemas['ExerciseResponse']
 export type ExerciseInput = Pick<Exercise, 'title' | 'instructions' | 'position' | 'exercise_type' | 'is_published'>
 export type ExerciseSubmission = ApiSchemas['ExerciseSubmissionResponse']
+export type ExerciseSubmissionInboxItem = ApiSchemas['ExerciseSubmissionInboxResponse']
 export type Student = ApiSchemas['StudentResponse']
 export type Teacher = ApiSchemas['TeacherResponse']
 export type SearchResult = ApiSchemas['SearchResponse']['items'][number]
@@ -173,6 +174,26 @@ export function listExerciseSubmissions(exerciseId: string): Promise<ExerciseSub
   return apiRequest(`/api/v1/education/exercises/${exerciseId}/submissions?limit=100`)
 }
 
+export async function listCourseExerciseSubmissions(courseId: string): Promise<ExerciseSubmissionInboxItem[]> {
+  const submissions: ExerciseSubmissionInboxItem[] = []
+  let offset = 0
+  while (true) {
+    const page = await apiRequest<ExerciseSubmissionInboxItem[]>(
+      `/api/v1/education/courses/${courseId}/exercise-submissions?offset=${offset}&limit=100`,
+    )
+    submissions.push(...page)
+    if (page.length < 100) return submissions
+    offset += page.length
+  }
+}
+
+export function reviewExerciseSubmission(submissionId: string, feedback: string | null): Promise<ExerciseSubmission> {
+  return apiRequest(`/api/v1/education/exercise-submissions/${submissionId}/review`, {
+    method: 'PATCH',
+    body: { feedback },
+  })
+}
+
 export function submitExercise(
   exerciseId: string,
   attemptNumber: number,
@@ -185,11 +206,8 @@ export function submitExercise(
 }
 
 export async function getCoursePendingReviewCount(courseId: string): Promise<number> {
-  const lessons = await getCourseLessons(courseId)
-  const exerciseGroups = await Promise.all(lessons.map((lesson) => listExercises(lesson.id)))
-  const exercises = exerciseGroups.flat().filter((exercise) => exercise.is_published)
-  const attempts = await Promise.all(exercises.map((exercise) => listExerciseSubmissions(exercise.id)))
-  return attempts.flat().filter((attempt) => attempt.reviewed_at === null).length
+  const submissions = await listCourseExerciseSubmissions(courseId)
+  return submissions.filter((submission) => submission.reviewed_at === null).length
 }
 
 export async function getTeachingCourses(): Promise<Course[]> {

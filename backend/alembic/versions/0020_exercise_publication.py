@@ -19,7 +19,13 @@ depends_on: Union[str, None] = None
 def upgrade() -> None:
     op.add_column(
         "exercises",
-        sa.Column("is_published", sa.Boolean(), server_default=sa.false(), nullable=False),
+        sa.Column("is_published", sa.Boolean(), server_default=sa.true(), nullable=False),
+    )
+    op.alter_column(
+        "exercises",
+        "is_published",
+        existing_type=sa.Boolean(),
+        server_default=sa.false(),
     )
 
 

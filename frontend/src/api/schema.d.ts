@@ -675,6 +675,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/education/courses/{course_id}/exercise-submissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List course exercise submissions for review */
+        get: operations["list_course_exercise_submissions_api_v1_education_courses__course_id__exercise_submissions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/education/courses/{course_id}/lessons": {
         parameters: {
             query?: never;
@@ -2247,6 +2264,23 @@ export interface paths {
         put?: never;
         /** Create an assessment */
         post: operations["create_assessment_education_courses__course_id__assessments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/education/courses/{course_id}/exercise-submissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List course exercise submissions for review */
+        get: operations["list_course_exercise_submissions_education_courses__course_id__exercise_submissions_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3910,6 +3944,48 @@ export interface components {
             answer_text: string;
             /** Attempt Number */
             attempt_number: number;
+        };
+        /** ExerciseSubmissionInboxResponse */
+        ExerciseSubmissionInboxResponse: {
+            /** Answer Text */
+            answer_text: string;
+            /** Attempt Number */
+            attempt_number: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Exercise Id */
+            exercise_id: string;
+            /** Exercise Title */
+            exercise_title: string;
+            /** Feedback */
+            feedback: string | null;
+            /** Id */
+            id: string;
+            /** Lesson Id */
+            lesson_id: string;
+            /** Lesson Title */
+            lesson_title: string;
+            /** Reviewed At */
+            reviewed_at: string | null;
+            /** Reviewer Id */
+            reviewer_id: string | null;
+            /** Student Id */
+            student_id: string;
+            /** Student Name */
+            student_name: string;
+            /**
+             * Submitted At
+             * Format: date-time
+             */
+            submitted_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /** ExerciseSubmissionResponse */
         ExerciseSubmissionResponse: {
@@ -6206,6 +6282,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssessmentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_course_exercise_submissions_api_v1_education_courses__course_id__exercise_submissions_get: {
+        parameters: {
+            query?: {
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                course_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExerciseSubmissionInboxResponse"][];
                 };
             };
             /** @description Validation Error */
@@ -10517,6 +10627,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssessmentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_course_exercise_submissions_education_courses__course_id__exercise_submissions_get: {
+        parameters: {
+            query?: {
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                course_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExerciseSubmissionInboxResponse"][];
                 };
             };
             /** @description Validation Error */
