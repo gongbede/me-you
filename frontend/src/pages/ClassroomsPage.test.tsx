@@ -70,4 +70,28 @@ describe('Classrooms', () => {
       body: { content: 'Hello class', message_type: 'CHAT' },
     })))
   })
+
+  it('loads the next attendance page for teachers', async () => {
+    const firstPage = Array.from({ length: 50 }, (_, index) => ({
+      session_id: 'session-1', user_id: `student-${index}`, username: `Student ${index}`,
+      status: 'ABSENT', joined_at: null, updated_at: session.created_at,
+    }))
+    const secondPage = [{
+      session_id: 'session-1', user_id: 'student-50', username: 'Student 50',
+      status: 'ABSENT', joined_at: null, updated_at: session.created_at,
+    }]
+    request.mockImplementation(async (path) => {
+      if (path === '/api/v1/education/courses/course-1/class-sessions?limit=100') return [session] as never
+      if (path === '/api/v1/education/class-sessions/session-1/messages?limit=100') return [] as never
+      if (path === '/api/v1/education/class-sessions/session-1/attendance?offset=0&limit=50') return firstPage as never
+      if (path === '/api/v1/education/class-sessions/session-1/attendance?offset=50&limit=50') return secondPage as never
+      return undefined as never
+    })
+
+    renderClassroom('/teaching/courses/course-1/classrooms/session-1')
+    expect(await screen.findByText('Student 0')).toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: 'Load more students' }))
+    expect(await screen.findByText('Student 50')).toBeInTheDocument()
+    expect(request).toHaveBeenCalledWith('/api/v1/education/class-sessions/session-1/attendance?offset=50&limit=50')
+  })
 })

@@ -6726,7 +6726,10 @@ export interface operations {
     };
     list_class_session_attendance_api_v1_education_class_sessions__session_id__attendance_get: {
         parameters: {
-            query?: never;
+            query?: {
+                offset?: number;
+                limit?: number;
+            };
             header?: never;
             path: {
                 session_id: string;
@@ -11465,7 +11468,10 @@ export interface operations {
     };
     list_class_session_attendance_education_class_sessions__session_id__attendance_get: {
         parameters: {
-            query?: never;
+            query?: {
+                offset?: number;
+                limit?: number;
+            };
             header?: never;
             path: {
                 session_id: string;

@@ -194,7 +194,13 @@ async def join_class_session(session_id: uuid.UUID, current_user: User = Depends
 
 
 @router.get("/class-sessions/{session_id}/attendance", response_model=list[ClassSessionAttendanceResponse], summary="List classroom attendance")
-async def list_class_session_attendance(session_id: uuid.UUID, current_user: User = Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session)):
+async def list_class_session_attendance(
+    session_id: uuid.UUID,
+    current_user: User = Depends(get_current_postgres_user),
+    database: AsyncSession = Depends(get_postgres_session),
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+):
     value = await session_or_404(session_id, database)
     await require_course_teacher(value.course_id, current_user.id, database)
     rows = (
@@ -208,6 +214,8 @@ async def list_class_session_attendance(session_id: uuid.UUID, current_user: Use
             )
             .where(Enrollment.course_id == value.course_id)
             .order_by(User.username.asc(), User.id.asc())
+            .offset(offset)
+            .limit(limit)
         )
     ).all()
     return [

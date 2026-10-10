@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, CalendarClock, Check, Clock3, LoaderCircle, MessageCircle, Megaphone, Plus, Send, Users, Video } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
@@ -173,6 +173,7 @@ function ClassroomSchedule({ courseId, teacherMode }: { courseId: string; teache
 
 function ClassroomRoom({ courseId, sessionId, teacherMode }: { courseId: string; sessionId: string; teacherMode: boolean }) {
   const queryClient = useQueryClient()
+  const attendancePageSize = 50
   const [messageType, setMessageType] = useState<ClassSessionMessageType>('CHAT')
   const [message, setMessage] = useState('')
   const sessionQuery = useQuery({
@@ -186,12 +187,16 @@ function ClassroomRoom({ courseId, sessionId, teacherMode }: { courseId: string;
     enabled: Boolean(classSession),
     refetchInterval: classSession?.status === 'LIVE' ? 5000 : false,
   })
-  const attendanceQuery = useQuery({
+  const attendanceQuery = useInfiniteQuery({
     queryKey: ['classrooms', 'attendance', sessionId],
-    queryFn: () => getClassSessionAttendance(sessionId),
+    queryFn: ({ pageParam }) => getClassSessionAttendance(sessionId, pageParam, attendancePageSize),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, _pages, lastPageParam) =>
+      lastPage.length === attendancePageSize ? lastPageParam + attendancePageSize : undefined,
     enabled: Boolean(classSession && teacherMode),
     refetchInterval: classSession?.status === 'LIVE' && teacherMode ? 10000 : false,
   })
+  const attendance = attendanceQuery.data?.pages.flatMap((page) => page) ?? []
   const joinMutation = useMutation({
     mutationFn: () => joinClassSession(sessionId),
     onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['classrooms', 'attendance', sessionId] }),
@@ -248,7 +253,7 @@ function ClassroomRoom({ courseId, sessionId, teacherMode }: { courseId: string;
             <button className="button button--primary" type="submit" disabled={!message.trim() || sendMutation.isPending}>{sendMutation.isPending ? <LoaderCircle size={16} className="spin" aria-hidden="true" /> : <Send size={16} aria-hidden="true" />}{sendMutation.isPending ? 'Sending…' : messageType === 'ANNOUNCEMENT' ? 'Post announcement' : 'Send message'}</button>
           </form>}
         </section>
-        {teacherMode && <section className="classroom-attendance" aria-labelledby="classroom-attendance-title"><div className="classroom-chat__heading"><div><h2 id="classroom-attendance-title">Attendance</h2><p>Enrolled students</p></div><Users size={20} aria-hidden="true" /></div>{attendanceQuery.isPending ? <p className="learning-loading" role="status">Loading attendance…</p> : attendanceQuery.error ? <div className="inline-error" role="alert"><p>{classroomError(attendanceQuery.error)}</p><button className="button button--outline" type="button" onClick={() => void attendanceQuery.refetch()}>Retry</button></div> : <ul className="classroom-attendance__list">{attendanceQuery.data?.map((record) => <AttendanceRow key={record.user_id} record={record} disabled={attendanceMutation.isPending} onChange={(status) => attendanceMutation.mutate({ userId: record.user_id, status })} />)}</ul>}</section>}
+        {teacherMode && <section className="classroom-attendance" aria-labelledby="classroom-attendance-title"><div className="classroom-chat__heading"><div><h2 id="classroom-attendance-title">Attendance</h2><p>Enrolled students</p></div><Users size={20} aria-hidden="true" /></div>{attendanceQuery.isPending ? <p className="learning-loading" role="status">Loading attendance…</p> : attendanceQuery.error && !attendanceQuery.data ? <div className="inline-error" role="alert"><p>{classroomError(attendanceQuery.error)}</p><button className="button button--outline" type="button" onClick={() => void attendanceQuery.refetch()}>Retry</button></div> : <><ul className="classroom-attendance__list">{attendance.map((record) => <AttendanceRow key={record.user_id} record={record} disabled={attendanceMutation.isPending} onChange={(status) => attendanceMutation.mutate({ userId: record.user_id, status })} />)}</ul>{attendanceQuery.error && <div className="inline-error" role="alert"><p>{classroomError(attendanceQuery.error)}</p><button className="button button--outline" type="button" onClick={() => void attendanceQuery.fetchNextPage()}>Retry</button></div>}{attendanceQuery.hasNextPage && <button className="button button--outline classroom-attendance__more" type="button" disabled={attendanceQuery.isFetchingNextPage} onClick={() => void attendanceQuery.fetchNextPage()}>{attendanceQuery.isFetchingNextPage ? 'Loading…' : 'Load more students'}</button>}</>}</section>}
       </div>
     </div>
   )

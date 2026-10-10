@@ -22,6 +22,8 @@ from app.database import get_postgres_session
 from app.main import app
 from app.models import (
     AuthIdentity,
+    ClassSession,
+    ClassSessionAttendance,
     Course,
     CourseTeacher,
     Department,
@@ -493,6 +495,66 @@ def test_google_sign_in_refuses_deactivated_matching_account(postgres_database_u
             assert identity is None
             await session.delete(user)
             await session.commit()
+
+    asyncio.run(verify())
+
+
+def test_classroom_attendance_paginates_more_students_than_the_default_limit(postgres_database_url):
+    from app.routes.classrooms import list_class_session_attendance
+
+    async def verify():
+        async with database_session(postgres_database_url) as session:
+            teacher_user = await create_user(session)
+            institution = await create_institution(session)
+            faculty = Faculty(institution_id=institution.id, name="Attendance faculty")
+            session.add(faculty)
+            await session.flush()
+            department = Department(faculty_id=faculty.id, name="Attendance department")
+            session.add(department)
+            await session.flush()
+            course = Course(department_id=department.id, code="ATTEND", name="Attendance")
+            teacher = Teacher(user_id=teacher_user.id, institution_id=institution.id)
+            session.add_all([course, teacher])
+            await session.flush()
+            session.add_all([
+                InstitutionMembership(user_id=teacher_user.id, institution_id=institution.id, role="TEACHER"),
+                CourseTeacher(course_id=course.id, teacher_id=teacher.id),
+            ])
+            await session.flush()
+            students = []
+            for index in range(55):
+                student_user = await create_user(
+                    session,
+                    username=f"attendance-{index:03}",
+                )
+                student = Student(user_id=student_user.id, institution_id=institution.id)
+                students.append(student)
+                session.add_all([
+                    student,
+                    InstitutionMembership(user_id=student_user.id, institution_id=institution.id, role="STUDENT"),
+                ])
+            await session.flush()
+            session.add_all([Enrollment(student_id=student.id, course_id=course.id) for student in students])
+            value = ClassSession(
+                course_id=course.id,
+                created_by_id=teacher_user.id,
+                title="Attendance pagination",
+                starts_at=datetime.now(timezone.utc),
+                ends_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            )
+            session.add(value)
+            await session.flush()
+            await session.commit()
+
+            first_page = await list_class_session_attendance(value.id, teacher_user, session)
+            second_page = await list_class_session_attendance(value.id, teacher_user, session, offset=50)
+
+            assert len(first_page) == 50
+            assert len(second_page) == 5
+            assert len({record["user_id"] for record in first_page + second_page}) == 55
+            assert [record["username"] for record in first_page + second_page] == [
+                f"attendance-{index:03}" for index in range(55)
+            ]
 
     asyncio.run(verify())
 

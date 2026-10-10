@@ -293,8 +293,12 @@ export function joinClassSession(sessionId: string): Promise<{ session_id: strin
   return apiRequest(`/api/v1/education/class-sessions/${sessionId}/join`, { method: 'POST' })
 }
 
-export function getClassSessionAttendance(sessionId: string): Promise<ClassSessionAttendance[]> {
-  return apiRequest(`/api/v1/education/class-sessions/${sessionId}/attendance`)
+export function getClassSessionAttendance(
+  sessionId: string,
+  offset = 0,
+  limit = 50,
+): Promise<ClassSessionAttendance[]> {
+  return apiRequest(`/api/v1/education/class-sessions/${sessionId}/attendance?offset=${offset}&limit=${limit}`)
 }
 
 export function markClassSessionAttendance(
