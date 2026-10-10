@@ -9,7 +9,7 @@ python3 -m venv backend/.venv
 backend/.venv/bin/pip install -r backend/requirements.txt
 ```
 
-`./scripts/dev-up.sh` creates `backend/.env` from the safe example when it is missing; it never overwrites an existing file. For production-like local settings, use a fresh JWT secret from `openssl rand -hex 32`. Set `ME_YOU_CORS_ORIGINS` to `http://localhost:5173` plus `https://${CODESPACE_NAME}-5173.${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}`. Set `ME_YOU_PUBLIC_BASE_URL` to the Codespaces origin. The env file is ignored by Git. PostgreSQL binds to loopback only; do not forward port 5432.
+`./scripts/dev-up.sh` creates `backend/.env` from the safe example when it is missing; it never overwrites an existing file. Set `ME_YOU_ENV` to exactly `development`, `test`, or `production`. For production, generate a fresh JWT secret with `openssl rand -hex 32`. Set `ME_YOU_CORS_ORIGINS` to `http://localhost:5173` plus `https://${CODESPACE_NAME}-5173.${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}`. Set `ME_YOU_PUBLIC_BASE_URL` to the Codespaces origin. The env file is ignored by Git. PostgreSQL binds to loopback only; do not forward port 5432.
 
 Run these steps in order. Run each server command in its own terminal:
 

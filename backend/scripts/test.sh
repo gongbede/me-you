@@ -5,7 +5,9 @@ backend_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 python_bin="${PYTHON:-}"
 
 if [[ -z "$python_bin" ]]; then
-  if [[ -x /usr/local/py-utils/venvs/pytest/bin/python ]]; then
+  if [[ -x "$backend_dir/.venv/bin/python" ]]; then
+    python_bin="$backend_dir/.venv/bin/python"
+  elif [[ -x /usr/local/py-utils/venvs/pytest/bin/python ]]; then
     python_bin=/usr/local/py-utils/venvs/pytest/bin/python
   else
     python_bin=python

@@ -6,8 +6,18 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-APP_ENV = os.getenv("ME_YOU_ENV", "development").lower()
 DEVELOPMENT_DEFAULT_SECRET = "development-only-me-you-jwt-secret"
+ALLOWED_ENVIRONMENTS = {"development", "test", "production"}
+
+
+def validate_environment(environment: str) -> str:
+    if environment not in ALLOWED_ENVIRONMENTS:
+        allowed = ", ".join(sorted(ALLOWED_ENVIRONMENTS))
+        raise ValueError(f"ME_YOU_ENV must be one of: {allowed}")
+    return environment
+
+
+APP_ENV = validate_environment(os.getenv("ME_YOU_ENV", "development"))
 CORS_ORIGINS = tuple(
     origin.strip()
     for origin in os.getenv("ME_YOU_CORS_ORIGINS", "").split(",")
@@ -16,15 +26,26 @@ CORS_ORIGINS = tuple(
 
 
 def validate_jwt_secret(secret: str | None = None, environment: str | None = None) -> str:
-    env_name = (environment or APP_ENV).lower()
+    env_name = validate_environment(environment or APP_ENV)
     resolved_secret = secret if secret is not None else os.getenv("ME_YOU_JWT_SECRET_KEY")
     if env_name == "production":
+        example_secrets = {DEVELOPMENT_DEFAULT_SECRET}
+        example_path = Path(__file__).resolve().parents[1] / ".env.example"
+        if example_path.exists():
+            for line in example_path.read_text(encoding="utf-8").splitlines():
+                key, separator, value = line.partition("=")
+                if separator and key.strip() == "ME_YOU_JWT_SECRET_KEY":
+                    example_secrets.add(value.strip().strip("\"'"))
         if (
             not resolved_secret
-            or resolved_secret == DEVELOPMENT_DEFAULT_SECRET
             or len(resolved_secret) < 32
+            or len(set(resolved_secret)) < 16
+            or resolved_secret in example_secrets
         ):
-            raise ValueError("ME_YOU_JWT_SECRET_KEY must be at least 32 characters in production")
+            raise ValueError(
+                "ME_YOU_JWT_SECRET_KEY in production must be at least 32 characters, "
+                "contain at least 16 distinct characters, and not be a placeholder"
+            )
         return resolved_secret
     return resolved_secret or DEVELOPMENT_DEFAULT_SECRET
 
@@ -41,7 +62,8 @@ def validate_production_config(
     s3_access_key: str | None = None,
     s3_secret_key: str | None = None,
 ) -> None:
-    if (environment or APP_ENV).lower() != "production":
+    env_name = validate_environment(environment or APP_ENV)
+    if env_name != "production":
         return
     validate_jwt_secret(secret=secret, environment="production")
     if not RATE_LIMIT_ENABLED:
