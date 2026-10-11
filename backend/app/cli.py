@@ -205,6 +205,23 @@ async def seed_demo(session_factory: Any = None) -> list[tuple[str, str, str]]:
     return credentials
 
 
+def _write_demo_credentials(path: str, credentials: list[tuple[str, str, str]]) -> None:
+    descriptor = os.open(
+        path,
+        os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0),
+        0o600,
+    )
+    try:
+        os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as output:
+            descriptor = -1
+            for label, email, password in credentials:
+                output.write(f"{label}: {email} / {password}\n")
+    finally:
+        if descriptor != -1:
+            os.close(descriptor)
+
+
 async def create_platform_admin(session_factory: Any = None) -> str:
     factory = _resolve_session_factory(session_factory)
     email = input("Email: ").strip()
@@ -383,19 +400,15 @@ def main() -> None:
     commands.add_parser("purge-expired", help="Delete expired rate-limit counter rows")
     commands.add_parser("purge-orphan-uploads", help="Delete stale, incomplete media uploads")
     commands.add_parser("purge-security-events", help="Delete old security audit events")
-    commands.add_parser("seed-demo", help="Seed development-only school and course demo data")
+    seed_parser = commands.add_parser("seed-demo", help="Seed development-only school and course demo data")
+    seed_parser.add_argument("--output", required=True, metavar="FILE", help="Write generated credentials to FILE")
     arguments = parser.parse_args()
 
     try:
         if arguments.command == "seed-demo":
             credentials = asyncio.run(seed_demo())
-            print("Demo school and course data is ready.")
-            if credentials:
-                print("New demo account passwords (shown once):")
-                for label, email, password in credentials:
-                    print(f"{label}: {email} / {password}")
-            else:
-                print("No new accounts were created; no passwords were generated.")
+            _write_demo_credentials(arguments.output, credentials)
+            print(arguments.output)
         elif arguments.command == "create-platform-admin":
             email = asyncio.run(create_platform_admin())
             print(f"Platform administrator created or promoted: {email}")

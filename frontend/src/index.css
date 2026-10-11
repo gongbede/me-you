@@ -569,6 +569,13 @@ button:disabled {
   text-decoration: none;
 }
 
+.mobile-tab--retry {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+}
+
 .page-stack {
   display: grid;
   gap: 25px;
@@ -2323,6 +2330,14 @@ button:disabled {
     color: rgb(255 255 255 / 72%);
     font-size: 0.9rem;
     font-weight: 750;
+  }
+
+  .nav-link--retry {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    text-align: left;
   }
 
   .nav-link:hover,

@@ -18,6 +18,8 @@ Profiles default to `NETWORK` visibility, preserving existing shared-institution
 
 Run `python -m app.cli create-platform-admin` from `backend/` to create the first administrator or promote an existing account. New-account passwords are entered with `getpass` prompts, never command-line arguments. Use `python -m app.cli grant-platform-admin <email>` and `python -m app.cli revoke-platform-admin <email>` for later changes; revoking the last active platform administrator is refused.
 
+In development, seed demo accounts with `ME_YOU_ENV=development python -m app.cli seed-demo --output demo-credentials.txt`. Credentials are written to the output file with mode `0600`; the command prints only the file path.
+
 ## Account lifecycle
 
 `POST /account/logout` revokes the current JWT version. Account deletion is an anonymizing soft-delete: identifiers are replaced, profiles and authored social content are removed, messages/submission text is redacted, and academic/audit references remain. Password recovery and email verification require an installed `EmailProvider`; no local fake sender is provided. Tokens are random, single-use, expire, and only their SHA-256 digests are stored.

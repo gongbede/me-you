@@ -1,4 +1,4 @@
-import { BookOpen, Building2, House, LogOut, UserRound } from 'lucide-react'
+import { BookOpen, Building2, House, LogOut, RotateCw, UserRound } from 'lucide-react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Logo } from './Logo'
@@ -37,6 +37,12 @@ export function AppShell() {
               <span>{label}</span>
             </NavLink>
           ))}
+          {teachingQuery.isError && (
+            <button className="nav-link nav-link--retry" type="button" onClick={() => void teachingQuery.refetch()}>
+              <RotateCw size={19} aria-hidden="true" />
+              <span>Retry Teaching</span>
+            </button>
+          )}
         </nav>
         <div className="sidebar__bottom">
           <div className="sidebar__user">
@@ -58,13 +64,19 @@ export function AppShell() {
         <main className="app-main"><Outlet /></main>
       </div>
 
-      <nav className="mobile-tabs" aria-label="Mobile navigation" style={{ gridTemplateColumns: `repeat(${tabs.length + 1}, minmax(0, 1fr))` }}>
+      <nav className="mobile-tabs" aria-label="Mobile navigation" style={{ gridTemplateColumns: `repeat(${tabs.length + 1 + Number(teachingQuery.isError)}, minmax(0, 1fr))` }}>
         {tabs.map(({ to, label, icon: Icon, end }) => (
           <NavLink className={({ isActive }) => `mobile-tab ${learningTabIsActive(to, isActive) ? 'is-active' : ''}`} end={end} key={to} to={to}>
             <Icon size={21} aria-hidden="true" />
             <span>{label}</span>
           </NavLink>
         ))}
+        {teachingQuery.isError && (
+          <button className="mobile-tab mobile-tab--retry" type="button" onClick={() => void teachingQuery.refetch()}>
+            <RotateCw size={21} aria-hidden="true" />
+            <span>Retry Teaching</span>
+          </button>
+        )}
         <NavLink className="mobile-tab" to="/logout"><LogOut size={21} aria-hidden="true" /><span>Sign out</span></NavLink>
       </nav>
     </div>
