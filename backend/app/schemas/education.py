@@ -63,6 +63,40 @@ class InstitutionInvitationCreate(BaseModel):
     role: Literal["ADMIN", "TEACHER", "STUDENT"]
 
 
+class InstitutionInvitationByEmailCreate(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+    role: Literal["ADMIN", "TEACHER", "STUDENT"]
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        normalized = value.strip().casefold()
+        local, separator, domain = normalized.partition("@")
+        if (
+            not separator
+            or not local
+            or not domain
+            or "@" in domain
+            or any(character.isspace() for character in normalized)
+        ):
+            raise ValueError("email must be a valid email address")
+        return normalized
+
+
+class InstitutionInvitationQueuedResponse(BaseModel):
+    status: Literal["ACCEPTED"]
+
+
+class AdminInstitutionInvitationResponse(BaseModel):
+    id: str
+    institution_id: str
+    user_id: str
+    email: str
+    role: str
+    status: str
+    created_at: datetime
+
+
 class InstitutionMembershipRequestResponse(BaseModel):
     id: str
     institution_id: str

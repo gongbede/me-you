@@ -3198,6 +3198,150 @@ def test_institution_discovery_is_opt_in_paginated_and_private_fields_stay_hidde
     asyncio.run(verify())
 
 
+def test_admin_email_invitations_are_non_enumerating_rate_limited_and_cancellable(
+    postgres_database_url, monkeypatch
+):
+    from app.models import InstitutionMembershipRequest
+    from app.rate_limit import get_rate_limit_store
+
+    class MemoryLimiter:
+        def __init__(self):
+            self.counts = {}
+
+        async def increment(self, scope, key, window_seconds):
+            value = (scope, key, window_seconds)
+            self.counts[value] = self.counts.get(value, 0) + 1
+            return self.counts[value], 23
+
+    async def verify():
+        engine = create_async_engine(postgres_database_url)
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        original_overrides = app.dependency_overrides.copy()
+        selected = {"admin_id": None}
+        limiter = MemoryLimiter()
+        try:
+            async with session_factory() as session:
+                admin = await create_user(session)
+                active_target = await create_user(
+                    session, email="invite-target@example.test"
+                )
+                institution = await create_institution(session)
+                session.add(
+                    InstitutionMembership(
+                        user_id=admin.id,
+                        institution_id=institution.id,
+                        role="ADMIN",
+                    )
+                )
+                await session.commit()
+                selected.update(
+                    admin_id=admin.id,
+                    institution_id=institution.id,
+                    target_id=active_target.id,
+                )
+
+            async def database_dependency():
+                async with session_factory() as session:
+                    yield session
+
+            async def user_dependency():
+                async with session_factory() as session:
+                    return await session.get(User, selected["admin_id"])
+
+            app.dependency_overrides[get_postgres_session] = database_dependency
+            app.dependency_overrides[get_current_postgres_user] = user_dependency
+            app.dependency_overrides[get_rate_limit_store] = lambda: limiter
+            monkeypatch.setattr(
+                institution_routes.config, "INSTITUTION_INVITATION_ADMIN_LIMIT", 2
+            )
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                path = f"/institutions/{selected['institution_id']}/invitations/by-email"
+                absent = await client.post(
+                    path, json={"email": "missing@example.test", "role": "STUDENT"}
+                )
+                present = await client.post(
+                    path,
+                    json={"email": "INVITE-TARGET@example.test", "role": "TEACHER"},
+                )
+                assert absent.status_code == present.status_code == 202
+                assert absent.json() == present.json() == {"status": "ACCEPTED"}
+                limited = await client.post(
+                    path, json={"email": "another@example.test", "role": "STUDENT"}
+                )
+                assert limited.status_code == 429
+                assert limited.headers["retry-after"] == "23"
+                assert list(limiter.counts) == [
+                    (
+                        "institution:invitation:admin",
+                        str(selected["admin_id"]),
+                        institution_routes.config.INSTITUTION_INVITATION_WINDOW_SECONDS,
+                    )
+                ]
+
+                invitations = await client.get(
+                    f"/institutions/{selected['institution_id']}/invitations?limit=5"
+                )
+                assert invitations.status_code == 200
+                assert len(invitations.json()) == 1
+                invitation = invitations.json()[0]
+                assert invitation["email"] == "invite-target@example.test"
+                assert invitation["role"] == "TEACHER"
+                assert (await client.get(
+                    f"/institutions/{selected['institution_id']}/invitations?limit=101"
+                )).status_code == 422
+
+                events = await client.get(
+                    f"/institutions/{selected['institution_id']}/invitations"
+                )
+                assert events.status_code == 200
+                cancelled = await client.delete(
+                    f"/institutions/{selected['institution_id']}/invitations/{invitation['id']}"
+                )
+                assert cancelled.status_code == 204
+                assert (await client.get(
+                    f"/institutions/{selected['institution_id']}/invitations"
+                )).json() == []
+
+            async with session_factory() as session:
+                pending = list(
+                    (
+                        await session.scalars(
+                            select(InstitutionMembershipRequest).where(
+                                InstitutionMembershipRequest.institution_id
+                                == selected["institution_id"]
+                            )
+                        )
+                    ).all()
+                )
+                assert len(pending) == 1
+                assert pending[0].user_id == selected["target_id"]
+                assert pending[0].status == "CANCELLED"
+                audit_events = list(
+                    (
+                        await session.scalars(
+                            select(SecurityEvent).where(
+                                SecurityEvent.event_type
+                                == "institution.invitation.email_requested"
+                            )
+                        )
+                    ).all()
+                )
+                assert len(audit_events) == 2
+                assert all(
+                    "invite-target@example.test" not in str(event.details)
+                    and len(event.details["email_hash"]) == 64
+                    for event in audit_events
+                )
+        finally:
+            app.dependency_overrides.clear()
+            app.dependency_overrides.update(original_overrides)
+            await engine.dispose()
+
+    asyncio.run(verify())
+
+
 def test_media_download_scope_and_avatar_profile_visibility(postgres_database_url):
     from datetime import datetime, timedelta, timezone
     import tempfile

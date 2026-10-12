@@ -1393,11 +1393,46 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List pending invitations sent by the current administrator */
+        get: operations["list_sent_institution_invitations_api_v1_institutions__institution_id__invitations_get"];
         put?: never;
         /** Invite a user to an institution */
         post: operations["invite_institution_member_api_v1_institutions__institution_id__invitations_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/institutions/{institution_id}/invitations/by-email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Invite an account by email without disclosing account existence */
+        post: operations["invite_institution_member_by_email_api_v1_institutions__institution_id__invitations_by_email_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/institutions/{institution_id}/invitations/{request_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Cancel a pending invitation sent by the current administrator */
+        delete: operations["cancel_sent_institution_invitation_api_v1_institutions__institution_id__invitations__request_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3145,11 +3180,46 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List pending invitations sent by the current administrator */
+        get: operations["list_sent_institution_invitations_institutions__institution_id__invitations_get"];
         put?: never;
         /** Invite a user to an institution */
         post: operations["invite_institution_member_institutions__institution_id__invitations_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/institutions/{institution_id}/invitations/by-email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Invite an account by email without disclosing account existence */
+        post: operations["invite_institution_member_by_email_institutions__institution_id__invitations_by_email_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/institutions/{institution_id}/invitations/{request_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Cancel a pending invitation sent by the current administrator */
+        delete: operations["cancel_sent_institution_invitation_institutions__institution_id__invitations__request_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3898,6 +3968,26 @@ export interface components {
             /** User Id */
             user_id: string;
         };
+        /** AdminInstitutionInvitationResponse */
+        AdminInstitutionInvitationResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Email */
+            email: string;
+            /** Id */
+            id: string;
+            /** Institution Id */
+            institution_id: string;
+            /** Role */
+            role: string;
+            /** Status */
+            status: string;
+            /** User Id */
+            user_id: string;
+        };
         /** AssessmentCreate */
         AssessmentCreate: {
             /** Due At */
@@ -4600,6 +4690,16 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** InstitutionInvitationByEmailCreate */
+        InstitutionInvitationByEmailCreate: {
+            /** Email */
+            email: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "ADMIN" | "TEACHER" | "STUDENT";
+        };
         /** InstitutionInvitationCreate */
         InstitutionInvitationCreate: {
             /**
@@ -4609,6 +4709,14 @@ export interface components {
             role: "ADMIN" | "TEACHER" | "STUDENT";
             /** User Id */
             user_id: string;
+        };
+        /** InstitutionInvitationQueuedResponse */
+        InstitutionInvitationQueuedResponse: {
+            /**
+             * Status
+             * @constant
+             */
+            status: "ACCEPTED";
         };
         /** InstitutionJoinRequestCreate */
         InstitutionJoinRequestCreate: {
@@ -9088,6 +9196,40 @@ export interface operations {
             };
         };
     };
+    list_sent_institution_invitations_api_v1_institutions__institution_id__invitations_get: {
+        parameters: {
+            query?: {
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                institution_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminInstitutionInvitationResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     invite_institution_member_api_v1_institutions__institution_id__invitations_post: {
         parameters: {
             query?: never;
@@ -9111,6 +9253,71 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["InstitutionMembershipRequestResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    invite_institution_member_by_email_api_v1_institutions__institution_id__invitations_by_email_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                institution_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstitutionInvitationByEmailCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstitutionInvitationQueuedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_sent_institution_invitation_api_v1_institutions__institution_id__invitations__request_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                institution_id: string;
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -13863,6 +14070,40 @@ export interface operations {
             };
         };
     };
+    list_sent_institution_invitations_institutions__institution_id__invitations_get: {
+        parameters: {
+            query?: {
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                institution_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminInstitutionInvitationResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     invite_institution_member_institutions__institution_id__invitations_post: {
         parameters: {
             query?: never;
@@ -13886,6 +14127,71 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["InstitutionMembershipRequestResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    invite_institution_member_by_email_institutions__institution_id__invitations_by_email_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                institution_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstitutionInvitationByEmailCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstitutionInvitationQueuedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_sent_institution_invitation_institutions__institution_id__invitations__request_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                institution_id: string;
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

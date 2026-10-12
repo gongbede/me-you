@@ -27,6 +27,50 @@
         "title": "AddConversationMember",
         "type": "object"
       },
+      "AdminInstitutionInvitationResponse": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "institution_id": {
+            "title": "Institution Id",
+            "type": "string"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "institution_id",
+          "user_id",
+          "email",
+          "role",
+          "status",
+          "created_at"
+        ],
+        "title": "AdminInstitutionInvitationResponse",
+        "type": "object"
+      },
       "AssessmentCreate": {
         "properties": {
           "due_at": {
@@ -1930,6 +1974,31 @@
         "title": "InstitutionDiscoveryResponse",
         "type": "object"
       },
+      "InstitutionInvitationByEmailCreate": {
+        "properties": {
+          "email": {
+            "maxLength": 320,
+            "minLength": 3,
+            "title": "Email",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "ADMIN",
+              "TEACHER",
+              "STUDENT"
+            ],
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "role"
+        ],
+        "title": "InstitutionInvitationByEmailCreate",
+        "type": "object"
+      },
       "InstitutionInvitationCreate": {
         "properties": {
           "role": {
@@ -1951,6 +2020,20 @@
           "role"
         ],
         "title": "InstitutionInvitationCreate",
+        "type": "object"
+      },
+      "InstitutionInvitationQueuedResponse": {
+        "properties": {
+          "status": {
+            "const": "ACCEPTED",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "InstitutionInvitationQueuedResponse",
         "type": "object"
       },
       "InstitutionJoinRequestCreate": {
@@ -9944,6 +10027,79 @@
       }
     },
     "/api/v1/institutions/{institution_id}/invitations": {
+      "get": {
+        "operationId": "list_sent_institution_invitations_api_v1_institutions__institution_id__invitations_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "institution_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Institution Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AdminInstitutionInvitationResponse"
+                  },
+                  "title": "Response List Sent Institution Invitations Api V1 Institutions  Institution Id  Invitations Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List pending invitations sent by the current administrator",
+        "tags": [
+          "education"
+        ]
+      },
       "post": {
         "operationId": "invite_institution_member_api_v1_institutions__institution_id__invitations_post",
         "parameters": [
@@ -9996,6 +10152,115 @@
           }
         ],
         "summary": "Invite a user to an institution",
+        "tags": [
+          "education"
+        ]
+      }
+    },
+    "/api/v1/institutions/{institution_id}/invitations/by-email": {
+      "post": {
+        "operationId": "invite_institution_member_by_email_api_v1_institutions__institution_id__invitations_by_email_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "institution_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Institution Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstitutionInvitationByEmailCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstitutionInvitationQueuedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Invite an account by email without disclosing account existence",
+        "tags": [
+          "education"
+        ]
+      }
+    },
+    "/api/v1/institutions/{institution_id}/invitations/{request_id}": {
+      "delete": {
+        "operationId": "cancel_sent_institution_invitation_api_v1_institutions__institution_id__invitations__request_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "institution_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Institution Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Request Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Cancel a pending invitation sent by the current administrator",
         "tags": [
           "education"
         ]
@@ -18064,6 +18329,79 @@
       }
     },
     "/institutions/{institution_id}/invitations": {
+      "get": {
+        "operationId": "list_sent_institution_invitations_institutions__institution_id__invitations_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "institution_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Institution Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AdminInstitutionInvitationResponse"
+                  },
+                  "title": "Response List Sent Institution Invitations Institutions  Institution Id  Invitations Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List pending invitations sent by the current administrator",
+        "tags": [
+          "education"
+        ]
+      },
       "post": {
         "operationId": "invite_institution_member_institutions__institution_id__invitations_post",
         "parameters": [
@@ -18116,6 +18454,115 @@
           }
         ],
         "summary": "Invite a user to an institution",
+        "tags": [
+          "education"
+        ]
+      }
+    },
+    "/institutions/{institution_id}/invitations/by-email": {
+      "post": {
+        "operationId": "invite_institution_member_by_email_institutions__institution_id__invitations_by_email_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "institution_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Institution Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstitutionInvitationByEmailCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstitutionInvitationQueuedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Invite an account by email without disclosing account existence",
+        "tags": [
+          "education"
+        ]
+      }
+    },
+    "/institutions/{institution_id}/invitations/{request_id}": {
+      "delete": {
+        "operationId": "cancel_sent_institution_invitation_institutions__institution_id__invitations__request_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "institution_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Institution Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Request Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Cancel a pending invitation sent by the current administrator",
         "tags": [
           "education"
         ]

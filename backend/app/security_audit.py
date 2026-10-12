@@ -21,6 +21,7 @@ _DETAIL_KEYS_BY_EVENT = {
     "institution.membership.request_approved": {"role"},
     "institution.membership.request_rejected": {"role"},
     "institution.membership.invited": {"role"},
+    "institution.invitation.email_requested": {"email_hash"},
     "institution.membership.invitation_accepted": {"role"},
     "institution.membership.invitation_declined": set(),
     "institution.membership.role_changed": {"previous_role", "new_role"},
@@ -54,6 +55,10 @@ def sanitize_security_details(
         elif key == "reason" and value == "last_active_admin":
             safe_details[key] = value
         elif key == "policy" and value == "anonymized_retention":
+            safe_details[key] = value
+        elif key == "email_hash" and isinstance(value, str) and len(value) == 64 and all(
+            character in "0123456789abcdef" for character in value
+        ):
             safe_details[key] = value
     return safe_details
 

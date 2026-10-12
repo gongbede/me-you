@@ -1,3 +1,4 @@
+import hashlib
 import uuid
 from datetime import datetime, timezone
 from typing import Annotated
@@ -30,7 +31,9 @@ from ..models import (
     User,
 )
 from ..permissions import count_active_institution_admins, list_user_institution_ids, require_institution_admin, require_institution_membership
+from ..rate_limit import RateLimitStore, get_rate_limit_store
 from ..schemas import (
+    AdminInstitutionInvitationResponse,
     CourseCreate,
     CourseResponse,
     DepartmentCreate,
@@ -41,6 +44,8 @@ from ..schemas import (
     InstitutionDiscoveryResponse,
     InstitutionMembershipCreate,
     InstitutionInvitationCreate,
+    InstitutionInvitationByEmailCreate,
+    InstitutionInvitationQueuedResponse,
     InstitutionJoinRequestCreate,
     InstitutionMembershipResponse,
     InstitutionMembershipRequestResponse,
@@ -638,6 +643,168 @@ async def request_institution_membership(
         institution_id, data.role, current_user, database, request
     )
     return membership_request_response(value)
+
+
+@router.post(
+    "/{institution_id}/invitations/by-email",
+    response_model=InstitutionInvitationQueuedResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Invite an account by email without disclosing account existence",
+)
+async def invite_institution_member_by_email(
+    institution_id: uuid.UUID,
+    data: InstitutionInvitationByEmailCreate,
+    current_user: User = Depends(get_current_postgres_user),
+    database: AsyncSession = Depends(get_postgres_session),
+    limiter: RateLimitStore | None = Depends(get_rate_limit_store),
+    request: Request = None,
+):
+    await require_institution_admin(current_user.id, institution_id, database)
+    if limiter is not None:
+        count, retry_after = await limiter.increment(
+            "institution:invitation:admin",
+            str(current_user.id),
+            config.INSTITUTION_INVITATION_WINDOW_SECONDS,
+        )
+        if count > config.INSTITUTION_INVITATION_ADMIN_LIMIT:
+            raise HTTPException(
+                status_code=429,
+                detail="Too many school invitations; try again later",
+                headers={"Retry-After": str(retry_after)},
+            )
+
+    normalized_email = data.email
+    target = await database.scalar(
+        select(User).where(
+            func.lower(User.email) == normalized_email,
+            User.is_active.is_(True),
+        )
+    )
+    if target is not None:
+        has_membership = await database.scalar(
+            select(InstitutionMembership.id).where(
+                InstitutionMembership.user_id == target.id,
+                InstitutionMembership.institution_id == institution_id,
+            )
+        )
+        pending_request = await database.scalar(
+            select(InstitutionMembershipRequest.id).where(
+                InstitutionMembershipRequest.user_id == target.id,
+                InstitutionMembershipRequest.institution_id == institution_id,
+                InstitutionMembershipRequest.status.in_(("REQUESTED", "INVITED")),
+            )
+        )
+        if has_membership is None and pending_request is None:
+            database.add(
+                InstitutionMembershipRequest(
+                    institution_id=institution_id,
+                    user_id=target.id,
+                    role=data.role,
+                    request_type="INVITATION",
+                    status="INVITED",
+                    created_by_user_id=current_user.id,
+                )
+            )
+
+    email_hash = hashlib.sha256(normalized_email.encode("utf-8")).hexdigest()
+    record_security_event(
+        database,
+        event_type="institution.invitation.email_requested",
+        outcome="SUCCESS",
+        request=request,
+        actor_user_id=current_user.id,
+        institution_id=institution_id,
+        details={"email_hash": email_hash},
+    )
+    try:
+        await database.commit()
+    except IntegrityError:
+        await database.rollback()
+        record_security_event(
+            database,
+            event_type="institution.invitation.email_requested",
+            outcome="SUCCESS",
+            request=request,
+            actor_user_id=current_user.id,
+            institution_id=institution_id,
+            details={"email_hash": email_hash},
+        )
+        await database.commit()
+    return {"status": "ACCEPTED"}
+
+
+@router.get(
+    "/{institution_id}/invitations",
+    response_model=list[AdminInstitutionInvitationResponse],
+    summary="List pending invitations sent by the current administrator",
+)
+async def list_sent_institution_invitations(
+    institution_id: uuid.UUID,
+    current_user: User = Depends(get_current_postgres_user),
+    database: AsyncSession = Depends(get_postgres_session),
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+):
+    await require_institution_admin(current_user.id, institution_id, database)
+    rows = (
+        await database.execute(
+            select(InstitutionMembershipRequest, User.email)
+            .join(User, User.id == InstitutionMembershipRequest.user_id)
+            .where(
+                InstitutionMembershipRequest.institution_id == institution_id,
+                InstitutionMembershipRequest.created_by_user_id == current_user.id,
+                InstitutionMembershipRequest.request_type == "INVITATION",
+                InstitutionMembershipRequest.status == "INVITED",
+            )
+            .order_by(
+                InstitutionMembershipRequest.created_at.asc(),
+                InstitutionMembershipRequest.id.asc(),
+            )
+            .offset(offset)
+            .limit(limit)
+        )
+    ).all()
+    return [
+        {
+            "id": str(value.id),
+            "institution_id": str(value.institution_id),
+            "user_id": str(value.user_id),
+            "email": email,
+            "role": value.role,
+            "status": value.status,
+            "created_at": value.created_at,
+        }
+        for value, email in rows
+    ]
+
+
+@router.delete(
+    "/{institution_id}/invitations/{request_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Cancel a pending invitation sent by the current administrator",
+)
+async def cancel_sent_institution_invitation(
+    institution_id: uuid.UUID,
+    request_id: uuid.UUID,
+    current_user: User = Depends(get_current_postgres_user),
+    database: AsyncSession = Depends(get_postgres_session),
+):
+    await require_institution_admin(current_user.id, institution_id, database)
+    value = await database.scalar(
+        select(InstitutionMembershipRequest).where(
+            InstitutionMembershipRequest.id == request_id,
+            InstitutionMembershipRequest.institution_id == institution_id,
+            InstitutionMembershipRequest.created_by_user_id == current_user.id,
+            InstitutionMembershipRequest.request_type == "INVITATION",
+            InstitutionMembershipRequest.status == "INVITED",
+        )
+    )
+    if value is None:
+        raise HTTPException(status_code=404, detail="Pending invitation not found")
+    value.status = "CANCELLED"
+    value.decided_by_user_id = current_user.id
+    value.updated_at = datetime.now(timezone.utc)
+    await database.commit()
 
 
 @router.get(
