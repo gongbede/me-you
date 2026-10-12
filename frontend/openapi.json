@@ -8824,6 +8824,71 @@
         ]
       }
     },
+    "/api/v1/institutions/administered": {
+      "get": {
+        "operationId": "list_administered_institutions_api_v1_institutions_administered_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/InstitutionResponse"
+                  },
+                  "title": "Response List Administered Institutions Api V1 Institutions Administered Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List institutions administered by the current user",
+        "tags": [
+          "education"
+        ]
+      }
+    },
     "/api/v1/institutions/courses/{course_id}": {
       "delete": {
         "operationId": "delete_course_api_v1_institutions_courses__course_id__delete",
@@ -17121,6 +17186,71 @@
           }
         ],
         "summary": "Create an institution",
+        "tags": [
+          "education"
+        ]
+      }
+    },
+    "/institutions/administered": {
+      "get": {
+        "operationId": "list_administered_institutions_institutions_administered_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/InstitutionResponse"
+                  },
+                  "title": "Response List Administered Institutions Institutions Administered Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List institutions administered by the current user",
         "tags": [
           "education"
         ]

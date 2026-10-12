@@ -1188,6 +1188,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/institutions/administered": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List institutions administered by the current user */
+        get: operations["list_administered_institutions_api_v1_institutions_administered_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/institutions/courses/{course_id}": {
         parameters: {
             query?: never;
@@ -2969,6 +2986,23 @@ export interface paths {
         put?: never;
         /** Create an institution */
         post: operations["create_institution_institutions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/institutions/administered": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List institutions administered by the current user */
+        get: operations["list_administered_institutions_institutions_administered_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -8482,6 +8516,38 @@ export interface operations {
             };
         };
     };
+    list_administered_institutions_api_v1_institutions_administered_get: {
+        parameters: {
+            query?: {
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstitutionResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_course_api_v1_institutions_courses__course_id__get: {
         parameters: {
             query?: never;
@@ -13343,6 +13409,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InstitutionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_administered_institutions_institutions_administered_get: {
+        parameters: {
+            query?: {
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstitutionResponse"][];
                 };
             };
             /** @description Validation Error */

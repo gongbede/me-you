@@ -1,9 +1,9 @@
-import { BookOpen, Building2, House, LogOut, RotateCw, UserRound } from 'lucide-react'
+import { BookOpen, Building2, House, LogOut, RotateCw, Settings2, UserRound } from 'lucide-react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Logo } from './Logo'
 import { useAuth } from '../hooks/useAuth'
-import { getTeachingCourses } from '../api/education'
+import { getTeachingCourses, listAdministeredInstitutions } from '../api/education'
 
 const baseTabs = [
   { to: '/', label: 'Home', icon: House, end: true },
@@ -16,14 +16,16 @@ export function AppShell() {
   const { user } = useAuth()
   const location = useLocation()
   const teachingQuery = useQuery({ queryKey: ['teaching', 'courses'], queryFn: getTeachingCourses })
+  const administrationQuery = useQuery({ queryKey: ['administration', 'institutions'], queryFn: listAdministeredInstitutions })
   const tabs = [
     ...baseTabs.slice(0, 3),
     ...(teachingQuery.data?.length ? [{ to: '/teaching', label: 'Teaching', icon: BookOpen, end: false }] : []),
+    ...(administrationQuery.data?.length ? [{ to: '/administration', label: 'Administration', icon: Settings2, end: false }] : []),
     baseTabs[3],
   ]
   const learningPath = location.pathname.startsWith('/courses/') || location.pathname.startsWith('/lessons/')
   const learningTabIsActive = (to: string, isActive: boolean) =>
-    isActive || (to === '/my-courses' && learningPath) || (to === '/teaching' && location.pathname.startsWith('/teaching'))
+    isActive || (to === '/my-courses' && learningPath) || (to === '/teaching' && location.pathname.startsWith('/teaching')) || (to === '/administration' && location.pathname.startsWith('/administration'))
 
   return (
     <div className="app-shell">
@@ -41,6 +43,12 @@ export function AppShell() {
             <button className="nav-link nav-link--retry" type="button" onClick={() => void teachingQuery.refetch()}>
               <RotateCw size={19} aria-hidden="true" />
               <span>Retry Teaching</span>
+            </button>
+          )}
+          {administrationQuery.isError && (
+            <button className="nav-link nav-link--retry" type="button" onClick={() => void administrationQuery.refetch()}>
+              <RotateCw size={19} aria-hidden="true" />
+              <span>Retry Administration</span>
             </button>
           )}
         </nav>
@@ -64,7 +72,7 @@ export function AppShell() {
         <main className="app-main"><Outlet /></main>
       </div>
 
-      <nav className="mobile-tabs" aria-label="Mobile navigation" style={{ gridTemplateColumns: `repeat(${tabs.length + 1 + Number(teachingQuery.isError)}, minmax(0, 1fr))` }}>
+      <nav className="mobile-tabs" aria-label="Mobile navigation" style={{ gridTemplateColumns: `repeat(${tabs.length + 1 + Number(teachingQuery.isError) + Number(administrationQuery.isError)}, minmax(0, 1fr))` }}>
         {tabs.map(({ to, label, icon: Icon, end }) => (
           <NavLink className={({ isActive }) => `mobile-tab ${learningTabIsActive(to, isActive) ? 'is-active' : ''}`} end={end} key={to} to={to}>
             <Icon size={21} aria-hidden="true" />
@@ -75,6 +83,12 @@ export function AppShell() {
           <button className="mobile-tab mobile-tab--retry" type="button" onClick={() => void teachingQuery.refetch()}>
             <RotateCw size={21} aria-hidden="true" />
             <span>Retry Teaching</span>
+          </button>
+        )}
+        {administrationQuery.isError && (
+          <button className="mobile-tab mobile-tab--retry" type="button" onClick={() => void administrationQuery.refetch()}>
+            <RotateCw size={21} aria-hidden="true" />
+            <span>Retry Admin</span>
           </button>
         )}
         <NavLink className="mobile-tab" to="/logout"><LogOut size={21} aria-hidden="true" /><span>Sign out</span></NavLink>

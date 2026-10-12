@@ -3342,6 +3342,57 @@ def test_admin_email_invitations_are_non_enumerating_rate_limited_and_cancellabl
     asyncio.run(verify())
 
 
+def test_administered_institution_lookup_uses_membership_roles(postgres_database_url):
+    async def verify():
+        engine = create_async_engine(postgres_database_url)
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        original_overrides = app.dependency_overrides.copy()
+        selected = {"user_id": None}
+        try:
+            async with session_factory() as session:
+                user = await create_user(session)
+                admin_school = await create_institution(session, name="Admin school")
+                member_school = await create_institution(session, name="Member school")
+                session.add_all([
+                    InstitutionMembership(
+                        user_id=user.id,
+                        institution_id=admin_school.id,
+                        role="ADMIN",
+                    ),
+                    InstitutionMembership(
+                        user_id=user.id,
+                        institution_id=member_school.id,
+                        role="STUDENT",
+                    ),
+                ])
+                await session.commit()
+                selected["user_id"] = user.id
+                expected_admin_school_id = str(admin_school.id)
+
+            async def database_dependency():
+                async with session_factory() as session:
+                    yield session
+
+            async def user_dependency():
+                async with session_factory() as session:
+                    return await session.get(User, selected["user_id"])
+
+            app.dependency_overrides[get_postgres_session] = database_dependency
+            app.dependency_overrides[get_current_postgres_user] = user_dependency
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                response = await client.get("/institutions/administered")
+            assert response.status_code == 200
+            assert [value["id"] for value in response.json()] == [expected_admin_school_id]
+        finally:
+            app.dependency_overrides.clear()
+            app.dependency_overrides.update(original_overrides)
+            await engine.dispose()
+
+    asyncio.run(verify())
+
+
 def test_media_download_scope_and_avatar_profile_visibility(postgres_database_url):
     from datetime import datetime, timedelta, timezone
     import tempfile

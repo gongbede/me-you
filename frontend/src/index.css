@@ -2675,6 +2675,212 @@ button:disabled {
   justify-self: start;
 }
 
+.admin-page {
+  gap: 20px;
+}
+
+.admin-empty {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--royal-blue);
+  background: var(--surface);
+}
+
+.admin-empty h2,
+.admin-empty p {
+  margin: 0;
+}
+
+.admin-empty p,
+.admin-school-list p,
+.admin-panel-heading p,
+.admin-note {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.admin-school-list,
+.admin-record-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-school-list {
+  border-top: 1px solid var(--line);
+}
+
+.admin-school-list > li,
+.admin-record-list > li {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.admin-school-list > li > div,
+.admin-record-list > li > div:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.admin-school-list h2 {
+  margin: 3px 0 0;
+  color: var(--navy);
+  font-size: 1.1rem;
+}
+
+.admin-school-list p,
+.admin-panel-heading p {
+  margin: 0;
+  font-size: 0.86rem;
+}
+
+.admin-arrow {
+  transform: rotate(180deg);
+}
+
+.admin-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.admin-tabs button {
+  min-height: 44px;
+  padding: 9px 14px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.admin-tabs button.is-active {
+  border-bottom-color: var(--teal);
+  color: var(--navy);
+}
+
+.admin-tabs button:focus-visible,
+.admin-role-control select:focus-visible,
+.admin-invite-form input:focus-visible,
+.admin-invite-form select:focus-visible,
+.admin-form input:focus-visible,
+.admin-form textarea:focus-visible {
+  outline: 3px solid var(--royal-blue);
+  outline-offset: 2px;
+}
+
+.admin-panel-stack {
+  display: grid;
+  gap: 16px;
+}
+
+.admin-panel > h2,
+.admin-panel-heading h2 {
+  margin: 0 0 14px;
+  color: var(--navy);
+  font-size: 1.14rem;
+}
+
+.admin-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  color: var(--royal-blue);
+}
+
+.admin-panel-heading h2 {
+  margin-bottom: 3px;
+}
+
+.admin-record-list > li > div:first-child span {
+  color: var(--muted);
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+.admin-role-control select,
+.admin-form input,
+.admin-form textarea,
+.admin-invite-form input,
+.admin-invite-form select {
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 1px solid var(--royal-blue-100);
+  border-radius: 8px;
+  color: var(--ink);
+  background: #fbfdff;
+  font: inherit;
+}
+
+.admin-form,
+.admin-invite-form {
+  display: grid;
+  max-width: 680px;
+  gap: 14px;
+}
+
+.admin-form textarea {
+  resize: vertical;
+}
+
+.admin-form .button,
+.admin-invite-form .button {
+  justify-self: start;
+}
+
+.admin-note {
+  max-width: 75ch;
+  margin: 12px 0 0;
+  font-size: 0.84rem;
+}
+
+.admin-panel .learning-row-actions .button {
+  white-space: nowrap;
+}
+
+@media (max-width: 420px) {
+  .admin-school-list > li,
+  .admin-record-list > li {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .admin-school-list > li > div,
+  .admin-record-list > li > div:first-child {
+    flex: 1 1 100%;
+  }
+
+  .admin-record-list > li > .learning-row-actions {
+    width: 100%;
+  }
+
+  .admin-tabs button {
+    flex: 1;
+    padding-inline: 7px;
+    font-size: 0.86rem;
+  }
+
+  .admin-form .button,
+  .admin-invite-form .button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
 .learning-school-list > li,
 .learning-invitation-list > li,
 .learning-course-list > li,

@@ -560,6 +560,31 @@ async def discover_institutions(
     ]
 
 
+@router.get(
+    "/administered",
+    response_model=list[InstitutionResponse],
+    summary="List institutions administered by the current user",
+)
+async def list_administered_institutions(
+    current_user=Depends(get_current_postgres_user),
+    database: AsyncSession = Depends(get_postgres_session),
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 100,
+):
+    values = list((await database.scalars(
+        select(Institution)
+        .join(InstitutionMembership, InstitutionMembership.institution_id == Institution.id)
+        .where(
+            InstitutionMembership.user_id == current_user.id,
+            InstitutionMembership.role == "ADMIN",
+        )
+        .order_by(Institution.name.asc(), Institution.id.asc())
+        .offset(offset)
+        .limit(limit)
+    )).all())
+    return [institution_response(value) for value in values]
+
+
 @router.get("/{institution_id}", response_model=InstitutionResponse, summary="Get an institution")
 async def get_institution(institution_id: uuid.UUID, current_user=Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session)):
     value = await database.scalar(select(Institution).where(Institution.id == institution_id))

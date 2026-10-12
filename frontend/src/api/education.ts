@@ -4,6 +4,9 @@ export type Institution = ApiSchemas['InstitutionResponse']
 export type InstitutionDiscoveryResult = ApiSchemas['InstitutionDiscoveryResponse']
 export type InstitutionCreateInput = Pick<ApiSchemas['InstitutionCreate'], 'name' | 'institution_type' | 'public_description' | 'is_listed'>
 export type InstitutionRequest = ApiSchemas['InstitutionMembershipRequestResponse']
+export type InstitutionMembership = ApiSchemas['InstitutionMembershipResponse']
+export type AdminInstitutionInvitation = ApiSchemas['AdminInstitutionInvitationResponse']
+export type InstitutionRole = InstitutionMembership['role']
 export type Faculty = ApiSchemas['FacultyResponse']
 export type Department = ApiSchemas['DepartmentResponse']
 export type Course = ApiSchemas['CourseResponse']
@@ -34,6 +37,56 @@ export interface InstitutionCatalog {
 
 export function listInstitutions(): Promise<Institution[]> {
   return apiRequest('/api/v1/institutions?limit=100')
+}
+
+export function listAdministeredInstitutions(): Promise<Institution[]> {
+  return apiRequest('/api/v1/institutions/administered?limit=100')
+}
+
+export function listInstitutionMembers(institutionId: string): Promise<InstitutionMembership[]> {
+  return apiRequest(`/api/v1/institutions/${institutionId}/members?limit=100`)
+}
+
+export function updateInstitutionMemberRole(institutionId: string, membershipId: string, role: InstitutionRole): Promise<InstitutionMembership> {
+  return apiRequest(`/api/v1/institutions/${institutionId}/members/${membershipId}`, {
+    method: 'PATCH',
+    body: { role },
+  })
+}
+
+export function removeInstitutionMember(institutionId: string, membershipId: string): Promise<void> {
+  return apiRequest(`/api/v1/institutions/${institutionId}/members/${membershipId}`, { method: 'DELETE' })
+}
+
+export function listInstitutionJoinRequests(institutionId: string): Promise<InstitutionRequest[]> {
+  return apiRequest(`/api/v1/institutions/${institutionId}/join-requests?limit=100`)
+}
+
+export function approveInstitutionJoinRequest(institutionId: string, requestId: string): Promise<InstitutionMembership> {
+  return apiRequest(`/api/v1/institutions/${institutionId}/join-requests/${requestId}/approve`, { method: 'POST' })
+}
+
+export function rejectInstitutionJoinRequest(institutionId: string, requestId: string): Promise<InstitutionRequest> {
+  return apiRequest(`/api/v1/institutions/${institutionId}/join-requests/${requestId}/reject`, { method: 'POST' })
+}
+
+export function inviteInstitutionByEmail(institutionId: string, email: string, role: InstitutionRole): Promise<ApiSchemas['InstitutionInvitationQueuedResponse']> {
+  return apiRequest(`/api/v1/institutions/${institutionId}/invitations/by-email`, {
+    method: 'POST',
+    body: { email, role },
+  })
+}
+
+export function listSentInstitutionInvitations(institutionId: string): Promise<AdminInstitutionInvitation[]> {
+  return apiRequest(`/api/v1/institutions/${institutionId}/invitations?limit=100`)
+}
+
+export function cancelSentInstitutionInvitation(institutionId: string, requestId: string): Promise<void> {
+  return apiRequest(`/api/v1/institutions/${institutionId}/invitations/${requestId}`, { method: 'DELETE' })
+}
+
+export function updateInstitution(institutionId: string, input: ApiSchemas['InstitutionCreate']): Promise<Institution> {
+  return apiRequest(`/api/v1/institutions/${institutionId}`, { method: 'PATCH', body: input })
 }
 
 export function searchListedInstitutions(query: string, offset = 0, limit = 20): Promise<InstitutionDiscoveryResult[]> {
