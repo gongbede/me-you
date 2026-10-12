@@ -1,6 +1,8 @@
 import { ApiError, apiRequest, type ApiSchemas } from './client'
 
 export type Institution = ApiSchemas['InstitutionResponse']
+export type InstitutionDiscoveryResult = ApiSchemas['InstitutionDiscoveryResponse']
+export type InstitutionCreateInput = Pick<ApiSchemas['InstitutionCreate'], 'name' | 'institution_type' | 'public_description' | 'is_listed'>
 export type InstitutionRequest = ApiSchemas['InstitutionMembershipRequestResponse']
 export type Faculty = ApiSchemas['FacultyResponse']
 export type Department = ApiSchemas['DepartmentResponse']
@@ -32,6 +34,15 @@ export interface InstitutionCatalog {
 
 export function listInstitutions(): Promise<Institution[]> {
   return apiRequest('/api/v1/institutions?limit=100')
+}
+
+export function searchListedInstitutions(query: string, offset = 0, limit = 20): Promise<InstitutionDiscoveryResult[]> {
+  const params = new URLSearchParams({ query, offset: String(offset), limit: String(limit) })
+  return apiRequest(`/api/v1/institutions/discovery?${params}`)
+}
+
+export function createInstitution(input: InstitutionCreateInput): Promise<Institution> {
+  return apiRequest('/api/v1/institutions', { method: 'POST', body: input })
 }
 
 export function listMyInvitations(): Promise<InstitutionRequest[]> {

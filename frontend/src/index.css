@@ -2542,7 +2542,10 @@ button:disabled {
 }
 
 .learning-inline-form input,
-.learning-join-form input {
+.learning-join-form input,
+.learning-school-create-form input:not([type="checkbox"]),
+.learning-school-create-form select,
+.learning-school-create-form textarea {
   width: 100%;
   min-width: 0;
   min-height: 48px;
@@ -2554,7 +2557,10 @@ button:disabled {
 }
 
 .learning-inline-form input:focus-visible,
-.learning-join-form input:focus-visible {
+.learning-join-form input:focus-visible,
+.learning-school-create-form input:focus-visible,
+.learning-school-create-form select:focus-visible,
+.learning-school-create-form textarea:focus-visible {
   outline: 3px solid var(--royal-blue);
   outline-offset: 2px;
 }
@@ -2608,6 +2614,65 @@ button:disabled {
 .learning-enrolled-list > li:first-child,
 .learning-lesson-list > li:first-child {
   border-top: 0;
+}
+
+.learning-result-copy {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 3px;
+}
+
+.learning-result-copy > span,
+.learning-result-copy p {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.learning-result-copy p {
+  margin: 2px 0 0;
+  line-height: 1.45;
+}
+
+.learning-school-create-form {
+  display: grid;
+  max-width: 620px;
+  gap: 14px;
+}
+
+.learning-school-create-form input:not([type="checkbox"]),
+.learning-school-create-form select,
+.learning-school-create-form textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  padding: 10px 12px;
+  border: 1px solid var(--royal-blue-100);
+  border-radius: 8px;
+  color: var(--ink);
+  background: #fbfdff;
+  font: inherit;
+}
+
+.learning-school-create-form textarea {
+  resize: vertical;
+}
+
+.learning-listed-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+}
+
+.learning-listed-toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--royal-blue);
+}
+
+.learning-school-create-form .button {
+  justify-self: start;
 }
 
 .learning-school-list > li,

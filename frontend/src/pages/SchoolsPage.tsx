@@ -5,13 +5,16 @@ import { Link } from 'react-router-dom'
 import { getFriendlyErrorMessage } from '../api/client'
 import {
   acceptInvitation,
+  createInstitution,
   declineInvitation,
   listInstitutions,
   listMyInvitations,
   listMyStudents,
   listMyTeachers,
   requestStudentMembership,
-  searchResources,
+  searchListedInstitutions,
+  type Institution,
+  type InstitutionCreateInput,
   type InstitutionRequest,
 } from '../api/education'
 
@@ -24,7 +27,12 @@ export function SchoolsPage() {
   const [institutionId, setInstitutionId] = useState('')
   const [searchInput, setSearchInput] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
+  const [schoolName, setSchoolName] = useState('')
+  const [schoolType, setSchoolType] = useState<Institution['institution_type']>('SCHOOL')
+  const [publicDescription, setPublicDescription] = useState('')
+  const [isListed, setIsListed] = useState(false)
   const [joinResult, setJoinResult] = useState<InstitutionRequest | null>(null)
+  const [createdSchool, setCreatedSchool] = useState<Institution | null>(null)
   const schoolsQuery = useQuery({
     queryKey: ['education', 'institutions'],
     queryFn: listInstitutions,
@@ -39,12 +47,22 @@ export function SchoolsPage() {
   })
   const searchQuery = useQuery({
     queryKey: ['education', 'school-search', searchTerm],
-    queryFn: () => searchResources(searchTerm),
+    queryFn: () => searchListedInstitutions(searchTerm),
     enabled: searchTerm.length >= 2,
   })
   const joinMutation = useMutation({
     mutationFn: requestStudentMembership,
     onSuccess: (value) => setJoinResult(value),
+  })
+  const createMutation = useMutation({
+    mutationFn: (input: InstitutionCreateInput) => createInstitution(input),
+    onSuccess: async (school) => {
+      setCreatedSchool(school)
+      setSchoolName('')
+      setPublicDescription('')
+      setIsListed(false)
+      await queryClient.invalidateQueries({ queryKey: ['education', 'institutions'] })
+    },
   })
   const acceptMutation = useMutation({
     mutationFn: ({ institutionId: schoolId, requestId }: { institutionId: string; requestId: string }) =>
@@ -77,8 +95,19 @@ export function SchoolsPage() {
     }
   }
 
+  function submitCreate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    createMutation.mutate({
+      name: schoolName.trim(),
+      institution_type: schoolType,
+      public_description: publicDescription.trim() || null,
+      is_listed: isListed,
+    })
+  }
+
   const [students = [], teachers = []] = rolesQuery.data ?? []
-  const visibleMatches = searchQuery.data?.items.filter((item) => item.resource_type === 'institution') ?? []
+  const memberIds = new Set((schoolsQuery.data ?? []).map((school) => school.id))
+  const visibleMatches = searchQuery.data ?? []
 
   return (
     <div className="page-stack learning-page">
@@ -94,7 +123,7 @@ export function SchoolsPage() {
         <div className="learning-section__heading">
           <div>
             <h2 id="school-search-title">Find a school</h2>
-            <p>Search checks schools already visible to your account. To request a new school, use its ID from the school administrator.</p>
+            <p>Search schools that have chosen to appear in the directory.</p>
           </div>
           <Search size={20} aria-hidden="true" />
         </div>
@@ -105,25 +134,50 @@ export function SchoolsPage() {
             {searchQuery.isFetching ? 'Searching…' : 'Search'}
           </button>
         </form>
+        {searchTerm && searchQuery.isFetching && <p className="learning-loading" role="status">Searching listed schools…</p>}
         {searchQuery.isError && <p className="form-alert" role="alert">{accessError(searchQuery.error)}</p>}
         {searchTerm && searchQuery.isSuccess && (
           visibleMatches.length ? (
             <ul className="learning-result-list">
-              {visibleMatches.map((match) => <li key={match.id}><SchoolIcon size={18} aria-hidden="true" /><span>{match.name}</span><span className="status-label">Already a member</span></li>)}
+              {visibleMatches.map((match) => {
+                const request = joinResult?.institution_id === match.id ? joinResult : null
+                return <li key={match.id}>
+                  <SchoolIcon size={18} aria-hidden="true" />
+                  <div className="learning-result-copy"><strong>{match.name}</strong><span>{match.institution_type.replace('_', ' ')}</span>{match.description && <p>{match.description}</p>}</div>
+                  {memberIds.has(match.id) ? <span className="status-label">Already a member</span> : request ? <span className="status-label" role="status">Request {request.status.toLowerCase()}</span> : <button className="button button--outline" type="button" disabled={joinMutation.isPending} onClick={() => { setJoinResult(null); joinMutation.mutate(match.id) }}>{joinMutation.isPending ? 'Requesting…' : 'Request to join'}</button>}
+                </li>
+              })}
             </ul>
-          ) : <p className="learning-empty learning-empty--compact">No member-visible schools match that search.</p>
+          ) : <p className="learning-empty learning-empty--compact">No listed schools match that name.</p>
         )}
+        {searchQuery.isError && <button className="button button--outline" type="button" onClick={() => void searchQuery.refetch()}>Retry search</button>}
+        {joinMutation.isError && <p className="form-alert" role="alert">{accessError(joinMutation.error)} The request may already be pending or you may already belong to this school.</p>}
         <form className="learning-join-form" onSubmit={submitJoin}>
           <label className="field">
             <span>School ID</span>
             <input value={institutionId} onChange={(event) => setInstitutionId(event.currentTarget.value)} placeholder="Paste the institution ID" autoComplete="off" />
           </label>
           <button className="button button--primary" type="submit" disabled={!institutionId.trim() || joinMutation.isPending}>
-            {joinMutation.isPending ? 'Requesting…' : 'Request to join'} <ArrowRight size={16} aria-hidden="true" />
+            {joinMutation.isPending ? 'Requesting…' : 'Request with ID'} <ArrowRight size={16} aria-hidden="true" />
           </button>
         </form>
         {joinResult && <p className="form-success" role="status">Request {joinResult.status.toLowerCase()} for the {joinResult.role.toLowerCase()} role. A school administrator must approve it before course enrollment.</p>}
-        {joinMutation.isError && <p className="form-alert" role="alert">{accessError(joinMutation.error)} Check the school ID, or ask its administrator to invite you.</p>}
+      </section>
+
+      <section className="learning-section" aria-labelledby="school-create-title">
+        <div className="learning-section__heading">
+          <div><h2 id="school-create-title">Create a school</h2><p>You will become its administrator.</p></div>
+          <SchoolIcon size={20} aria-hidden="true" />
+        </div>
+        <form className="learning-school-create-form" onSubmit={submitCreate}>
+          <label className="field" htmlFor="new-school-name"><span>School name</span><input id="new-school-name" required minLength={1} maxLength={200} value={schoolName} onChange={(event) => setSchoolName(event.currentTarget.value)} /></label>
+          <label className="field" htmlFor="new-school-type"><span>Type</span><select id="new-school-type" value={schoolType} onChange={(event) => setSchoolType(event.currentTarget.value as Institution['institution_type'])}><option value="SCHOOL">School</option><option value="UNIVERSITY">University</option><option value="TRAINING_CENTER">Training center</option><option value="MUSIC_SCHOOL">Music school</option><option value="OTHER">Other</option></select></label>
+          <label className="field" htmlFor="new-school-description"><span>Public description <small>(optional, up to 500 characters)</small></span><textarea id="new-school-description" maxLength={500} rows={3} value={publicDescription} onChange={(event) => setPublicDescription(event.currentTarget.value)} /></label>
+          <label className="learning-listed-toggle"><input type="checkbox" checked={isListed} onChange={(event) => setIsListed(event.currentTarget.checked)} /><span>List this school in Find a school</span></label>
+          <button className="button button--primary" type="submit" disabled={!schoolName.trim() || createMutation.isPending}>{createMutation.isPending ? 'Creating…' : 'Create school'} <ArrowRight size={16} aria-hidden="true" /></button>
+        </form>
+        {createMutation.isError && <p className="form-alert" role="alert">{accessError(createMutation.error)}</p>}
+        {createdSchool && <p className="form-success" role="status">{createdSchool.name} is ready. You are its administrator. <Link to={`/schools/${createdSchool.id}`}>View school</Link></p>}
       </section>
 
       <section className="learning-section" aria-labelledby="invitations-title">
@@ -155,7 +209,7 @@ export function SchoolsPage() {
         </div>
         {schoolsQuery.isPending || rolesQuery.isPending ? <p className="learning-loading" role="status">Loading your schools…</p> : schoolsQuery.isError || rolesQuery.isError ? (
           <div className="inline-error" role="alert"><p>{accessError(schoolsQuery.error ?? rolesQuery.error)}</p><button className="button button--outline" type="button" onClick={() => { void schoolsQuery.refetch(); void rolesQuery.refetch() }}>Retry</button></div>
-        ) : schoolsQuery.data.length === 0 ? <p className="learning-empty learning-empty--compact">You do not have an active school membership yet. Accept an invitation or request to join with a school ID.</p> : (
+        ) : schoolsQuery.data.length === 0 ? <p className="learning-empty learning-empty--compact">You do not have an active school membership yet. Find a listed school, accept an invitation, or create a school to get started.</p> : (
           <ul className="learning-school-list">
             {schoolsQuery.data.map((school) => {
               const role = students.some((record) => record.institution_id === school.id) ? 'STUDENT' : teachers.some((record) => record.institution_id === school.id) ? 'TEACHER' : 'MEMBER'
