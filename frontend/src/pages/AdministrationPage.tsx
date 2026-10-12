@@ -3,6 +3,7 @@ import { ArrowLeft, Building2, Check, CircleAlert, MailPlus, RotateCw, Save, Set
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ApiError, getFriendlyErrorMessage, type ApiSchemas } from '../api/client'
+import { StructurePanel, TeachersPanel } from './AdminStructurePanels'
 import {
   approveInstitutionJoinRequest,
   cancelSentInstitutionInvitation,
@@ -20,7 +21,7 @@ import {
   type InstitutionRole,
 } from '../api/education'
 
-type AdminTab = 'members' | 'requests' | 'settings'
+type AdminTab = 'members' | 'requests' | 'settings' | 'structure' | 'teachers'
 
 function adminError(error: unknown): string {
   const message = getFriendlyErrorMessage(error)
@@ -231,6 +232,8 @@ function AdminSchool({ institution }: { institution: Institution }) {
   const tabs: Array<{ id: AdminTab; label: string }> = [
     { id: 'members', label: 'Members' },
     { id: 'requests', label: 'Requests' },
+    { id: 'structure', label: 'Structure' },
+    { id: 'teachers', label: 'Teachers' },
     { id: 'settings', label: 'Settings' },
   ]
 
@@ -243,6 +246,8 @@ function AdminSchool({ institution }: { institution: Institution }) {
       </div>
       {tab === 'members' && <MembersPanel institutionId={institution.id} />}
       {tab === 'requests' && <RequestsPanel institutionId={institution.id} />}
+      {tab === 'structure' && <StructurePanel institutionId={institution.id} />}
+      {tab === 'teachers' && <TeachersPanel institutionId={institution.id} />}
       {tab === 'settings' && <SchoolSettings key={institution.id} institution={institution} />}
     </div>
   )

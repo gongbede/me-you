@@ -2848,6 +2848,133 @@ button:disabled {
   font-size: 0.84rem;
 }
 
+.admin-inline-form {
+  display: flex;
+  min-width: 0;
+  align-items: flex-end;
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.admin-inline-form .field {
+  min-width: 0;
+  flex: 1;
+}
+
+.admin-inline-form input,
+.admin-inline-form select {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 1px solid var(--royal-blue-100);
+  border-radius: 8px;
+  color: var(--ink);
+  background: #fbfdff;
+  font: inherit;
+}
+
+.admin-structure-list,
+.admin-structure-departments {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.admin-structure-faculty,
+.admin-structure-department {
+  min-width: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.admin-structure-department {
+  margin-left: 12px;
+  padding-left: 12px;
+  border-left: 2px solid var(--teal-50);
+}
+
+.admin-structure-title,
+.admin-teacher-course-heading,
+.admin-assigned-teachers li {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.admin-structure-title h3,
+.admin-structure-title h4 {
+  min-width: 0;
+  margin: 0;
+  color: var(--navy);
+  overflow-wrap: anywhere;
+}
+
+.admin-structure-title h3 {
+  font-size: 1.03rem;
+}
+
+.admin-structure-title h4 {
+  font-size: 0.96rem;
+}
+
+.admin-structure-title > div,
+.admin-teacher-course-heading > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.admin-structure-title span,
+.admin-teacher-course-heading span,
+.admin-assigned-teachers span {
+  color: var(--muted);
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+.admin-editor {
+  margin: 8px 0;
+}
+
+.admin-editor summary {
+  width: fit-content;
+  color: var(--royal-blue);
+  font-size: 0.84rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.admin-structure-courses,
+.admin-teacher-courses,
+.admin-assigned-teachers {
+  display: grid;
+  gap: 10px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-structure-courses > li,
+.admin-teacher-courses > li {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--canvas);
+}
+
+.admin-assigned-teachers {
+  margin: 6px 0 10px;
+}
+
+.admin-assigned-teachers > li {
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+
 .admin-panel .learning-row-actions .button {
   white-space: nowrap;
 }
@@ -2878,6 +3005,21 @@ button:disabled {
   .admin-invite-form .button {
     width: 100%;
     justify-content: center;
+  }
+
+  .admin-inline-form {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-inline-form .button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .admin-structure-department {
+    margin-left: 4px;
+    padding-left: 8px;
   }
 }
 

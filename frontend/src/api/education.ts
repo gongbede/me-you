@@ -10,6 +10,10 @@ export type InstitutionRole = InstitutionMembership['role']
 export type Faculty = ApiSchemas['FacultyResponse']
 export type Department = ApiSchemas['DepartmentResponse']
 export type Course = ApiSchemas['CourseResponse']
+export type CourseTeacherAssignment = ApiSchemas['CourseTeacherResponse']
+export type FacultyInput = ApiSchemas['FacultyCreate']
+export type DepartmentInput = ApiSchemas['DepartmentCreate']
+export type CourseInput = ApiSchemas['CourseCreate']
 export type Enrollment = ApiSchemas['EnrollmentResponse']
 export type Lesson = ApiSchemas['LessonResponse']
 export type LessonInput = Pick<Lesson, 'title' | 'content' | 'position' | 'is_published'>
@@ -160,6 +164,61 @@ export function getDepartment(departmentId: string): Promise<Department> {
 
 export function getFaculty(facultyId: string): Promise<Faculty> {
   return apiRequest(`/api/v1/institutions/faculties/${facultyId}`)
+}
+
+export function createFaculty(institutionId: string, input: FacultyInput): Promise<Faculty> {
+  return apiRequest(`/api/v1/institutions/${institutionId}/faculties`, { method: 'POST', body: input })
+}
+
+export function updateFaculty(facultyId: string, input: FacultyInput): Promise<Faculty> {
+  return apiRequest(`/api/v1/institutions/faculties/${facultyId}`, { method: 'PATCH', body: input })
+}
+
+export function deleteFaculty(facultyId: string): Promise<void> {
+  return apiRequest(`/api/v1/institutions/faculties/${facultyId}`, { method: 'DELETE' })
+}
+
+export function createDepartment(facultyId: string, input: DepartmentInput): Promise<Department> {
+  return apiRequest(`/api/v1/institutions/faculties/${facultyId}/departments`, { method: 'POST', body: input })
+}
+
+export function updateDepartment(departmentId: string, input: DepartmentInput): Promise<Department> {
+  return apiRequest(`/api/v1/institutions/departments/${departmentId}`, { method: 'PATCH', body: input })
+}
+
+export function deleteDepartment(departmentId: string): Promise<void> {
+  return apiRequest(`/api/v1/institutions/departments/${departmentId}`, { method: 'DELETE' })
+}
+
+export function createCourse(departmentId: string, input: CourseInput): Promise<Course> {
+  return apiRequest(`/api/v1/institutions/departments/${departmentId}/courses`, { method: 'POST', body: input })
+}
+
+export function updateCourse(courseId: string, input: CourseInput): Promise<Course> {
+  return apiRequest(`/api/v1/institutions/courses/${courseId}`, { method: 'PATCH', body: input })
+}
+
+export function deleteCourse(courseId: string): Promise<void> {
+  return apiRequest(`/api/v1/institutions/courses/${courseId}`, { method: 'DELETE' })
+}
+
+export function listInstitutionTeachers(institutionId: string): Promise<Teacher[]> {
+  return apiRequest(`/api/v1/institutions/${institutionId}/teachers?limit=100`)
+}
+
+export function listCourseTeacherAssignments(courseId: string): Promise<CourseTeacherAssignment[]> {
+  return apiRequest(`/api/v1/education/courses/${courseId}/teachers?limit=100`)
+}
+
+export function assignTeacherToCourse(courseId: string, teacherId: string): Promise<CourseTeacherAssignment> {
+  return apiRequest(`/api/v1/education/courses/${courseId}/teachers`, {
+    method: 'POST',
+    body: { teacher_id: teacherId },
+  })
+}
+
+export function removeTeacherFromCourse(courseId: string, teacherId: string): Promise<void> {
+  return apiRequest(`/api/v1/education/courses/${courseId}/teachers/${teacherId}`, { method: 'DELETE' })
 }
 
 export async function getInstitutionCatalog(institutionId: string): Promise<InstitutionCatalog> {
