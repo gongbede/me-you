@@ -117,6 +117,7 @@ API_IP_LIMIT = int(os.getenv("API_IP_LIMIT", "120"))
 API_WINDOW_SECONDS = int(os.getenv("API_WINDOW_SECONDS", "60"))
 RATE_LIMIT_ENABLED = os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true"
 SECURITY_EVENT_RETENTION_DAYS = int(os.getenv("SECURITY_EVENT_RETENTION_DAYS", "365"))
+INSTITUTION_ADMIN_LIMIT = int(os.getenv("INSTITUTION_ADMIN_LIMIT", "3"))
 APP_PUBLIC_BASE_URL = os.getenv("ME_YOU_PUBLIC_BASE_URL", "http://localhost:3000").rstrip("/")
 STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "local").strip().lower()
 if STORAGE_BACKEND not in {"local", "s3"}:

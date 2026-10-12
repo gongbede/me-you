@@ -78,6 +78,30 @@ def test_api_rate_limit_returns_retry_after_and_exempts_health_routes():
         assert limited.headers["x-frame-options"] == "DENY"
 
 
+def test_institution_discovery_uses_the_api_rate_limit():
+    class MemoryLimiter:
+        def __init__(self):
+            self.count = 0
+
+        async def increment(self, _scope, _key, _window_seconds):
+            self.count += 1
+            return self.count, 11
+
+    limiter = MemoryLimiter()
+    limits = dict(app_main.RATE_LIMITS)
+    limits["api_ip"] = (1, 60)
+    with (
+        patch.object(app_main, "RATE_LIMITS", limits),
+        patch.object(app_main, "RATE_LIMIT_ENABLED", True),
+        patch.object(app_main, "get_rate_limit_store", return_value=limiter),
+        TestClient(app_main.app) as client,
+    ):
+        assert client.get("/api/v1/institutions/discovery?query=school").status_code != 429
+        limited = client.get("/api/v1/institutions/discovery?query=school")
+        assert limited.status_code == 429
+        assert limited.headers["retry-after"] == "11"
+
+
 def test_already_locked_login_skips_argon2_verification():
     import asyncio
     import uuid

@@ -1833,6 +1833,11 @@
             "title": "Institution Type",
             "type": "string"
           },
+          "is_listed": {
+            "default": false,
+            "title": "Is Listed",
+            "type": "boolean"
+          },
           "location": {
             "anyOf": [
               {
@@ -1850,6 +1855,18 @@
             "minLength": 1,
             "title": "Name",
             "type": "string"
+          },
+          "public_description": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Public Description"
           },
           "website": {
             "anyOf": [
@@ -1869,6 +1886,48 @@
           "institution_type"
         ],
         "title": "InstitutionCreate",
+        "type": "object"
+      },
+      "InstitutionDiscoveryResponse": {
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "institution_type": {
+            "enum": [
+              "SCHOOL",
+              "UNIVERSITY",
+              "TRAINING_CENTER",
+              "MUSIC_SCHOOL",
+              "OTHER"
+            ],
+            "title": "Institution Type",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "institution_type",
+          "description"
+        ],
+        "title": "InstitutionDiscoveryResponse",
         "type": "object"
       },
       "InstitutionInvitationCreate": {
@@ -2080,6 +2139,10 @@
             "title": "Institution Type",
             "type": "string"
           },
+          "is_listed": {
+            "title": "Is Listed",
+            "type": "boolean"
+          },
           "location": {
             "anyOf": [
               {
@@ -2094,6 +2157,17 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "public_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Public Description"
           },
           "updated_at": {
             "format": "date-time",
@@ -2116,6 +2190,8 @@
           "id",
           "name",
           "description",
+          "public_description",
+          "is_listed",
           "institution_type",
           "website",
           "location",
@@ -9077,6 +9153,82 @@
           }
         ],
         "summary": "Create a course",
+        "tags": [
+          "education"
+        ]
+      }
+    },
+    "/api/v1/institutions/discovery": {
+      "get": {
+        "operationId": "discover_institutions_api_v1_institutions_discovery_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "query",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Query",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/InstitutionDiscoveryResponse"
+                  },
+                  "title": "Response Discover Institutions Api V1 Institutions Discovery Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Search listed institutions",
         "tags": [
           "education"
         ]
@@ -17121,6 +17273,82 @@
           }
         ],
         "summary": "Create a course",
+        "tags": [
+          "education"
+        ]
+      }
+    },
+    "/institutions/discovery": {
+      "get": {
+        "operationId": "discover_institutions_institutions_discovery_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "query",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Query",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/InstitutionDiscoveryResponse"
+                  },
+                  "title": "Response Discover Institutions Institutions Discovery Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Search listed institutions",
         "tags": [
           "education"
         ]

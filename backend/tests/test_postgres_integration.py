@@ -3118,6 +3118,86 @@ def test_search_cursor_pagination_remains_institution_scoped(postgres_database_u
     asyncio.run(verify())
 
 
+def test_institution_discovery_is_opt_in_paginated_and_private_fields_stay_hidden(postgres_database_url):
+    from app.security import get_current_postgres_user
+
+    async def verify():
+        engine = create_async_engine(postgres_database_url)
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        original_overrides = app.dependency_overrides.copy()
+        selected_user = {"id": None}
+        try:
+            async with session_factory() as session:
+                user = await create_user(session)
+                listed = [
+                    Institution(
+                        name=f"Directory Academy {index}",
+                        institution_type="SCHOOL",
+                        description="PRIVATE DETAIL MUST NOT APPEAR",
+                        public_description=f"Public detail {index}",
+                        website="https://private.example.test",
+                        location="Private Location",
+                        is_listed=True,
+                    )
+                    for index in range(3)
+                ]
+                unlisted = Institution(
+                    name="Directory Academy Hidden",
+                    institution_type="SCHOOL",
+                    is_listed=False,
+                )
+                session.add_all([*listed, unlisted])
+                await session.commit()
+                selected_user["id"] = user.id
+                listed_ids = [str(value.id) for value in listed]
+                unlisted_id = str(unlisted.id)
+
+            async def database_dependency():
+                async with session_factory() as session:
+                    yield session
+
+            async def user_dependency():
+                async with session_factory() as session:
+                    return await session.get(User, selected_user["id"])
+
+            app.dependency_overrides[get_postgres_session] = database_dependency
+            app.dependency_overrides[get_current_postgres_user] = user_dependency
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                first_page = await client.get(
+                    "/institutions/discovery?query=Directory%20Academy&limit=2&offset=0"
+                )
+                second_page = await client.get(
+                    "/institutions/discovery?query=Directory%20Academy&limit=2&offset=2"
+                )
+                assert first_page.status_code == second_page.status_code == 200
+                assert [value["id"] for value in first_page.json()] == listed_ids[:2]
+                assert [value["id"] for value in second_page.json()] == [listed_ids[2]]
+                assert all(
+                    set(value) == {"id", "name", "institution_type", "description"}
+                    for value in first_page.json() + second_page.json()
+                )
+                assert all(
+                    "PRIVATE" not in str(value)
+                    and "website" not in value
+                    and "location" not in value
+                    for value in first_page.json() + second_page.json()
+                )
+                assert unlisted_id not in {
+                    value["id"] for value in first_page.json() + second_page.json()
+                }
+                assert (await client.get(
+                    "/institutions/discovery?query=Directory&limit=51"
+                )).status_code == 422
+        finally:
+            app.dependency_overrides.clear()
+            app.dependency_overrides.update(original_overrides)
+            await engine.dispose()
+
+    asyncio.run(verify())
+
+
 def test_media_download_scope_and_avatar_profile_visibility(postgres_database_url):
     from datetime import datetime, timedelta, timezone
     import tempfile

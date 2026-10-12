@@ -94,6 +94,21 @@ class EducationCoreTests(unittest.IsolatedAsyncioTestCase):
             InstitutionCreate(name="   ", institution_type="SCHOOL")
         self.assertIn("value must not be blank", str(blank_error.exception))
 
+    async def test_institution_creation_limit_returns_clear_conflict(self):
+        from unittest.mock import patch
+
+        session = EducationSession([self.user.id, 3])
+        with patch("app.routes.institutions.config.INSTITUTION_ADMIN_LIMIT", 3):
+            with self.assertRaises(HTTPException) as error:
+                await create_institution(
+                    InstitutionCreate(name="Another School", institution_type="SCHOOL"),
+                    self.user,
+                    session,
+                )
+        self.assertEqual(error.exception.status_code, 409)
+        self.assertIn("maximum 3", error.exception.detail)
+        self.assertEqual(session.added, [])
+
     async def test_course_creation_and_duplicate_error(self):
         admin_membership = InstitutionMembership(id=uuid.uuid4(), user_id=self.user.id, institution_id=self.institution.id, role="ADMIN")
         session = EducationSession([self.department, self.faculty, admin_membership])

@@ -1244,6 +1244,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/institutions/discovery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search listed institutions */
+        get: operations["discover_institutions_api_v1_institutions_discovery_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/institutions/faculties/{faculty_id}": {
         parameters: {
             query?: never;
@@ -2979,6 +2996,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/institutions/discovery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search listed institutions */
+        get: operations["discover_institutions_institutions_discovery_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/institutions/faculties/{faculty_id}": {
         parameters: {
             query?: never;
@@ -4538,12 +4572,33 @@ export interface components {
              * @enum {string}
              */
             institution_type: "SCHOOL" | "UNIVERSITY" | "TRAINING_CENTER" | "MUSIC_SCHOOL" | "OTHER";
+            /**
+             * Is Listed
+             * @default false
+             */
+            is_listed: boolean;
             /** Location */
             location?: string | null;
             /** Name */
             name: string;
+            /** Public Description */
+            public_description?: string | null;
             /** Website */
             website?: string | null;
+        };
+        /** InstitutionDiscoveryResponse */
+        InstitutionDiscoveryResponse: {
+            /** Description */
+            description: string | null;
+            /** Id */
+            id: string;
+            /**
+             * Institution Type
+             * @enum {string}
+             */
+            institution_type: "SCHOOL" | "UNIVERSITY" | "TRAINING_CENTER" | "MUSIC_SCHOOL" | "OTHER";
+            /** Name */
+            name: string;
         };
         /** InstitutionInvitationCreate */
         InstitutionInvitationCreate: {
@@ -4645,10 +4700,14 @@ export interface components {
              * @enum {string}
              */
             institution_type: "SCHOOL" | "UNIVERSITY" | "TRAINING_CENTER" | "MUSIC_SCHOOL" | "OTHER";
+            /** Is Listed */
+            is_listed: boolean;
             /** Location */
             location: string | null;
             /** Name */
             name: string;
+            /** Public Description */
+            public_description: string | null;
             /**
              * Updated At
              * Format: date-time
@@ -8561,6 +8620,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CourseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    discover_institutions_api_v1_institutions_discovery_get: {
+        parameters: {
+            query: {
+                query: string;
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstitutionDiscoveryResponse"][];
                 };
             };
             /** @description Validation Error */
@@ -13303,6 +13395,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CourseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    discover_institutions_institutions_discovery_get: {
+        parameters: {
+            query: {
+                query: string;
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstitutionDiscoveryResponse"][];
                 };
             };
             /** @description Validation Error */

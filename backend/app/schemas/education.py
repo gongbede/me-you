@@ -17,6 +17,8 @@ def non_blank(value: str) -> str:
 class InstitutionCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=4000)
+    public_description: str | None = Field(default=None, max_length=500)
+    is_listed: bool = False
     institution_type: InstitutionType
     website: str | None = Field(default=None, max_length=2048)
     location: str | None = Field(default=None, max_length=200)
@@ -27,11 +29,20 @@ class InstitutionResponse(BaseModel):
     id: str
     name: str
     description: str | None
+    public_description: str | None
+    is_listed: bool
     institution_type: InstitutionType
     website: str | None
     location: str | None
     created_at: datetime
     updated_at: datetime
+
+
+class InstitutionDiscoveryResponse(BaseModel):
+    id: str
+    name: str
+    institution_type: InstitutionType
+    description: str | None
 
 
 class InstitutionMembershipCreate(BaseModel):

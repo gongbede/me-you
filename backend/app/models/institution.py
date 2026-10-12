@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, DateTime, Index, String, Text, Uuid
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Index, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
@@ -23,11 +23,14 @@ class Institution(Base):
             name="ck_institutions_type",
         ),
         Index("ix_institutions_name", "name"),
+        Index("ix_institutions_listed_name", "is_listed", "name"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    public_description: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    is_listed: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     institution_type: Mapped[str] = mapped_column(String(30), nullable=False)
     website: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     location: Mapped[str | None] = mapped_column(String(200), nullable=True)

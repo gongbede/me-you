@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..activity import record_activity
+from .. import config
 from ..database import get_postgres_session
 from ..models import (
     Assessment,
@@ -37,6 +38,7 @@ from ..schemas import (
     FacultyCreate,
     FacultyResponse,
     InstitutionCreate,
+    InstitutionDiscoveryResponse,
     InstitutionMembershipCreate,
     InstitutionInvitationCreate,
     InstitutionJoinRequestCreate,
@@ -55,7 +57,7 @@ router = APIRouter(prefix="/institutions", tags=["education"])
 
 
 def institution_response(value: Institution) -> dict:
-    return {"id": str(value.id), "name": value.name, "description": value.description, "institution_type": value.institution_type, "website": value.website, "location": value.location, "created_at": value.created_at, "updated_at": value.updated_at}
+    return {"id": str(value.id), "name": value.name, "description": value.description, "public_description": value.public_description, "is_listed": value.is_listed, "institution_type": value.institution_type, "website": value.website, "location": value.location, "created_at": value.created_at, "updated_at": value.updated_at}
 
 
 def faculty_response(value: Faculty) -> dict:
@@ -478,6 +480,20 @@ async def get_institution_student(institution_id: uuid.UUID, student_id: uuid.UU
 
 @router.post("", response_model=InstitutionResponse, status_code=201, summary="Create an institution")
 async def create_institution(data: InstitutionCreate, current_user=Depends(get_current_postgres_user), database: AsyncSession = Depends(get_postgres_session), request: Request = None):
+    await database.scalar(
+        select(User.id).where(User.id == current_user.id).with_for_update()
+    )
+    admin_count = int(await database.scalar(
+        select(func.count(InstitutionMembership.id)).where(
+            InstitutionMembership.user_id == current_user.id,
+            InstitutionMembership.role == "ADMIN",
+        )
+    ) or 0)
+    if admin_count >= config.INSTITUTION_ADMIN_LIMIT:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Institution creation limit reached (maximum {config.INSTITUTION_ADMIN_LIMIT} institutions created or administered per user)",
+        )
     institution = Institution(**data.model_dump(), created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc))
     database.add(institution)
     await database.flush()
@@ -505,6 +521,38 @@ async def list_institutions(current_user=Depends(get_current_postgres_user), dat
         return []
     values = list((await database.scalars(select(Institution).where(Institution.id.in_(sorted(institution_ids))).order_by(Institution.name.asc(), Institution.id.asc()).offset(offset).limit(limit))).all())
     return [institution_response(value) for value in values]
+
+
+@router.get("/discovery", response_model=list[InstitutionDiscoveryResponse], summary="Search listed institutions")
+async def discover_institutions(
+    query: Annotated[str, Query(min_length=1, max_length=200)],
+    current_user=Depends(get_current_postgres_user),
+    database: AsyncSession = Depends(get_postgres_session),
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=50)] = 20,
+):
+    search = query.strip()
+    if not search:
+        raise HTTPException(status_code=422, detail="Search query must not be blank")
+    values = list((await database.scalars(
+        select(Institution)
+        .where(
+            Institution.is_listed.is_(True),
+            func.lower(Institution.name).contains(search.lower()),
+        )
+        .order_by(Institution.name.asc(), Institution.id.asc())
+        .offset(offset)
+        .limit(limit)
+    )).all())
+    return [
+        {
+            "id": str(value.id),
+            "name": value.name,
+            "institution_type": value.institution_type,
+            "description": value.public_description,
+        }
+        for value in values
+    ]
 
 
 @router.get("/{institution_id}", response_model=InstitutionResponse, summary="Get an institution")

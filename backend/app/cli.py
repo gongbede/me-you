@@ -67,6 +67,7 @@ async def seed_demo(session_factory: Any = None) -> list[tuple[str, str, str]]:
                 "location": "Example City",
             },
         )
+        institution.is_listed = True
         faculty = await _get_or_create(
             session,
             Faculty,
