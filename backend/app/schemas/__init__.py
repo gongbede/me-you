@@ -92,6 +92,7 @@ from .administration import PlatformAdminUserResponse
 from .media import (
 	MediaAssetResponse,
 	MediaAvatarSet,
+	MediaReelLimitsResponse,
 	MediaDownloadResponse,
 	MediaUploadIntentCreate,
 	MediaUploadIntentResponse,
@@ -190,6 +191,7 @@ __all__ = [
 	"MessageResponse",
 	"MediaAssetResponse",
 	"MediaAvatarSet",
+	"MediaReelLimitsResponse",
 	"MediaDownloadResponse",
 	"MediaUploadIntentCreate",
 	"MediaUploadIntentResponse",

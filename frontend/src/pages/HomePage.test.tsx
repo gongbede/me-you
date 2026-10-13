@@ -24,6 +24,7 @@ const makePost = (id: string, content: string) => ({
   author: { id: 'author-id', username: 'author', display_name: 'Author', avatar_url: null },
   content,
   visibility: 'PUBLIC' as const,
+  post_type: 'POST' as const,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
   like_count: 0,

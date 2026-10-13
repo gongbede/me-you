@@ -68,3 +68,8 @@ class MediaDownloadResponse(BaseModel):
 
 class MediaAvatarSet(BaseModel):
     asset_id: str = Field(min_length=36, max_length=36)
+
+
+class MediaReelLimitsResponse(BaseModel):
+    max_bytes: int
+    content_types: list[str]

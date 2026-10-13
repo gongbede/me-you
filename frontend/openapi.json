@@ -2712,6 +2712,27 @@
         "title": "MediaDownloadResponse",
         "type": "object"
       },
+      "MediaReelLimitsResponse": {
+        "properties": {
+          "content_types": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Content Types",
+            "type": "array"
+          },
+          "max_bytes": {
+            "title": "Max Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "max_bytes",
+          "content_types"
+        ],
+        "title": "MediaReelLimitsResponse",
+        "type": "object"
+      },
       "MediaUploadIntentCreate": {
         "properties": {
           "byte_size": {
@@ -11412,6 +11433,32 @@
         ]
       }
     },
+    "/api/v1/media/reel-limits": {
+      "get": {
+        "operationId": "get_reel_media_limits_api_v1_media_reel_limits_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaReelLimitsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Reel Media Limits",
+        "tags": [
+          "media"
+        ]
+      }
+    },
     "/api/v1/media/upload-intents": {
       "post": {
         "operationId": "create_media_upload_intent_api_v1_media_upload_intents_post",
@@ -19938,6 +19985,32 @@
           }
         },
         "summary": "Receive Local Upload",
+        "tags": [
+          "media"
+        ]
+      }
+    },
+    "/media/reel-limits": {
+      "get": {
+        "operationId": "get_reel_media_limits_media_reel_limits_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaReelLimitsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Reel Media Limits",
         "tags": [
           "media"
         ]

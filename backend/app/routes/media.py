@@ -28,6 +28,7 @@ from ..schemas import (
     MediaAssetResponse,
     MediaAvatarSet,
     MediaDownloadResponse,
+    MediaReelLimitsResponse,
     MediaUploadIntentCreate,
     MediaUploadIntentResponse,
 )
@@ -61,6 +62,16 @@ MAX_BYTES_BY_PURPOSE = {
 
 def max_bytes_for_purpose(purpose: str) -> int:
     return REEL_MAX_BYTES if purpose == "REEL" else MAX_BYTES_BY_PURPOSE[purpose]
+
+
+@router.get("/reel-limits", response_model=MediaReelLimitsResponse)
+async def get_reel_media_limits(
+    _current_user: User = Depends(get_current_postgres_user),
+):
+    return {
+        "max_bytes": REEL_MAX_BYTES,
+        "content_types": sorted(CONTENT_TYPES_BY_PURPOSE["REEL"]),
+    }
 
 
 def media_asset_response(asset: MediaAsset) -> dict:
