@@ -28,6 +28,10 @@ In development, seed demo accounts with `ME_YOU_ENV=development python -m app.cl
 
 `STORAGE_BACKEND=local` stores UUID-keyed objects under `STORAGE_LOCAL_DIR` for development and tests. Set `STORAGE_BACKEND=s3` with `S3_BUCKET`, `S3_REGION`, and optional `S3_ENDPOINT_URL` for AWS S3 or an S3-compatible service. Supply `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` through the process environment; production requires S3 and HTTPS. Signed URLs default to five minutes. Per-user stored media defaults to 2 GB. Run `python -m app.cli purge-orphan-uploads` to remove incomplete uploads older than `MEDIA_ORPHAN_UPLOAD_HOURS` (24 by default). Start local MinIO with `docker compose up -d minio` when the image registry is reachable.
 
+## Known limits
+
+Reels reuse posts for captions, visibility, likes, and comments. Reel uploads accept MP4 and WebM and default to a 50 MB limit controlled by `REEL_MAX_BYTES`. Reel videos are served by short-lived signed URLs. There is no transcoding, thumbnail generation, or server-side duration check yet; the client only warns when a selected clip exceeds 60 seconds. Demo seed data does not include Reels because the repository has no sample video file.
+
 ## Tests
 
 Run the backend suite from any directory with:

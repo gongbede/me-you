@@ -74,6 +74,7 @@ from .communication import (
 from .social import (
 	CommentResponse,
 	CreateComment,
+	CreateReel,
 	CreatePost,
 	FeedResponse,
 	FollowUserResponse,
@@ -172,6 +173,7 @@ __all__ = [
 	"CreateMessage",
 	"CreateProfile",
 	"CreateComment",
+	"CreateReel",
 	"CreatePost",
 	"FeedResponse",
 	"FollowUserResponse",

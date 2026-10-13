@@ -49,6 +49,9 @@ def post_response(post: Post, author_summary: dict | None = None) -> dict:
         "author": author_summary,
         "content": post.content,
         "visibility": getattr(post, "visibility", None) or "PUBLIC",
+        "post_type": getattr(post, "post_type", "POST") or "POST",
+        "media_asset_id": str(post.media_asset_id) if getattr(post, "media_asset_id", None) else None,
+        "video_url": None,
         "created_at": post.created_at,
         "updated_at": post.updated_at,
         "like_count": 0,
@@ -171,12 +174,41 @@ async def post_responses(
             "avatar_url": avatar_url,
         }
 
+    reel_assets_by_id = {}
+    reel_posts = [post for post in posts if getattr(post, "post_type", "POST") == "REEL"]
+    if reel_posts:
+        asset_ids = [post.media_asset_id for post in reel_posts if post.media_asset_id is not None]
+        reel_assets = list((await database.scalars(
+            select(MediaAsset).where(
+                MediaAsset.id.in_(asset_ids),
+                MediaAsset.owner_id.in_(author_ids),
+                MediaAsset.purpose == "REEL",
+                MediaAsset.status == "READY",
+            )
+        )).all()) if asset_ids else []
+        reel_assets_by_id = {asset.id: asset for asset in reel_assets}
+
     responses = []
     for post in posts:
         response = post_response(post, author_summaries.get(post.author_id))
         response["like_count"] = like_counts.get(post.id, 0)
         response["comment_count"] = comment_counts.get(post.id, 0)
         response["liked_by_me"] = post.id in liked_post_ids
+        asset = reel_assets_by_id.get(getattr(post, "media_asset_id", None))
+        if (
+            getattr(post, "post_type", "POST") == "REEL"
+            and asset is not None
+            and asset.owner_id == post.author_id
+        ):
+            storage = provider_or_503(providers, "storage")
+            response["video_url"] = validate_provider_url(
+                await storage.create_download_url(
+                    asset.storage_key,
+                    expires_in_seconds=STORAGE_SIGNED_URL_LIFETIME_SECONDS,
+                ),
+                "reel video",
+                request,
+            )
         responses.append(response)
     return responses
 
@@ -247,6 +279,7 @@ async def get_feed(
         select(Post)
         .join(User, User.id == Post.author_id)
         .where(
+            Post.post_type == "POST",
             or_(Post.author_id == current_user.id, Post.author_id.in_(followed_user_ids)),
             User.is_active.is_(True),
             visible_post_clause(current_user),
@@ -332,6 +365,8 @@ async def delete_post(
     post = await get_post(post_id, database, current_user)
     if post.author_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to delete this post")
+    if getattr(post, "post_type", "POST") == "REEL":
+        raise HTTPException(status_code=409, detail="Use the reel delete endpoint to remove this video")
 
     await database.delete(post)
     await database.commit()

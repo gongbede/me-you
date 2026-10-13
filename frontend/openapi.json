@@ -1141,6 +1141,37 @@
         "title": "CreateProfile",
         "type": "object"
       },
+      "CreateReel": {
+        "properties": {
+          "content": {
+            "maxLength": 10000,
+            "minLength": 1,
+            "title": "Content",
+            "type": "string"
+          },
+          "media_asset_id": {
+            "title": "Media Asset Id",
+            "type": "string"
+          },
+          "visibility": {
+            "default": "PUBLIC",
+            "enum": [
+              "PUBLIC",
+              "AUTHENTICATED",
+              "NETWORK",
+              "PRIVATE"
+            ],
+            "title": "Visibility",
+            "type": "string"
+          }
+        },
+        "required": [
+          "media_asset_id",
+          "content"
+        ],
+        "title": "CreateReel",
+        "type": "object"
+      },
       "DepartmentCreate": {
         "properties": {
           "description": {
@@ -3196,10 +3227,41 @@
             "title": "Liked By Me",
             "type": "boolean"
           },
+          "media_asset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media Asset Id"
+          },
+          "post_type": {
+            "default": "POST",
+            "enum": [
+              "POST",
+              "REEL"
+            ],
+            "title": "Post Type",
+            "type": "string"
+          },
           "updated_at": {
             "format": "date-time",
             "title": "Updated At",
             "type": "string"
+          },
+          "video_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Url"
           },
           "visibility": {
             "enum": [
@@ -12741,6 +12803,170 @@
         ]
       }
     },
+    "/api/v1/reels": {
+      "post": {
+        "operationId": "create_reel_api_v1_reels_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReel"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create a reel",
+        "tags": [
+          "reels"
+        ]
+      }
+    },
+    "/api/v1/reels/feed": {
+      "get": {
+        "operationId": "get_reels_feed_api_v1_reels_feed_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 20,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get visible reels",
+        "tags": [
+          "reels"
+        ]
+      }
+    },
+    "/api/v1/reels/{reel_id}": {
+      "delete": {
+        "operationId": "delete_reel_api_v1_reels__reel_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "reel_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Reel Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete your reel",
+        "tags": [
+          "reels"
+        ]
+      }
+    },
     "/api/v1/register": {
       "post": {
         "operationId": "register_api_v1_register_post",
@@ -21105,6 +21331,170 @@
         "summary": "Set My Profile Avatar",
         "tags": [
           "profile"
+        ]
+      }
+    },
+    "/reels": {
+      "post": {
+        "operationId": "create_reel_reels_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReel"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create a reel",
+        "tags": [
+          "reels"
+        ]
+      }
+    },
+    "/reels/feed": {
+      "get": {
+        "operationId": "get_reels_feed_reels_feed_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 20,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get visible reels",
+        "tags": [
+          "reels"
+        ]
+      }
+    },
+    "/reels/{reel_id}": {
+      "delete": {
+        "operationId": "delete_reel_reels__reel_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "reel_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Reel Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete your reel",
+        "tags": [
+          "reels"
         ]
       }
     },

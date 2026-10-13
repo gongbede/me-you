@@ -19,7 +19,14 @@ class Post(Base):
             "visibility IN ('PUBLIC', 'AUTHENTICATED', 'NETWORK', 'PRIVATE')",
             name="ck_posts_visibility",
         ),
+        CheckConstraint("post_type IN ('POST', 'REEL')", name="ck_posts_post_type"),
+        CheckConstraint(
+            "(post_type = 'POST' AND media_asset_id IS NULL) OR "
+            "(post_type = 'REEL' AND media_asset_id IS NOT NULL)",
+            name="ck_posts_reel_media_asset",
+        ),
         Index("ix_posts_author_created_at", "author_id", "created_at"),
+        Index("ix_posts_type_created_at", "post_type", "created_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -33,6 +40,12 @@ class Post(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     visibility: Mapped[str] = mapped_column(
         String(20), nullable=False, default="PUBLIC", server_default="PUBLIC"
+    )
+    post_type: Mapped[str] = mapped_column(
+        String(8), nullable=False, default="POST", server_default="POST"
+    )
+    media_asset_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("media_assets.id", ondelete="RESTRICT"), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

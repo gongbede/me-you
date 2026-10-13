@@ -34,6 +34,7 @@ from .routes.posts import router as posts_router
 from .routes.profile import router as profile_router
 from .routes.platform_admin import router as platform_admin_router
 from .routes.registration import router as registration_router
+from .routes.reels import router as reels_router
 from .routes.search import router as search_router
 from .routes.security_events import router as security_events_router
 
@@ -89,6 +90,7 @@ routers = (
     auth_google_router,
     auth_phone_router,
     posts_router,
+    reels_router,
     comments_router,
     classrooms_router,
     likes_router,

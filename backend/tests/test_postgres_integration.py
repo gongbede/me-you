@@ -2729,13 +2729,47 @@ def test_account_email_tokens_logout_and_anonymizing_deletion(postgres_database_
                     original_filename="avatar.png",
                     upload_expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
                 )
-                session.add_all([message, avatar_asset])
+                reel_key = f"users/{user_id}/{uuid.uuid4()}"
+                reel_bytes = b"\x00\x00\x00\x18ftypisom0000"
+                reel_intent = await storage.create_upload_intent(
+                    object_key=reel_key,
+                    content_type="video/mp4",
+                    max_bytes=len(reel_bytes),
+                    expires_in_seconds=60,
+                )
+                reel_token = urlparse(reel_intent.upload_url).path.rsplit("/", 1)[-1]
+
+                async def reel_chunks():
+                    yield reel_bytes
+
+                await storage.accept_upload(reel_token, "video/mp4", reel_chunks())
+                reel_asset = MediaAsset(
+                    owner_id=user_id,
+                    purpose="REEL",
+                    status="READY",
+                    storage_provider="local",
+                    storage_key=reel_key,
+                    content_type="video/mp4",
+                    byte_size=len(reel_bytes),
+                    original_filename="reel.mp4",
+                    upload_expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
+                )
+                session.add_all([message, avatar_asset, reel_asset])
+                await session.flush()
+                reel_post = Post(
+                    author_id=user_id,
+                    content="Account deletion removes this Reel too",
+                    post_type="REEL",
+                    media_asset_id=reel_asset.id,
+                )
+                session.add(reel_post)
                 await session.flush()
                 profile.avatar_asset_id = avatar_asset.id
                 await session.commit()
                 comment_id = comment.id
                 post_id = post.id
                 message_id = message.id
+                reel_post_id = reel_post.id
                 institution_id = institution.id
 
                 await delete_account(
@@ -2762,6 +2796,7 @@ def test_account_email_tokens_logout_and_anonymizing_deletion(postgres_database_
             async with session_factory() as session:
                 assert await session.get(Profile, user_id) is None
                 assert await session.get(Post, post_id) is None
+                assert await session.get(Post, reel_post_id) is None
                 assert await session.get(Comment, comment_id) is None
                 message = await session.get(Message, message_id)
                 assert message.deleted_at is not None
@@ -2774,6 +2809,7 @@ def test_account_email_tokens_logout_and_anonymizing_deletion(postgres_database_
                 )
                 assert retained_student is not None
                 assert await storage.inspect_object(avatar_key) is None
+                assert await storage.inspect_object(reel_key) is None
                 events = list(
                     (
                         await session.scalars(
@@ -3388,6 +3424,239 @@ def test_administered_institution_lookup_uses_membership_roles(postgres_database
         finally:
             app.dependency_overrides.clear()
             app.dependency_overrides.update(original_overrides)
+            await engine.dispose()
+
+    asyncio.run(verify())
+
+
+def test_reel_create_enforces_asset_rules_and_delete_removes_stored_video(postgres_database_url):
+    from fastapi import FastAPI
+    from app.models import MediaAsset
+    from app.providers import ProviderRegistry, ProviderSettings, get_provider_registry
+    from app.routes.reels import router as reels_router
+
+    class ReelStorage:
+        name = "test-reels"
+
+        def __init__(self):
+            self.deleted = []
+
+        async def create_download_url(self, object_key, *, expires_in_seconds):
+            return "https://media.example.test/signed-reel"
+
+        async def delete_object(self, object_key):
+            self.deleted.append(object_key)
+
+    async def verify():
+        engine = create_async_engine(postgres_database_url)
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        test_app = FastAPI()
+        test_app.include_router(reels_router)
+        original_overrides = app.dependency_overrides.copy()
+        selected_user = {"id": None}
+        storage = ReelStorage()
+        providers = ProviderRegistry(settings=ProviderSettings(storage="test-reels"), storage=storage)
+        try:
+            async with session_factory() as session:
+                owner = await create_user(session)
+                other = await create_user(session)
+                now = datetime.now(timezone.utc)
+                assets = {
+                    "owned": MediaAsset(
+                        owner_id=owner.id, purpose="REEL", status="READY", storage_provider="test",
+                        storage_key="reel-owned", content_type="video/mp4", byte_size=1024,
+                        original_filename="owned.mp4", upload_expires_at=now,
+                    ),
+                    "foreign": MediaAsset(
+                        owner_id=other.id, purpose="REEL", status="READY", storage_provider="test",
+                        storage_key="reel-foreign", content_type="video/mp4", byte_size=1024,
+                        original_filename="foreign.mp4", upload_expires_at=now,
+                    ),
+                    "wrong-purpose": MediaAsset(
+                        owner_id=owner.id, purpose="POST_MEDIA", status="READY", storage_provider="test",
+                        storage_key="wrong-purpose", content_type="video/mp4", byte_size=1024,
+                        original_filename="post.mp4", upload_expires_at=now,
+                    ),
+                    "pending": MediaAsset(
+                        owner_id=owner.id, purpose="REEL", status="UPLOAD_PENDING", storage_provider="test",
+                        storage_key="reel-pending", content_type="video/mp4", byte_size=1024,
+                        original_filename="pending.mp4", upload_expires_at=now + timedelta(minutes=5),
+                    ),
+                    "too-large": MediaAsset(
+                        owner_id=owner.id, purpose="REEL", status="READY", storage_provider="test",
+                        storage_key="reel-too-large", content_type="video/mp4", byte_size=reel_routes_limit() + 1,
+                        original_filename="large.mp4", upload_expires_at=now,
+                    ),
+                }
+                session.add_all(assets.values())
+                await session.commit()
+                selected_user["id"] = owner.id
+                asset_ids = {name: str(asset.id) for name, asset in assets.items()}
+
+            async def database_dependency():
+                async with session_factory() as session:
+                    yield session
+
+            async def user_dependency():
+                async with session_factory() as session:
+                    return await session.get(User, selected_user["id"])
+
+            test_app.dependency_overrides[get_postgres_session] = database_dependency
+            test_app.dependency_overrides[get_current_postgres_user] = user_dependency
+            test_app.dependency_overrides[get_provider_registry] = lambda: providers
+            async with AsyncClient(transport=ASGITransport(app=test_app), base_url="http://test") as client:
+                path = "/reels"
+                valid = await client.post(path, json={"media_asset_id": asset_ids["owned"], "content": "A short clip"})
+                assert valid.status_code == 201
+                reel = valid.json()
+                assert reel["post_type"] == "REEL"
+                assert reel["media_asset_id"] == asset_ids["owned"]
+                assert reel["video_url"] == "https://media.example.test/signed-reel"
+                assert "reel-owned" not in valid.text
+
+                foreign = await client.post(path, json={"media_asset_id": asset_ids["foreign"], "content": "Clip"})
+                wrong_purpose = await client.post(path, json={"media_asset_id": asset_ids["wrong-purpose"], "content": "Clip"})
+                pending = await client.post(path, json={"media_asset_id": asset_ids["pending"], "content": "Clip"})
+                oversized = await client.post(path, json={"media_asset_id": asset_ids["too-large"], "content": "Clip"})
+                assert foreign.status_code == 404
+                assert wrong_purpose.status_code == 422
+                assert pending.status_code == 409
+                assert oversized.status_code == 413
+
+                selected_user["id"] = assets["foreign"].owner_id
+                denied_delete = await client.delete(f"/reels/{reel['id']}")
+                assert denied_delete.status_code == 404
+                selected_user["id"] = assets["owned"].owner_id
+                deleted = await client.delete(f"/reels/{reel['id']}")
+                assert deleted.status_code == 204
+                assert storage.deleted == ["reel-owned"]
+        finally:
+            test_app.dependency_overrides.clear()
+            test_app.dependency_overrides.update(original_overrides)
+            await engine.dispose()
+
+    asyncio.run(verify())
+
+
+def reel_routes_limit():
+    from app.routes.reels import REEL_MAX_BYTES
+
+    return REEL_MAX_BYTES
+
+
+def test_reel_feed_privacy_cursor_pagination_and_query_count_is_bounded(postgres_database_url):
+    from fastapi import FastAPI
+    from app.models import Follow, MediaAsset, Post
+    from app.providers import ProviderRegistry, ProviderSettings, get_provider_registry
+    from app.routes.reels import router as reels_router
+
+    class ReelStorage:
+        async def create_download_url(self, object_key, *, expires_in_seconds):
+            return "https://media.example.test/signed"
+
+    async def verify():
+        engine = create_async_engine(postgres_database_url)
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        test_app = FastAPI()
+        test_app.include_router(reels_router)
+        original_overrides = app.dependency_overrides.copy()
+        selected_user = {"id": None}
+        providers = ProviderRegistry(settings=ProviderSettings(storage="test-reels"), storage=ReelStorage())
+        statements = []
+
+        def count_statement(_connection, _cursor, statement, _parameters, _context, _executemany):
+            statements.append(statement)
+
+        event.listen(engine.sync_engine, "before_cursor_execute", count_statement)
+        try:
+            async with session_factory() as session:
+                viewer = await create_user(session)
+                followed_author = await create_user(session)
+                unrelated_author = await create_user(session)
+                session.add(Follow(follower_id=viewer.id, following_id=followed_author.id))
+                public_reels = []
+                for index in range(22):
+                    asset = MediaAsset(
+                        owner_id=followed_author.id, purpose="REEL", status="READY",
+                        storage_provider="test", storage_key=f"feed-reel-{index}",
+                        content_type="video/mp4", byte_size=2048, original_filename=f"{index}.mp4",
+                        upload_expires_at=datetime.now(timezone.utc),
+                    )
+                    session.add(asset)
+                    await session.flush()
+                    reel = Post(
+                        author_id=followed_author.id, content=f"Visible reel {index}",
+                        post_type="REEL", media_asset_id=asset.id, visibility="PUBLIC",
+                    )
+                    public_reels.append(reel)
+                    session.add(reel)
+                hidden_asset = MediaAsset(
+                    owner_id=followed_author.id, purpose="REEL", status="READY",
+                    storage_provider="test", storage_key="private-reel", content_type="video/webm",
+                    byte_size=1024, original_filename="private.webm", upload_expires_at=datetime.now(timezone.utc),
+                )
+                session.add(hidden_asset)
+                await session.flush()
+                hidden_reel = Post(
+                    author_id=followed_author.id, content="Private reel", post_type="REEL",
+                    media_asset_id=hidden_asset.id, visibility="PRIVATE",
+                )
+                outsider_asset = MediaAsset(
+                    owner_id=unrelated_author.id, purpose="REEL", status="READY",
+                    storage_provider="test", storage_key="outsider-reel", content_type="video/mp4",
+                    byte_size=1024, original_filename="outsider.mp4", upload_expires_at=datetime.now(timezone.utc),
+                )
+                session.add(outsider_asset)
+                await session.flush()
+                outsider_reel = Post(
+                    author_id=unrelated_author.id, content="Unfollowed reel", post_type="REEL",
+                    media_asset_id=outsider_asset.id, visibility="PUBLIC",
+                )
+                regular_post = Post(author_id=followed_author.id, content="Not a reel", post_type="POST")
+                session.add_all([hidden_reel, outsider_reel, regular_post])
+                await session.commit()
+                selected_user["id"] = viewer.id
+
+            async def database_dependency():
+                async with session_factory() as session:
+                    yield session
+
+            async def user_dependency():
+                async with session_factory() as session:
+                    return await session.get(User, selected_user["id"])
+
+            test_app.dependency_overrides[get_postgres_session] = database_dependency
+            test_app.dependency_overrides[get_current_postgres_user] = user_dependency
+            test_app.dependency_overrides[get_provider_registry] = lambda: providers
+            async with AsyncClient(transport=ASGITransport(app=test_app), base_url="http://test") as client:
+                first = await client.get("/reels/feed?limit=2")
+                assert first.status_code == 200
+                first_payload = first.json()
+                assert first_payload["has_more"] is True
+                assert len(first_payload["items"]) == 2
+                assert all(item["post_type"] == "REEL" and item["video_url"] for item in first_payload["items"])
+                second = await client.get(f"/reels/feed?limit=2&cursor={first_payload['next_cursor']}")
+                assert second.status_code == 200
+                assert not {item["id"] for item in first_payload["items"]} & {item["id"] for item in second.json()["items"]}
+                all_visible = await client.get("/reels/feed?limit=20")
+                all_visible_text = str(all_visible.json())
+                assert "Private reel" not in all_visible_text
+                assert "Unfollowed reel" not in all_visible_text
+                assert "Not a reel" not in all_visible_text
+
+                statements.clear()
+                one_item = await client.get("/reels/feed?limit=1")
+                count_one = len(statements)
+                statements.clear()
+                twenty_items = await client.get("/reels/feed?limit=20")
+                count_twenty = len(statements)
+                assert len(one_item.json()["items"]) == 1
+                assert len(twenty_items.json()["items"]) == 20
+                assert count_one == count_twenty
+        finally:
+            event.remove(engine.sync_engine, "before_cursor_execute", count_statement)
+            test_app.dependency_overrides.clear()
+            test_app.dependency_overrides.update(original_overrides)
             await engine.dispose()
 
     asyncio.run(verify())

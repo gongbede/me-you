@@ -223,6 +223,7 @@ class MigrationFoundationTests(unittest.TestCase):
             ("0020_exercise_publication.py", "0020_exercise_publication", "0019_phone_login_codes"),
             ("0021_live_classrooms.py", "0021_live_classrooms", "0020_exercise_publication"),
             ("0022_institution_discovery.py", "0022_institution_discovery", "0021_live_classrooms"),
+            ("0023_reels.py", "0023_reels", "0022_institution_discovery"),
         )
         for filename, revision, down_revision in revisions:
             migration = load_module(

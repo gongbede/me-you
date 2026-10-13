@@ -23,6 +23,7 @@ from app.routes.media import (
     complete_media_upload,
     create_media_download_url,
     create_media_upload_intent,
+    delete_media_asset,
     router,
 )
 from app.schemas import MediaUploadIntentCreate
@@ -70,6 +71,7 @@ class FakeStorage:
         self.object_key = None
         self.expected_size = None
         self.detected_content_type = "image/png"
+        self.content_type = "image/png"
 
     async def create_upload_intent(self, *, object_key, content_type, max_bytes, expires_in_seconds):
         self.object_key = object_key
@@ -83,7 +85,7 @@ class FakeStorage:
     async def inspect_object(self, object_key):
         return StoredObjectMetadata(
             object_key=object_key,
-            content_type="image/png",
+            content_type=self.content_type,
             byte_size=self.expected_size or 512,
             checksum_sha256="a" * 64,
             detected_content_type=self.detected_content_type,
@@ -199,6 +201,53 @@ class MediaTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(error.exception.status_code, 422)
         self.assertEqual(asset.status, "FAILED")
 
+    async def test_reel_upload_intent_obeys_configured_limit(self):
+        from unittest.mock import patch
+
+        request = MediaUploadIntentCreate(
+            purpose="REEL",
+            content_type="video/mp4",
+            byte_size=101,
+            original_filename="clip.mp4",
+        )
+        with patch("app.routes.media.REEL_MAX_BYTES", 100):
+            with self.assertRaises(HTTPException) as error:
+                await create_media_upload_intent(
+                    request, self.user, MediaSession(), self.providers
+                )
+        self.assertEqual(error.exception.status_code, 413)
+        self.assertIn("size limit", error.exception.detail)
+
+    async def test_reel_completion_rejects_configured_oversize_and_spoofed_magic(self):
+        from unittest.mock import patch
+
+        def pending_asset(byte_size: int) -> MediaAsset:
+            return MediaAsset(
+                id=uuid.uuid4(), owner_id=self.user.id, purpose="REEL",
+                status="UPLOAD_PENDING", storage_provider="fake", storage_key="reel-object",
+                content_type="video/mp4", byte_size=byte_size, original_filename="clip.mp4",
+                upload_expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
+            )
+
+        oversized = pending_asset(101)
+        self.storage.content_type = "video/mp4"
+        self.storage.detected_content_type = "video/mp4"
+        self.storage.expected_size = 101
+        with patch("app.routes.media.REEL_MAX_BYTES", 100):
+            with self.assertRaises(HTTPException) as size_error:
+                await complete_media_upload(oversized.id, self.user, MediaSession([oversized]), self.providers)
+        self.assertEqual(size_error.exception.status_code, 422)
+        self.assertEqual(oversized.status, "FAILED")
+
+        spoofed = pending_asset(80)
+        self.storage.expected_size = 80
+        self.storage.detected_content_type = "video/webm"
+        with patch("app.routes.media.REEL_MAX_BYTES", 100):
+            with self.assertRaises(HTTPException) as magic_error:
+                await complete_media_upload(spoofed.id, self.user, MediaSession([spoofed]), self.providers)
+        self.assertEqual(magic_error.exception.status_code, 422)
+        self.assertEqual(spoofed.status, "FAILED")
+
     async def test_cross_owner_lookup_is_hidden_and_ready_asset_download_is_signed(self):
         asset = MediaAsset(
             id=uuid.uuid4(), owner_id=self.user.id, purpose="PROFILE_IMAGE",
@@ -215,6 +264,17 @@ class MediaTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(response["download_url"], "https://storage.example.test/download")
         self.assertEqual(response["expires_in_seconds"], 300)
+
+    async def test_reel_asset_cannot_be_deleted_while_attached(self):
+        asset = MediaAsset(
+            id=uuid.uuid4(), owner_id=self.user.id, purpose="REEL", status="READY",
+            storage_provider="fake", storage_key="attached-reel", content_type="video/mp4",
+            byte_size=512, original_filename="clip.mp4",
+            upload_expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
+        )
+        with self.assertRaises(HTTPException) as error:
+            await delete_media_asset(asset.id, self.user, MediaSession([asset, uuid.uuid4()]), self.providers)
+        self.assertEqual(error.exception.status_code, 409)
 
     async def test_media_endpoint_requires_authentication(self):
         app = FastAPI()

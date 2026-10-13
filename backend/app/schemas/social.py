@@ -30,6 +30,20 @@ class CreatePost(BaseModel):
         return value
 
 
+class CreateReel(BaseModel):
+    media_asset_id: str
+    content: str = Field(min_length=1, max_length=10000)
+    visibility: Literal["PUBLIC", "AUTHENTICATED", "NETWORK", "PRIVATE"] = "PUBLIC"
+
+    @field_validator("content")
+    @classmethod
+    def content_must_not_be_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("content must not be blank")
+        return value
+
+
 class UpdatePost(CreatePost):
     pass
 
@@ -42,6 +56,9 @@ class PostResponse(BaseModel):
     author: PostAuthorSummary
     content: str
     visibility: Literal["PUBLIC", "AUTHENTICATED", "NETWORK", "PRIVATE"]
+    post_type: Literal["POST", "REEL"] = "POST"
+    media_asset_id: str | None = None
+    video_url: str | None = None
     created_at: datetime
     updated_at: datetime
     like_count: int

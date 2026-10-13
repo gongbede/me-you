@@ -11,11 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..config import (
     APP_ENV,
     MEDIA_USER_QUOTA_BYTES,
+    REEL_MAX_BYTES,
     S3_ENDPOINT_URL,
     STORAGE_SIGNED_URL_LIFETIME_SECONDS,
 )
 from ..database import get_postgres_session
-from ..models import InstitutionMembership, MediaAsset, Profile, User
+from ..models import InstitutionMembership, MediaAsset, Post, Profile, User
 from ..privacy import can_view_profile
 from ..providers import ProviderRegistry, get_provider_registry, provider_or_503
 from ..providers.storage import (
@@ -53,9 +54,13 @@ MAX_BYTES_BY_PURPOSE = {
     "PROFILE_IMAGE": 5_000_000,
     "POST_MEDIA": 250_000_000,
     "COURSE_MEDIA": 500_000_000,
-    "REEL": 1_000_000_000,
+    "REEL": REEL_MAX_BYTES,
     "MESSAGE_ATTACHMENT": 50_000_000,
 }
+
+
+def max_bytes_for_purpose(purpose: str) -> int:
+    return REEL_MAX_BYTES if purpose == "REEL" else MAX_BYTES_BY_PURPOSE[purpose]
 
 
 def media_asset_response(asset: MediaAsset) -> dict:
@@ -121,7 +126,7 @@ async def create_media_upload_intent(
 ):
     if data.content_type not in CONTENT_TYPES_BY_PURPOSE[data.purpose]:
         raise HTTPException(status_code=422, detail="Content type is not allowed for this media purpose")
-    max_bytes = MAX_BYTES_BY_PURPOSE[data.purpose]
+    max_bytes = max_bytes_for_purpose(data.purpose)
     if data.byte_size > max_bytes:
         raise HTTPException(status_code=413, detail="File exceeds the size limit for this media purpose")
     if data.institution_id is not None and data.purpose != "COURSE_MEDIA":
@@ -224,7 +229,7 @@ async def complete_media_upload(
         metadata.object_key != asset.storage_key
         or metadata.content_type != asset.content_type
         or metadata.byte_size != asset.byte_size
-        or metadata.byte_size > MAX_BYTES_BY_PURPOSE[asset.purpose]
+        or metadata.byte_size > max_bytes_for_purpose(asset.purpose)
         or metadata.detected_content_type != asset.content_type
     ):
         await storage.delete_object(asset.storage_key)
@@ -378,6 +383,10 @@ async def delete_media_asset(
     providers: ProviderRegistry = Depends(get_provider_registry),
 ):
     asset = await owned_asset_or_404(asset_id, current_user.id, database)
+    if await database.scalar(
+        select(Post.id).where(Post.media_asset_id == asset.id)
+    ) is not None:
+        raise HTTPException(status_code=409, detail="Media asset is attached to a reel")
     storage = provider_or_503(providers, "storage")
     await storage.delete_object(asset.storage_key)
     await database.delete(asset)
