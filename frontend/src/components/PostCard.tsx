@@ -42,7 +42,7 @@ export function PostCard({
   const isLiked = post.liked_by_me
 
   return (
-    <article className="post-card" aria-label={`Post by ${post.author.username}`}>
+    <article id={`post-${post.id}`} className="post-card" aria-label={`Post by ${post.author.username}`}>
       <div className="post-card__header">
         <UserIdentity
           userId={post.author_id}

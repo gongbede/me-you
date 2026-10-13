@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Logo } from './Logo'
 import { useAuth } from '../hooks/useAuth'
 import { getTeachingCourses, listAdministeredInstitutions } from '../api/education'
+import { NotificationBell } from './NotificationBell'
 
 const baseTabs = [
   { to: '/', label: 'Home', icon: House, end: true },
@@ -67,7 +68,7 @@ export function AppShell() {
         <header className="topbar">
           <div className="topbar__mobile-brand"><Logo variant="mark" size={36} /></div>
           <span className="topbar__greeting">A brighter day to learn something.</span>
-          <span className="topbar__spark" aria-hidden="true">✦</span>
+          <div className="topbar__actions"><span className="topbar__spark" aria-hidden="true">✦</span><NotificationBell /></div>
         </header>
         <main className="app-main"><Outlet /></main>
       </div>
