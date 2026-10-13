@@ -66,6 +66,10 @@ export function getUserFollowers(userId: string): Promise<ApiSchemas['FollowUser
   return getAllCursorItems(`/api/v1/users/${userId}/followers`)
 }
 
+export function getUserFollowing(userId: string): Promise<ApiSchemas['FollowUserResponse'][]> {
+  return getAllCursorItems(`/api/v1/users/${userId}/following`)
+}
+
 async function getAllCursorItems<TItem>(path: string): Promise<TItem[]> {
   const items: TItem[] = []
   let cursor: string | null = null

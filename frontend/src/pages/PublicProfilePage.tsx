@@ -1,14 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useParams } from 'react-router-dom'
-import { UserRound, UserRoundPlus, UserRoundMinus } from 'lucide-react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { MessageCircle, UserRound, UserRoundPlus, UserRoundMinus } from 'lucide-react'
 import { getFriendlyErrorMessage } from '../api/client'
 import { followUser, getPublicProfile, getUserFollowers, unfollowUser } from '../api/social'
 import { useAuth } from '../hooks/useAuth'
+import { createDirectConversation } from '../api/messaging'
 
 export function PublicProfilePage() {
   const { userId = '' } = useParams()
   const { user: currentUser } = useAuth()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const profileQuery = useQuery({
     queryKey: ['profile', 'public', userId],
     queryFn: () => getPublicProfile(userId),
@@ -26,6 +28,13 @@ export function PublicProfilePage() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['profile', 'followers', userId] })
+    },
+  })
+  const messageMutation = useMutation({
+    mutationFn: () => createDirectConversation(userId),
+    onSuccess: async (conversation) => {
+      await queryClient.invalidateQueries({ queryKey: ['messages', 'conversations'] })
+      navigate(`/messages/${conversation.id}`)
     },
   })
 
@@ -46,6 +55,7 @@ export function PublicProfilePage() {
     <div className="page-stack profile-page">
       <section className="page-heading-row">
         <div><span className="eyebrow">COMMUNITY</span><h1>{profile.display_name}</h1></div>
+        {!isSelf && currentUser && <button className="button button--outline" type="button" disabled={messageMutation.isPending} onClick={() => messageMutation.mutate()}><MessageCircle size={17} aria-hidden="true" />{messageMutation.isPending ? 'Opening…' : 'Message'}</button>}
         {!isSelf && currentUser && !followersQuery.isPending && !followersQuery.isError && (
           <button
             className={`button ${isFollowing ? 'button--outline' : 'button--primary'}`}
@@ -60,6 +70,7 @@ export function PublicProfilePage() {
       </section>
       {followersQuery.isError && <p className="form-alert" role="alert">{getFriendlyErrorMessage(followersQuery.error)}</p>}
       {followMutation.isError && <p className="form-alert" role="alert">{getFriendlyErrorMessage(followMutation.error)}</p>}
+      {messageMutation.isError && <p className="form-alert" role="alert">{getFriendlyErrorMessage(messageMutation.error)}</p>}
       <section className="profile-card" aria-label={`${profile.display_name}'s profile`}>
         <div className="profile-card__identity">
           <div className="profile-avatar">
