@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query'
 import { ArrowDown, Heart, LoaderCircle, MessageCircle, Pause, Play, Plus, Trash2, Volume2, VolumeX, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
@@ -12,7 +12,9 @@ import { deleteReel, getReelLimits, getReelsPage, uploadReel, validateReelFile, 
 const reelFeedKey = ['reels', 'feed'] as const
 
 function reducedMotionPreferred() {
-  return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  return typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }
 
 function updateReelLike(
@@ -75,7 +77,7 @@ function ReelUploadForm({
     return () => URL.revokeObjectURL(url)
   }, [file])
 
-  function selectFile(event: React.ChangeEvent<HTMLInputElement>) {
+  function selectFile(event: ChangeEvent<HTMLInputElement>) {
     const nextFile = event.currentTarget.files?.[0] ?? null
     setFileError(nextFile ? validateReelFile(nextFile, limits) ?? '' : '')
     setFile(nextFile)
@@ -227,9 +229,15 @@ export function ReelsViewer({ embedded = false }: { embedded?: boolean }) {
   const [reducedMotion, setReducedMotion] = useState(reducedMotionPreferred)
   const viewerRef = useRef<HTMLDivElement>(null)
   const loadMoreRef = useRef<HTMLDivElement>(null)
+  const [viewerElement, setViewerElement] = useState<HTMLDivElement | null>(null)
   const reels: Reel[] = reelsQuery.data?.pages.flatMap((page) => page.items) ?? []
+  const setViewerRef = useCallback((element: HTMLDivElement | null) => {
+    viewerRef.current = element
+    setViewerElement(element)
+  }, [])
 
   useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return
     const media = window.matchMedia('(prefers-reduced-motion: reduce)')
     const update = () => setReducedMotion(media.matches)
     media.addEventListener?.('change', update)
@@ -274,8 +282,8 @@ export function ReelsViewer({ embedded = false }: { embedded?: boolean }) {
         {limitsQuery.isPending ? <p className="learning-loading" role="status">Loading video limits…</p> : limitsQuery.isError ? <div className="inline-error" role="alert"><p>{getFriendlyErrorMessage(limitsQuery.error)}</p><button className="button button--outline" type="button" onClick={() => void limitsQuery.refetch()}>Retry</button></div> : <ReelUploadForm limits={limitsQuery.data} onCreated={createdReel} />}
       </section>}
       {reelsQuery.isPending ? <div className="page-state" role="status">Loading Reels…</div> : reelsQuery.isError && !reelsQuery.data ? <div className="page-state page-state--error" role="alert"><h2>Reels unavailable</h2><p>{getFriendlyErrorMessage(reelsQuery.error)}</p><button className="button button--outline" type="button" onClick={() => void reelsQuery.refetch()}>Retry</button></div> : reels.length === 0 ? <div className="reels-empty"><MessageCircle size={25} aria-hidden="true" /><h2>No Reels yet</h2><p>Follow people who share video, or publish your first Reel.</p></div> : <>
-        <div className="reels-viewer" ref={viewerRef} aria-label="Reel viewer">
-          {reels.map((reel) => <ReelSlide key={reel.id} reel={reel} root={viewerRef.current} active={activeId === reel.id} reducedMotion={reducedMotion} currentUserId={user?.id ?? ''} onVisibility={handleVisibility} onDeleted={removeReel} />)}
+        <div className="reels-viewer" ref={setViewerRef} aria-label="Reel viewer" tabIndex={0}>
+          {reels.map((reel) => <ReelSlide key={reel.id} reel={reel} root={viewerElement} active={activeId === reel.id} reducedMotion={reducedMotion} currentUserId={user?.id ?? ''} onVisibility={handleVisibility} onDeleted={removeReel} />)}
           <div ref={loadMoreRef} className="reels-load-sentinel" aria-hidden="true" />
         </div>
         {reelsQuery.hasNextPage && <button className="button button--outline reels-load-more" type="button" disabled={reelsQuery.isFetchingNextPage} onClick={() => void reelsQuery.fetchNextPage()}>{reelsQuery.isFetchingNextPage && <LoaderCircle size={16} className="spin" aria-hidden="true" />}{reelsQuery.isFetchingNextPage ? 'Loading…' : 'Load more'}</button>}
