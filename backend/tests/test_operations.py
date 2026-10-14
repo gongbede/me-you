@@ -12,9 +12,15 @@ class OperationsTests(unittest.TestCase):
     def test_environment_validation_accepts_only_supported_values(self):
         for environment in ("development", "test", "production"):
             self.assertEqual(validate_environment(environment), environment)
-        for environment in ("", "Development", "prod", "production ", "typo"):
+        for environment in (None, "", "Development", "prod", "production ", "typo"):
             with self.subTest(environment=environment), self.assertRaisesRegex(ValueError, "ME_YOU_ENV"):
                 validate_environment(environment)
+
+    def test_production_jwt_secret_requires_explicit_configuration(self):
+        with patch.dict("os.environ", {}, clear=False):
+            with patch("app.config.os.getenv", side_effect=lambda key, default=None: None if key == "ME_YOU_JWT_SECRET_KEY" else default):
+                with self.assertRaisesRegex(ValueError, "ME_YOU_JWT_SECRET_KEY"):
+                    validate_jwt_secret(environment="production")
 
     def test_production_jwt_secret_rejects_short_repetitive_and_example_values(self):
         for secret in (

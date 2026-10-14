@@ -46,11 +46,19 @@ class AccountLifecycleResponse(BaseModel):
 
 class LoginResponse(BaseModel):
     message: str
-    access_token: str
-    token_type: str
+    access_token: str | None = None
+    token_type: str | None = None
     id: str
     username: str
     email: str
+    csrf_token: str | None = None
+
+
+class AuthSessionResponse(BaseModel):
+    id: str
+    username: str
+    email: str
+    csrf_token: str
 
 
 class UserResponse(BaseModel):

@@ -1,12 +1,19 @@
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ProtectedRoute } from './ProtectedRoute'
 import { AuthProvider } from '../hooks/useAuth'
 
 describe('ProtectedRoute', () => {
   beforeEach(() => {
-    window.sessionStorage.clear()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({ detail: 'Not authenticated' }),
+      { status: 401, headers: { 'Content-Type': 'application/json' } },
+    )))
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
   })
 
   it('redirects an anonymous visitor to login', async () => {
@@ -25,5 +32,6 @@ describe('ProtectedRoute', () => {
 
     expect(await screen.findByText('Login destination')).toBeInTheDocument()
     expect(screen.queryByText('Private content')).not.toBeInTheDocument()
+    expect(fetch).toHaveBeenCalledWith('/api/v1/account/session', expect.objectContaining({ credentials: 'include' }))
   })
 })

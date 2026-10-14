@@ -10,14 +10,16 @@ DEVELOPMENT_DEFAULT_SECRET = "development-only-me-you-jwt-secret"
 ALLOWED_ENVIRONMENTS = {"development", "test", "production"}
 
 
-def validate_environment(environment: str) -> str:
+def validate_environment(environment: str | None) -> str:
+    if not environment:
+        raise ValueError("ME_YOU_ENV must be explicitly configured")
     if environment not in ALLOWED_ENVIRONMENTS:
         allowed = ", ".join(sorted(ALLOWED_ENVIRONMENTS))
         raise ValueError(f"ME_YOU_ENV must be one of: {allowed}")
     return environment
 
 
-APP_ENV = validate_environment(os.getenv("ME_YOU_ENV", "development"))
+APP_ENV = validate_environment(os.getenv("ME_YOU_ENV"))
 CORS_ORIGINS = tuple(
     origin.strip()
     for origin in os.getenv("ME_YOU_CORS_ORIGINS", "").split(",")
@@ -102,6 +104,12 @@ POSTGRESQL_DATABASE_URL = os.getenv("ME_YOU_DATABASE_URL")
 JWT_SECRET_KEY = validate_jwt_secret()
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
+AUTH_SESSION_COOKIE_NAME = "me_you_session"
+AUTH_SESSION_COOKIE_PATH = "/api/v1"
+AUTH_SESSION_COOKIE_SAMESITE = "lax"
+AUTH_SESSION_COOKIE_MAX_AGE = ACCESS_TOKEN_EXPIRE_MINUTES * 60
+AUTH_SESSION_MODE_HEADER = "X-Me-You-Session"
+AUTH_CSRF_HEADER = "X-CSRF-Token"
 TRUSTED_PROXY_COUNT = max(0, int(os.getenv("TRUSTED_PROXY_COUNT", "0")))
 LOGIN_PAIR_FAILURE_LIMIT = int(os.getenv("LOGIN_PAIR_FAILURE_LIMIT", "5"))
 LOGIN_PAIR_WINDOW_SECONDS = int(os.getenv("LOGIN_PAIR_WINDOW_SECONDS", "900"))

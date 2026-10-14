@@ -1,15 +1,28 @@
 from contextlib import asynccontextmanager
+import hmac
 import json
 import logging
 import uuid
 from datetime import datetime, timezone
+from urllib.parse import urlsplit, urlunsplit
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .config import APP_ENV, APP_NAME, CORS_ORIGINS, RATE_LIMITS, RATE_LIMIT_ENABLED, VERSION, validate_production_config
+from .config import (
+    APP_ENV,
+    APP_NAME,
+    AUTH_CSRF_HEADER,
+    AUTH_SESSION_COOKIE_NAME,
+    AUTH_SESSION_MODE_HEADER,
+    CORS_ORIGINS,
+    RATE_LIMITS,
+    RATE_LIMIT_ENABLED,
+    VERSION,
+    validate_production_config,
+)
 from .database import init_mongodb
 from .rate_limit import client_ip, get_rate_limit_store
 from .routes.general import router as general_router
@@ -37,6 +50,7 @@ from .routes.registration import router as registration_router
 from .routes.reels import router as reels_router
 from .routes.search import router as search_router
 from .routes.security_events import router as security_events_router
+from .security import clear_auth_cookie, decode_access_token
 
 
 @asynccontextmanager
@@ -70,14 +84,42 @@ if not root_logger.handlers:
     root_logger.addHandler(log_handler)
 logger = logging.getLogger("me_you.api")
 
+
+def request_origin(request: Request) -> str | None:
+    origin = request.headers.get("origin")
+    if origin:
+        parsed = urlsplit(origin)
+        if parsed.scheme in {"http", "https"} and parsed.netloc and not parsed.path:
+            return origin
+        return None
+    referer = request.headers.get("referer")
+    if not referer:
+        return None
+    parsed = urlsplit(referer)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return None
+    return urlunsplit((parsed.scheme, parsed.netloc, "", "", ""))
+
+
+def origin_is_allowed(request: Request) -> bool:
+    origin = request_origin(request)
+    return origin is not None and origin in CORS_ORIGINS
+
+
+def csrf_rejection(request_id: str, detail: str, *, status_code: int = 403) -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code,
+        content={"detail": detail, "code": "csrf_rejected", "request_id": request_id},
+    )
+
 if CORS_ORIGINS:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(CORS_ORIGINS),
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
-        expose_headers=["X-Request-ID", "X-Next-Cursor"],
+        allow_headers=["Authorization", "Content-Type", "X-Request-ID", AUTH_CSRF_HEADER, AUTH_SESSION_MODE_HEADER],
+        expose_headers=["X-Request-ID", "X-Next-Cursor", "X-Session-Invalidated"],
     )
 
 routers = (
@@ -150,9 +192,44 @@ async def add_request_and_security_headers(request: Request, call_next):
     request_id = str(uuid.uuid4())
     request.state.request_id = request_id
     response = None
+    cookie_token = request.cookies.get(AUTH_SESSION_COOKIE_NAME)
     try:
-        if RATE_LIMIT_ENABLED:
-            path = request.url.path.removeprefix("/api/v1") or "/"
+        path = request.url.path.removeprefix("/api/v1") or "/"
+        method = request.method.upper()
+        unsafe_method = method not in {"GET", "HEAD", "OPTIONS"}
+        cookie_session_login = (
+            method == "POST"
+            and path in {"/login", "/auth/google", "/auth/phone/verify"}
+            and request.headers.get(AUTH_SESSION_MODE_HEADER, "").strip().lower() == "cookie"
+        )
+
+        if cookie_session_login:
+            if not origin_is_allowed(request):
+                response = csrf_rejection(request_id, "Untrusted request origin")
+        elif cookie_token and unsafe_method:
+            try:
+                claims = decode_access_token(cookie_token)
+            except HTTPException as error:
+                response = csrf_rejection(
+                    request_id,
+                    "Invalid or expired session",
+                    status_code=401,
+                )
+                if error.headers:
+                    response.headers.update(error.headers)
+            else:
+                expected_csrf = claims.get("csrf")
+                supplied_csrf = request.headers.get(AUTH_CSRF_HEADER)
+                if not origin_is_allowed(request):
+                    response = csrf_rejection(request_id, "Untrusted request origin")
+                elif (
+                    not isinstance(expected_csrf, str)
+                    or not isinstance(supplied_csrf, str)
+                    or not hmac.compare_digest(expected_csrf, supplied_csrf)
+                ):
+                    response = csrf_rejection(request_id, "Invalid CSRF token")
+
+        if response is None and RATE_LIMIT_ENABLED:
             if path not in {"/health/live", "/health/ready", "/login"}:
                 if path == "/register":
                     scope, limit_name = "registration:ip", "registration_ip"
@@ -195,6 +272,8 @@ async def add_request_and_security_headers(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
+    if response.status_code == 401 and cookie_token:
+        clear_auth_cookie(response)
     return response
 
 

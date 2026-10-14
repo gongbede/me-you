@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,7 +8,7 @@ from ..models import User
 from ..rate_limit import RateLimitStore, client_ip, get_rate_limit_store, hash_rate_limit_key
 from ..schemas import LoginRequest, LoginResponse
 from ..security_audit import record_security_event
-from ..security import auth_token_response, password_hash
+from ..security import auth_token_response, cookie_session_requested, password_hash
 
 
 router = APIRouter()
@@ -20,12 +20,13 @@ def login_subject_hash(email: str) -> str:
     return hash_rate_limit_key(email.strip().casefold())
 
 
-@router.post("/login", response_model=LoginResponse)
+@router.post("/login", response_model=LoginResponse, response_model_exclude_none=True)
 async def login(
     login_data: LoginRequest,
     database: AsyncSession = Depends(get_postgres_session),
     limiter: RateLimitStore | None = Depends(get_rate_limit_store),
     request: Request = None,
+    response: Response = None,
 ):
     ip_address = client_ip(request) if request is not None else "unknown"
     pair_key = f"{login_data.email.strip().casefold()}\0{ip_address}"
@@ -123,7 +124,11 @@ async def login(
         )
         await database.commit()
 
-    return auth_token_response(user)
+    return auth_token_response(
+        user,
+        response,
+        cookie_session=cookie_session_requested(request),
+    )
 
 
 def login_throttled(retry_after: int) -> HTTPException:

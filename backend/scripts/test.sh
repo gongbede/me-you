@@ -15,5 +15,6 @@ if [[ -z "$python_bin" ]]; then
 fi
 
 export PYTHONPATH="$backend_dir${PYTHONPATH:+:$PYTHONPATH}"
+export ME_YOU_ENV="${ME_YOU_ENV:-test}"
 cd "$backend_dir"
 exec "$python_bin" -m pytest "$@"

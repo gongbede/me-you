@@ -3,7 +3,9 @@ import type { components, paths } from './schema'
 export type ApiPath = keyof paths & string
 export type ApiSchemas = components['schemas']
 
-const TOKEN_KEY = 'me-you.access-token'
+const CSRF_HEADER = 'X-CSRF-Token'
+const SESSION_MODE_HEADER = 'X-Me-You-Session'
+let csrfToken: string | null = null
 
 export class ApiError extends Error {
   readonly status: number
@@ -17,18 +19,12 @@ export class ApiError extends Error {
   }
 }
 
-export function getAccessToken(): string | null {
-  return typeof window === 'undefined' ? null : window.sessionStorage.getItem(TOKEN_KEY)
+export function setCsrfToken(token: string): void {
+  csrfToken = token
 }
 
-export function storeAccessToken(token: string): void {
-  window.sessionStorage.setItem(TOKEN_KEY, token)
-}
-
-export function clearAccessToken(): void {
-  if (typeof window !== 'undefined') {
-    window.sessionStorage.removeItem(TOKEN_KEY)
-  }
+export function clearCsrfToken(): void {
+  csrfToken = null
 }
 
 function detailMessage(detail: unknown): string | null {
@@ -63,6 +59,7 @@ export interface ApiRequestOptions extends Omit<RequestInit, 'body' | 'method'> 
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   body?: unknown
   auth?: boolean
+  sessionMode?: boolean
 }
 
 export interface ApiCursorPage<TResponse> {
@@ -74,23 +71,34 @@ async function sendRequest(
   path: ApiPath | (string & {}),
   options: ApiRequestOptions,
 ): Promise<Response> {
-  const { auth = true, body, headers: suppliedHeaders, ...requestOptions } = options
+  const {
+    auth = true,
+    body,
+    credentials: suppliedCredentials,
+    headers: suppliedHeaders,
+    sessionMode = false,
+    ...requestOptions
+  } = options
   const headers = new Headers(suppliedHeaders)
-  const token = auth ? getAccessToken() : null
+  const method = (requestOptions.method ?? 'GET').toUpperCase()
 
-  if (token) headers.set('Authorization', `Bearer ${token}`)
+  if (sessionMode) headers.set(SESSION_MODE_HEADER, 'cookie')
+  if (csrfToken && (auth || sessionMode) && !['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+    headers.set(CSRF_HEADER, csrfToken)
+  }
   if (body !== undefined && !(body instanceof FormData)) {
     headers.set('Content-Type', 'application/json')
   }
 
   const response = await fetch(path, {
     ...requestOptions,
+    credentials: suppliedCredentials ?? (auth || sessionMode ? 'include' : 'omit'),
     headers,
     body: body === undefined ? undefined : body instanceof FormData ? body : JSON.stringify(body),
   })
 
-  if (response.status === 401) {
-    clearAccessToken()
+  if ((response.status === 401 && auth) || response.headers.get('X-Session-Invalidated') === 'true') {
+    clearCsrfToken()
     window.dispatchEvent(new Event('me-you:unauthorized'))
   }
 

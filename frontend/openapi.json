@@ -256,6 +256,34 @@
         "title": "AssessmentUpdate",
         "type": "object"
       },
+      "AuthSessionResponse": {
+        "properties": {
+          "csrf_token": {
+            "title": "Csrf Token",
+            "type": "string"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "email",
+          "csrf_token"
+        ],
+        "title": "AuthSessionResponse",
+        "type": "object"
+      },
       "ClassSessionAttendanceResponse": {
         "properties": {
           "joined_at": {
@@ -2561,8 +2589,26 @@
       "LoginResponse": {
         "properties": {
           "access_token": {
-            "title": "Access Token",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Access Token"
+          },
+          "csrf_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Csrf Token"
           },
           "email": {
             "title": "Email",
@@ -2577,8 +2623,15 @@
             "type": "string"
           },
           "token_type": {
-            "title": "Token Type",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token Type"
           },
           "username": {
             "title": "Username",
@@ -2587,8 +2640,6 @@
         },
         "required": [
           "message",
-          "access_token",
-          "token_type",
           "id",
           "username",
           "email"
@@ -4566,6 +4617,32 @@
         ]
       }
     },
+    "/account/session": {
+      "get": {
+        "operationId": "get_auth_session_account_session_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthSessionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Auth Session",
+        "tags": [
+          "account"
+        ]
+      }
+    },
     "/account/sessions/revoke": {
       "post": {
         "operationId": "revoke_account_sessions_account_sessions_revoke_post",
@@ -4976,6 +5053,32 @@
           }
         },
         "summary": "Set a new password using a recovery token",
+        "tags": [
+          "account"
+        ]
+      }
+    },
+    "/api/v1/account/session": {
+      "get": {
+        "operationId": "get_auth_session_api_v1_account_session_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthSessionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Auth Session",
         "tags": [
           "account"
         ]

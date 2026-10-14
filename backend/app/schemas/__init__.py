@@ -98,6 +98,7 @@ from .media import (
 	MediaUploadIntentResponse,
 )
 from .user import (
+	AuthSessionResponse,
 	LoginRequest,
 	LoginResponse,
 	AccountLifecycleResponse,
@@ -181,6 +182,7 @@ __all__ = [
 	"LikeResponse",
 	"LoginRequest",
 	"LoginResponse",
+	"AuthSessionResponse",
 	"AccountLifecycleResponse",
 	"PasswordConfirmationRequest",
 	"PasswordRecoveryRequest",

@@ -175,6 +175,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/account/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Auth Session */
+        get: operations["get_auth_session_account_session_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/account/sessions/revoke": {
         parameters: {
             query?: never;
@@ -357,6 +374,23 @@ export interface paths {
         put?: never;
         /** Set a new password using a recovery token */
         post: operations["confirm_password_recovery_api_v1_account_password_recovery_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/account/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Auth Session */
+        get: operations["get_auth_session_api_v1_account_session_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4214,6 +4248,17 @@ export interface components {
             /** Title */
             title?: string | null;
         };
+        /** AuthSessionResponse */
+        AuthSessionResponse: {
+            /** Csrf Token */
+            csrf_token: string;
+            /** Email */
+            email: string;
+            /** Id */
+            id: string;
+            /** Username */
+            username: string;
+        };
         /** ClassSessionAttendanceResponse */
         ClassSessionAttendanceResponse: {
             /** Joined At */
@@ -5111,7 +5156,9 @@ export interface components {
         /** LoginResponse */
         LoginResponse: {
             /** Access Token */
-            access_token: string;
+            access_token?: string | null;
+            /** Csrf Token */
+            csrf_token?: string | null;
             /** Email */
             email: string;
             /** Id */
@@ -5119,7 +5166,7 @@ export interface components {
             /** Message */
             message: string;
             /** Token Type */
-            token_type: string;
+            token_type?: string | null;
             /** Username */
             username: string;
         };
@@ -5984,6 +6031,26 @@ export interface operations {
             };
         };
     };
+    get_auth_session_account_session_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthSessionResponse"];
+                };
+            };
+        };
+    };
     revoke_account_sessions_account_sessions_revoke_post: {
         parameters: {
             query?: never;
@@ -6311,6 +6378,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_auth_session_api_v1_account_session_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthSessionResponse"];
                 };
             };
         };

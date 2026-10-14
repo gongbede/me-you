@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 import phonenumbers
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -19,7 +19,7 @@ from ..models import AuthIdentity, PhoneLoginCode, User
 from ..providers.sms import RealSMSProvider, SMSProvider, get_sms_provider
 from ..rate_limit import RateLimitStore, client_ip, get_rate_limit_store
 from ..schemas import LoginResponse
-from ..security import auth_token_response, password_hash
+from ..security import auth_token_response, cookie_session_requested, password_hash
 from ..providers.registry import provider_not_configured_http_error
 
 
@@ -143,11 +143,13 @@ async def request_phone_code(
     return {"message": REQUEST_MESSAGE}
 
 
-@router.post("/verify", response_model=LoginResponse)
+@router.post("/verify", response_model=LoginResponse, response_model_exclude_none=True)
 async def verify_phone_code(
     data: PhoneCodeVerify,
     database: AsyncSession = Depends(get_postgres_session),
     _sms_provider: SMSProvider = Depends(get_sms_provider),
+    request: Request = None,
+    response: Response = None,
 ):
     phone_number = data.phone_number
     _ensure_sms_provider_configured(_sms_provider)
@@ -215,4 +217,8 @@ async def verify_phone_code(
     except IntegrityError:
         await database.rollback()
         raise _generic_code_error() from None
-    return auth_token_response(user)
+    return auth_token_response(
+        user,
+        response,
+        cookie_session=cookie_session_requested(request),
+    )

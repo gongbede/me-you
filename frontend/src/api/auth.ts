@@ -1,23 +1,27 @@
-import { apiRequest, clearAccessToken, storeAccessToken, type ApiSchemas } from './client'
+import { ApiError, apiRequest, clearCsrfToken, setCsrfToken, type ApiSchemas } from './client'
 
-export async function login(input: ApiSchemas['LoginRequest']): Promise<ApiSchemas['LoginResponse']> {
-  const response = await apiRequest<ApiSchemas['LoginResponse']>('/api/v1/login', {
-    method: 'POST',
-    body: input,
-    auth: false,
-  })
-  storeAccessToken(response.access_token)
+function acceptCookieSession(response: ApiSchemas['LoginResponse']): ApiSchemas['LoginResponse'] {
+  if (!response.csrf_token) throw new Error('The server did not establish a secure session.')
+  setCsrfToken(response.csrf_token)
   return response
 }
 
+export async function login(input: ApiSchemas['LoginRequest']): Promise<ApiSchemas['LoginResponse']> {
+  return acceptCookieSession(await apiRequest<ApiSchemas['LoginResponse']>('/api/v1/login', {
+    method: 'POST',
+    body: input,
+    auth: false,
+    sessionMode: true,
+  }))
+}
+
 export async function googleLogin(idToken: string): Promise<ApiSchemas['LoginResponse']> {
-  const response = await apiRequest<ApiSchemas['LoginResponse']>('/api/v1/auth/google', {
+  return acceptCookieSession(await apiRequest<ApiSchemas['LoginResponse']>('/api/v1/auth/google', {
     method: 'POST',
     body: { id_token: idToken },
     auth: false,
-  })
-  storeAccessToken(response.access_token)
-  return response
+    sessionMode: true,
+  }))
 }
 
 export function requestPhoneLoginCode(phoneNumber: string): Promise<{ message: string }> {
@@ -32,13 +36,12 @@ export async function verifyPhoneLoginCode(
   phoneNumber: string,
   code: string,
 ): Promise<ApiSchemas['LoginResponse']> {
-  const response = await apiRequest<ApiSchemas['LoginResponse']>('/api/v1/auth/phone/verify', {
+  return acceptCookieSession(await apiRequest<ApiSchemas['LoginResponse']>('/api/v1/auth/phone/verify', {
     method: 'POST',
     body: { phone_number: phoneNumber, code },
     auth: false,
-  })
-  storeAccessToken(response.access_token)
-  return response
+    sessionMode: true,
+  }))
 }
 
 export function register(input: ApiSchemas['UserCreate']): Promise<ApiSchemas['UserResponse']> {
@@ -51,18 +54,20 @@ export function register(input: ApiSchemas['UserCreate']): Promise<ApiSchemas['U
 
 export async function logout(): Promise<void> {
   try {
-    if (getTokenPresent()) {
-      await apiRequest<ApiSchemas['AccountLifecycleResponse']>('/api/v1/account/logout', {
-        method: 'POST',
-      })
-    }
+    await apiRequest<ApiSchemas['AccountLifecycleResponse']>('/api/v1/account/logout', {
+      method: 'POST',
+    })
+  } catch (error) {
+    if (!(error instanceof ApiError && error.status === 401)) throw error
   } finally {
-    clearAccessToken()
+    clearCsrfToken()
   }
 }
 
-function getTokenPresent(): boolean {
-  return Boolean(window.sessionStorage.getItem('me-you.access-token'))
+export async function getCurrentSession(): Promise<ApiSchemas['AuthSessionResponse']> {
+  const session = await apiRequest<ApiSchemas['AuthSessionResponse']>('/api/v1/account/session')
+  setCsrfToken(session.csrf_token)
+  return session
 }
 
 export function requestEmailVerification(): Promise<ApiSchemas['AccountLifecycleResponse']> {

@@ -2,7 +2,7 @@ import secrets
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,6 +29,7 @@ from ..permissions import ensure_account_can_be_deactivated
 from ..providers import ProviderRegistry, get_provider_registry, provider_or_503
 from ..schemas import (
     AccountLifecycleResponse,
+    AuthSessionResponse,
     EmailTokenConfirm,
     PasswordChangeRequest,
     PasswordChangeResponse,
@@ -37,11 +38,27 @@ from ..schemas import (
     PasswordRecoveryRequest,
     UserResponse,
 )
-from ..security import get_current_postgres_user, password_hash
+from ..security import clear_auth_cookie, get_current_postgres_user, password_hash
 from ..security_audit import record_security_event
 
 
 router = APIRouter(tags=["account"])
+
+
+@router.get("/account/session", response_model=AuthSessionResponse)
+async def get_auth_session(
+    current_user: User = Depends(get_current_postgres_user),
+    request: Request = None,
+):
+    csrf_token = getattr(request.state, "csrf_token", None) if request is not None else None
+    if not isinstance(csrf_token, str):
+        raise HTTPException(status_code=401, detail="Cookie session required")
+    return {
+        "id": str(current_user.id),
+        "username": current_user.username,
+        "email": current_user.email,
+        "csrf_token": csrf_token,
+    }
 
 
 @router.get(
@@ -71,6 +88,7 @@ async def change_my_password(
     current_user: User = Depends(get_current_postgres_user),
     database: AsyncSession = Depends(get_postgres_session),
     request: Request = None,
+    response: Response = None,
 ):
     if not password_hash.verify(data.current_password, current_user.password_hash):
         raise HTTPException(
@@ -100,6 +118,8 @@ async def change_my_password(
     except BaseException:
         await database.rollback()
         raise
+    if response is not None:
+        clear_auth_cookie(response, session_invalidated=True)
     return {"message": "Password updated"}
 
 
@@ -121,6 +141,7 @@ async def revoke_account_sessions(
     current_user: User = Depends(get_current_postgres_user),
     database: AsyncSession = Depends(get_postgres_session),
     request: Request = None,
+    response: Response = None,
 ):
     await confirm_current_password(data, current_user)
     current_user.token_version = (getattr(current_user, "token_version", 0) or 0) + 1
@@ -139,6 +160,8 @@ async def revoke_account_sessions(
     except BaseException:
         await database.rollback()
         raise
+    if response is not None:
+        clear_auth_cookie(response, session_invalidated=True)
     return {"message": "All account sessions have been revoked"}
 
 
@@ -151,6 +174,7 @@ async def logout_account(
     current_user: User = Depends(get_current_postgres_user),
     database: AsyncSession = Depends(get_postgres_session),
     request: Request = None,
+    response: Response = None,
 ):
     current_user.token_version = (getattr(current_user, "token_version", 0) or 0) + 1
     await invalidate_account_email_tokens(database, current_user.id)
@@ -169,6 +193,8 @@ async def logout_account(
     except BaseException:
         await database.rollback()
         raise
+    if response is not None:
+        clear_auth_cookie(response, session_invalidated=True)
     return {"message": "Logged out"}
 
 
@@ -280,6 +306,7 @@ async def deactivate_account(
     current_user: User = Depends(get_current_postgres_user),
     database: AsyncSession = Depends(get_postgres_session),
     request: Request = None,
+    response: Response = None,
 ):
     await confirm_current_password(data, current_user)
     await ensure_account_can_be_deactivated(
@@ -304,6 +331,8 @@ async def deactivate_account(
     except BaseException:
         await database.rollback()
         raise
+    if response is not None:
+        clear_auth_cookie(response, session_invalidated=True)
     return {"message": "Account deactivated"}
 
 
@@ -317,6 +346,7 @@ async def delete_account(
     current_user: User = Depends(get_current_postgres_user),
     database: AsyncSession = Depends(get_postgres_session),
     request: Request = None,
+    response: Response = None,
     providers: ProviderRegistry = Depends(get_provider_registry),
 ):
     await confirm_current_password(data, current_user)
@@ -393,4 +423,6 @@ async def delete_account(
     except BaseException:
         await database.rollback()
         raise
+    if response is not None:
+        clear_auth_cookie(response, session_invalidated=True)
     return {"message": "Account deleted"}

@@ -4,7 +4,7 @@ import secrets
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from google.auth.transport.requests import Request as GoogleRequest
 from google.oauth2 import id_token
 from pydantic import BaseModel, Field
@@ -16,7 +16,7 @@ from starlette.concurrency import run_in_threadpool
 from ..database import get_postgres_session
 from ..models import AuthIdentity, User
 from ..schemas import LoginResponse
-from ..security import auth_token_response, password_hash
+from ..security import auth_token_response, cookie_session_requested, password_hash
 from ..security_audit import record_security_event
 
 
@@ -60,10 +60,12 @@ async def google_sign_in_config():
     return {"client_id": client_id}
 
 
-@router.post("/google", response_model=LoginResponse)
+@router.post("/google", response_model=LoginResponse, response_model_exclude_none=True)
 async def google_sign_in(
     data: GoogleSignInRequest,
     database: AsyncSession = Depends(get_postgres_session),
+    request: Request = None,
+    response: Response = None,
 ):
     client_id = os.getenv("ME_YOU_GOOGLE_CLIENT_ID", "").strip()
     if not client_id:
@@ -151,4 +153,8 @@ async def google_sign_in(
             detail="Google account is not available",
         )
 
-    return auth_token_response(user)
+    return auth_token_response(
+        user,
+        response,
+        cookie_session=cookie_session_requested(request),
+    )

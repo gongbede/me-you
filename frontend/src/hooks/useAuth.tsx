@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import { googleLogin as googleLoginRequest, login as loginRequest, logout as logoutRequest, register as registerRequest, verifyPhoneLoginCode as verifyPhoneLoginCodeRequest } from '../api/auth'
-import { apiRequest, clearAccessToken, getAccessToken, type ApiSchemas } from '../api/client'
+import { getCurrentSession, googleLogin as googleLoginRequest, login as loginRequest, logout as logoutRequest, register as registerRequest, verifyPhoneLoginCode as verifyPhoneLoginCodeRequest } from '../api/auth'
+import { clearCsrfToken, type ApiSchemas } from '../api/client'
 
 export type AuthUser = Pick<ApiSchemas['LoginResponse'], 'id' | 'username' | 'email'>
 
@@ -19,7 +19,7 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
-  const [isLoading, setIsLoading] = useState(Boolean(getAccessToken()))
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     let isMounted = true
@@ -28,21 +28,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     window.addEventListener('me-you:unauthorized', handleUnauthorized)
 
-    if (getAccessToken()) {
-      void apiRequest<ApiSchemas['UserResponse']>('/api/v1/account/me')
-        .then((account) => {
-          if (isMounted) {
-            setUser({ id: account.id, username: account.username, email: account.email })
-          }
-        })
-        .catch(() => {
-          clearAccessToken()
-          if (isMounted) setUser(null)
-        })
-        .finally(() => {
-          if (isMounted) setIsLoading(false)
-        })
-    }
+    void getCurrentSession()
+      .then((account) => {
+        if (isMounted) setUser({ id: account.id, username: account.username, email: account.email })
+      })
+      .catch(() => {
+        clearCsrfToken()
+        if (isMounted) setUser(null)
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false)
+      })
 
     return () => {
       isMounted = false
