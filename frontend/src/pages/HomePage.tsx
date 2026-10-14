@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { LoaderCircle, MessageCircle } from 'lucide-react'
 import { createPost, getFeed, type Post } from '../api/social'
@@ -5,15 +6,21 @@ import { getFriendlyErrorMessage } from '../api/client'
 import { PostComposer } from '../components/PostComposer'
 import { PostCard } from '../components/PostCard'
 import { useAuth } from '../hooks/useAuth'
+import { ReelsViewer } from './ReelsPage'
+
+const homeTabStorageKey = 'home.activeTab'
+type HomeTab = 'feed' | 'reels'
 
 export function HomePage() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
+  const [activeTab, setActiveTab] = useState<HomeTab>(() => sessionStorage.getItem(homeTabStorageKey) === 'reels' ? 'reels' : 'feed')
   const feedQuery = useInfiniteQuery({
     queryKey: ['feed'],
     queryFn: ({ pageParam }) => getFeed(pageParam),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page) => page.has_more ? page.next_cursor ?? undefined : undefined,
+    enabled: activeTab === 'feed',
   })
   const createMutation = useMutation({
     mutationFn: createPost,
@@ -34,6 +41,11 @@ export function HomePage() {
     void queryClient.invalidateQueries({ queryKey: ['feed'] })
   }
 
+  function selectTab(tab: HomeTab) {
+    sessionStorage.setItem(homeTabStorageKey, tab)
+    setActiveTab(tab)
+  }
+
   return (
     <div className="page-stack">
       <section className="page-heading-row feed-heading">
@@ -44,6 +56,12 @@ export function HomePage() {
         </div>
       </section>
 
+      <div className="home-tabs" role="tablist" aria-label="Home content">
+        <button id="home-tab-feed" type="button" role="tab" aria-selected={activeTab === 'feed'} aria-controls="home-panel-feed" tabIndex={activeTab === 'feed' ? 0 : -1} className={activeTab === 'feed' ? 'is-active' : ''} onClick={() => selectTab('feed')}>Feed</button>
+        <button id="home-tab-reels" type="button" role="tab" aria-selected={activeTab === 'reels'} aria-controls="home-panel-reels" tabIndex={activeTab === 'reels' ? 0 : -1} className={activeTab === 'reels' ? 'is-active' : ''} onClick={() => selectTab('reels')}>Reels</button>
+      </div>
+
+      {activeTab === 'feed' ? <section id="home-panel-feed" role="tabpanel" aria-labelledby="home-tab-feed" className="home-tab-panel">
       <PostComposer
         onPost={(content) => createMutation.mutateAsync(content).then(() => undefined)}
         isPosting={createMutation.isPending}
@@ -88,6 +106,7 @@ export function HomePage() {
           <button className="button button--outline" type="button" onClick={() => void feedQuery.fetchNextPage()}>Retry</button>
         </div>
       )}
+      </section> : <section id="home-panel-reels" role="tabpanel" aria-labelledby="home-tab-reels" className="home-tab-panel"><ReelsViewer embedded /></section>}
     </div>
   )
 }

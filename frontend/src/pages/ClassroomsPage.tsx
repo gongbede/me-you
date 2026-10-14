@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, CalendarClock, Check, Clock3, LoaderCircle, MessageCircle, Megaphone, Plus, Send, Users, Video } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BookOpen, CalendarClock, Check, Clock3, GraduationCap, LoaderCircle, MessageCircle, Megaphone, Plus, Send, Users, Video } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { ApiError, getFriendlyErrorMessage } from '../api/client'
@@ -8,7 +8,10 @@ import {
   createClassSession,
   getClassSessionAttendance,
   getCourse,
+  getInstitutionCatalog,
   getTeachingCourses,
+  listEnrollments,
+  listInstitutions,
   joinClassSession,
   listClassSessions,
   listClassSessionMessages,
@@ -17,6 +20,7 @@ import {
   type ClassSession,
   type ClassSessionAttendance,
   type ClassSessionMessageType,
+  type Course,
 } from '../api/education'
 
 function classroomError(error: unknown): string {
@@ -270,4 +274,44 @@ export function ClassroomsPage() {
   if (!courseId) return <div className="page-state page-state--error" role="alert"><h1>Classroom unavailable</h1><p>Choose a course to view its sessions.</p></div>
   if (sessionId) return <ClassroomRoom courseId={courseId} sessionId={sessionId} teacherMode={teacherMode} />
   return <ClassroomSchedule courseId={courseId} teacherMode={teacherMode} />
+}
+
+export function ClassroomsIndexPage() {
+  const classroomsQuery = useQuery({
+    queryKey: ['classrooms', 'overview'],
+    queryFn: async () => {
+      const [teachingCourses, enrollments, institutions] = await Promise.all([
+        getTeachingCourses(),
+        listEnrollments(),
+        listInstitutions(),
+      ])
+      const enrolledIds = new Set(enrollments.map((enrollment) => enrollment.course_id))
+      const catalogs = await Promise.all(institutions.map((institution) => getInstitutionCatalog(institution.id)))
+      const courseEntries = new Map<string, { course: Course; teacherMode: boolean }>()
+      for (const course of catalogs.flatMap((catalog) => catalog.faculties.flatMap(({ departments }) => departments.flatMap(({ courses }) => courses)))) {
+        if (enrolledIds.has(course.id)) courseEntries.set(course.id, { course, teacherMode: false })
+      }
+      for (const course of teachingCourses) courseEntries.set(course.id, { course, teacherMode: true })
+      return [...courseEntries.values()]
+    },
+  })
+
+  return (
+    <div className="page-stack learning-page">
+      <section className="page-heading-row learning-heading"><div><span className="eyebrow">YOUR COURSES</span><h1>Classrooms</h1><p>Open live classroom schedules for your courses.</p></div></section>
+      {classroomsQuery.isPending ? <p className="learning-loading" role="status">Loading your classrooms…</p> : classroomsQuery.isError ? (
+        <div className="page-state page-state--error" role="alert"><h2>Classrooms unavailable</h2><p>{getFriendlyErrorMessage(classroomsQuery.error)}</p><button className="button button--outline" type="button" onClick={() => void classroomsQuery.refetch()}>Retry</button></div>
+      ) : classroomsQuery.data.length === 0 ? (
+        <div className="learning-empty learning-empty--large"><GraduationCap size={28} aria-hidden="true" /><h2>No course classrooms yet</h2><p>Classroom schedules appear here when you enroll in a course or teach one.</p><Link className="button button--primary" to="/my-courses">My Courses <ArrowRight size={16} aria-hidden="true" /></Link></div>
+      ) : (
+        <ul className="learning-enrolled-list">
+          {classroomsQuery.data.map(({ course, teacherMode }) => <li key={course.id}>
+            <div className="learning-course-code">{course.code}</div>
+            <div className="learning-course-copy"><span className="learning-kicker">{teacherMode ? 'TEACHING' : 'ENROLLED'}</span><h2>{course.name}</h2><p>{course.description || 'Course classroom schedule'}</p></div>
+            <Link className="icon-link" to={`${teacherMode ? '/teaching' : ''}/courses/${course.id}/classrooms`} aria-label={`Open ${course.name} classrooms`}><BookOpen size={20} aria-hidden="true" /></Link>
+          </li>)}
+        </ul>
+      )}
+    </div>
+  )
 }

@@ -1,7 +1,7 @@
-import { BookOpen, Building2, House, LogOut, MessageSquare, RotateCw, Settings2, UserRound } from 'lucide-react'
+import { Bell, BookOpen, Building2, Ellipsis, House, LogOut, MessageSquare, RotateCw, Settings2, UserRound, Users, X } from 'lucide-react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { Logo } from './Logo'
 import { useAuth } from '../hooks/useAuth'
 import { getTeachingCourses, listAdministeredInstitutions } from '../api/education'
@@ -20,6 +20,9 @@ export function AppShell() {
   const { user } = useAuth()
   const location = useLocation()
   const [isVisible, setIsVisible] = useState(() => !document.hidden)
+  const [isMoreOpen, setIsMoreOpen] = useState(false)
+  const moreTriggerRef = useRef<HTMLButtonElement>(null)
+  const moreSheetRef = useRef<HTMLElement>(null)
   useEffect(() => {
     const update = () => setIsVisible(!document.hidden)
     document.addEventListener('visibilitychange', update)
@@ -41,8 +44,41 @@ export function AppShell() {
     baseTabs[4],
   ]
   const learningPath = location.pathname.startsWith('/courses/') || location.pathname.startsWith('/lessons/')
+  const isMorePath = ['/profile', '/teaching', '/administration', '/classrooms', '/notifications', '/logout'].some((path) => location.pathname === path || location.pathname.startsWith(`${path}/`))
   const learningTabIsActive = (to: string, isActive: boolean) =>
     isActive || (to === '/my-courses' && learningPath) || (to === '/teaching' && location.pathname.startsWith('/teaching')) || (to === '/administration' && location.pathname.startsWith('/administration')) || (to === '/messages' && location.pathname.startsWith('/messages'))
+
+  useEffect(() => {
+    if (!isMoreOpen) return
+    moreSheetRef.current?.querySelector<HTMLElement>('[data-more-first]')?.focus()
+  }, [isMoreOpen])
+
+  function closeMoreSheet() {
+    setIsMoreOpen(false)
+    moreTriggerRef.current?.focus()
+  }
+
+  function handleMoreKeyDown(event: ReactKeyboardEvent<HTMLElement>) {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      closeMoreSheet()
+      return
+    }
+    if (event.key !== 'Tab') return
+    const sheet = moreSheetRef.current
+    if (!sheet) return
+    const focusable = Array.from(sheet.querySelectorAll<HTMLElement>('a[href], button:not([disabled])'))
+    const first = focusable[0]
+    const last = focusable.at(-1)
+    if (!first || !last) return
+    if (event.shiftKey && (document.activeElement === first || !sheet.contains(document.activeElement))) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && (document.activeElement === last || !sheet.contains(document.activeElement))) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
 
   return (
     <div className="app-shell">
@@ -95,33 +131,32 @@ export function AppShell() {
         <main className="app-main"><Outlet /></main>
       </div>
 
-      <nav className="mobile-tabs" aria-label="Mobile navigation" style={{ gridTemplateColumns: `repeat(${tabs.length + 1 + Number(teachingQuery.isError) + Number(administrationQuery.isError) + Number(messagesQuery.isError)}, minmax(0, 1fr))` }}>
-        {tabs.map(({ to, label, icon: Icon, end }) => (
+      <nav className="mobile-tabs" aria-label="Mobile navigation">
+        {baseTabs.slice(0, 4).map(({ to, label, icon: Icon, end }) => (
           <NavLink aria-label={label === 'Messages' && unreadMessages > 0 ? `Messages, ${unreadMessages} unread` : undefined} className={({ isActive }) => `mobile-tab ${learningTabIsActive(to, isActive) ? 'is-active' : ''}`} end={end} key={to} to={to}>
             <Icon size={21} aria-hidden="true" />
             <span>{label}{label === 'Messages' && unreadMessages > 0 && <span className="mobile-unread-badge">{unreadMessages > 99 ? '99+' : unreadMessages}</span>}</span>
           </NavLink>
         ))}
-        {teachingQuery.isError && (
-          <button className="mobile-tab mobile-tab--retry" type="button" onClick={() => void teachingQuery.refetch()}>
-            <RotateCw size={21} aria-hidden="true" />
-            <span>Retry Teaching</span>
-          </button>
-        )}
-        {administrationQuery.isError && (
-          <button className="mobile-tab mobile-tab--retry" type="button" onClick={() => void administrationQuery.refetch()}>
-            <RotateCw size={21} aria-hidden="true" />
-            <span>Retry Admin</span>
-          </button>
-        )}
-        {messagesQuery.isError && (
-          <button className="mobile-tab mobile-tab--retry" type="button" onClick={() => void messagesQuery.refetch()}>
-            <RotateCw size={21} aria-hidden="true" />
-            <span>Retry Messages</span>
-          </button>
-        )}
-        <NavLink className="mobile-tab" to="/logout"><LogOut size={21} aria-hidden="true" /><span>Sign out</span></NavLink>
+        <button ref={moreTriggerRef} className={`mobile-tab${isMorePath ? ' is-active' : ''}`} type="button" aria-haspopup="dialog" aria-expanded={isMoreOpen} aria-controls="more-sheet" onClick={() => setIsMoreOpen(true)}>
+          <Ellipsis size={21} aria-hidden="true" /><span>More</span>
+        </button>
       </nav>
+
+      {isMoreOpen && <>
+        <button className="more-sheet-backdrop" type="button" aria-hidden="true" tabIndex={-1} onClick={closeMoreSheet} />
+        <section id="more-sheet" ref={moreSheetRef} className="more-sheet" role="dialog" aria-modal="true" aria-labelledby="more-sheet-title" onKeyDown={handleMoreKeyDown}>
+          <header className="more-sheet__header"><h2 id="more-sheet-title">More</h2><button className="icon-button" type="button" aria-label="Close More menu" onClick={closeMoreSheet}><X size={19} aria-hidden="true" /></button></header>
+          <nav className="more-sheet__nav" aria-label="More navigation">
+            <NavLink className={({ isActive }) => `more-sheet__link${isActive ? ' is-active' : ''}`} data-more-first to="/profile" onClick={closeMoreSheet}><UserRound size={19} aria-hidden="true" /><span>Profile</span></NavLink>
+            {teachingQuery.data?.length ? <NavLink className={({ isActive }) => `more-sheet__link${isActive || location.pathname.startsWith('/teaching') ? ' is-active' : ''}`} to="/teaching" onClick={closeMoreSheet}><BookOpen size={19} aria-hidden="true" /><span>Teaching</span></NavLink> : null}
+            {administrationQuery.data?.length ? <NavLink className={({ isActive }) => `more-sheet__link${isActive || location.pathname.startsWith('/administration') ? ' is-active' : ''}`} to="/administration" onClick={closeMoreSheet}><Settings2 size={19} aria-hidden="true" /><span>Administration</span></NavLink> : null}
+            <NavLink className={({ isActive }) => `more-sheet__link${isActive ? ' is-active' : ''}`} to="/classrooms" onClick={closeMoreSheet}><Users size={19} aria-hidden="true" /><span>Classrooms</span></NavLink>
+            <NavLink className={({ isActive }) => `more-sheet__link${isActive ? ' is-active' : ''}`} to="/notifications" onClick={closeMoreSheet}><Bell size={19} aria-hidden="true" /><span>Notifications</span></NavLink>
+            <NavLink className={({ isActive }) => `more-sheet__link${isActive ? ' is-active' : ''}`} to="/logout" onClick={closeMoreSheet}><LogOut size={19} aria-hidden="true" /><span>Sign out</span></NavLink>
+          </nav>
+        </section>
+      </>}
     </div>
   )
 }

@@ -20,7 +20,7 @@ import { SchoolDetailPage } from './pages/SchoolDetailPage'
 import { SchoolsPage } from './pages/SchoolsPage'
 import { VerifyEmailPage } from './pages/VerifyEmailPage'
 import { TeachingPage } from './pages/TeachingPage'
-import { ClassroomsPage } from './pages/ClassroomsPage'
+import { ClassroomsIndexPage, ClassroomsPage } from './pages/ClassroomsPage'
 import { AdministrationPage } from './pages/AdministrationPage'
 import { NotificationsPage } from './pages/NotificationsPage'
 import { MessagesPage } from './pages/MessagesPage'
@@ -58,6 +58,7 @@ export default function App() {
                   <Route path="messages/:conversationId" element={<MessagesPage />} />
                   <Route path="reels" element={<ReelsPage />} />
                   <Route path="my-courses" element={<MyCoursesPage />} />
+                  <Route path="classrooms" element={<ClassroomsIndexPage />} />
                   <Route path="courses/:courseId" element={<CoursePage />} />
                   <Route path="courses/:courseId/classrooms" element={<ClassroomsPage />} />
                   <Route path="courses/:courseId/classrooms/:sessionId" element={<ClassroomsPage />} />

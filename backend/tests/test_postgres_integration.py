@@ -159,7 +159,6 @@ async def create_learning_records(session):
     await session.flush()
     return user, institution, course, student
 
-
 def test_database_rejects_duplicate_username_and_email(postgres_database_url):
     async def verify():
         async with database_session(postgres_database_url) as session:
@@ -955,10 +954,15 @@ def test_phone_code_expires_and_five_wrong_attempts_invalidate(postgres_database
 
 
 def test_seed_demo_is_idempotent(postgres_database_url, monkeypatch):
+    from sqlalchemy import delete
+
     from app.cli import seed_demo
     from app.models import (
+        Comment,
         Course,
         CourseTeacher,
+        Conversation,
+        ConversationMember,
         Department,
         Enrollment,
         Exercise,
@@ -967,6 +971,10 @@ def test_seed_demo_is_idempotent(postgres_database_url, monkeypatch):
         InstitutionMembership,
         InstitutionMembershipRequest,
         Lesson,
+        Message,
+        Notification,
+        Post,
+        PostLike,
         Student,
         Teacher,
         User,
@@ -993,6 +1001,13 @@ def test_seed_demo_is_idempotent(postgres_database_url, monkeypatch):
                     Student,
                     Enrollment,
                     User,
+                    Post,
+                    PostLike,
+                    Comment,
+                    Conversation,
+                    ConversationMember,
+                    Message,
+                    Notification,
                 )
                 before_counts = {
                     model.__tablename__: await session.scalar(
@@ -1013,7 +1028,7 @@ def test_seed_demo_is_idempotent(postgres_database_url, monkeypatch):
 
             assert len(first_credentials) == 4
             assert second_credentials == []
-            assert {name: counts[name] - before_counts[name] for name in counts} == {
+            expected_additions = {
                 "institutions": 1,
                 "faculties": 1,
                 "departments": 1,
@@ -1027,7 +1042,39 @@ def test_seed_demo_is_idempotent(postgres_database_url, monkeypatch):
                 "students": 1,
                 "enrollments": 1,
                 "users": 4,
+                "posts": 3,
+                "post_likes": 3,
+                "comments": 3,
+                "conversations": 2,
+                "conversation_members": 5,
+                "messages": 5,
+                "notifications": 3,
             }
+            actual_additions = {name: counts[name] - before_counts[name] for name in counts}
+            assert actual_additions == expected_additions
+
+            demo_user_ids = select(User.id).where(
+                User.email.in_(
+                    [
+                        "demo.admin@example.test",
+                        "demo.teacher@example.test",
+                        "demo.enrolled@example.test",
+                        "demo.invited@example.test",
+                    ]
+                )
+            )
+            demo_conversation_ids = select(Conversation.id).where(
+                Conversation.created_by_id.in_(demo_user_ids)
+            )
+            async with session_factory() as session:
+                await session.execute(
+                    delete(Notification).where(Notification.recipient_id.in_(demo_user_ids))
+                )
+                await session.execute(
+                    delete(Conversation).where(Conversation.id.in_(demo_conversation_ids))
+                )
+                await session.execute(delete(Post).where(Post.content.startswith("Demo:")))
+                await session.commit()
         finally:
             await engine.dispose()
 

@@ -4160,6 +4160,102 @@ button:disabled {
   font-size: 0.62rem;
 }
 
+.home-tab-panel {
+  display: grid;
+  min-width: 0;
+  gap: 25px;
+}
+
+.home-tabs {
+  display: flex;
+  gap: 24px;
+  border-bottom: 1px solid var(--line);
+}
+
+.home-tabs button {
+  min-height: 43px;
+  padding: 0 3px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  color: var(--muted);
+  background: transparent;
+  font-size: 0.92rem;
+  font-weight: 800;
+}
+
+.home-tabs button.is-active {
+  border-bottom-color: var(--royal-blue);
+  color: var(--navy);
+}
+
+.more-sheet-backdrop {
+  position: fixed;
+  z-index: 39;
+  inset: 0;
+  width: 100%;
+  border: 0;
+  background: rgb(7 22 47 / 48%);
+}
+
+.more-sheet {
+  position: fixed;
+  z-index: 40;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  max-height: min(82svh, 560px);
+  overflow-y: auto;
+  padding: 17px 20px max(20px, env(safe-area-inset-bottom));
+  border-radius: 16px 16px 0 0;
+  background: var(--surface);
+  box-shadow: 0 -14px 40px rgb(7 22 47 / 18%);
+}
+
+.more-sheet__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.more-sheet__header h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.more-sheet__nav {
+  display: grid;
+  gap: 4px;
+}
+
+.more-sheet__link {
+  display: flex;
+  min-height: 49px;
+  align-items: center;
+  gap: 13px;
+  padding: 0 12px;
+  border-radius: 8px;
+  color: var(--ink);
+  font-weight: 750;
+}
+
+.more-sheet__link.is-active {
+  color: var(--royal-blue-600);
+  background: var(--royal-blue-50);
+}
+
+.more-sheet__link:hover {
+  background: var(--royal-blue-50);
+  text-decoration: none;
+}
+
+@media (min-width: 900px) {
+  .more-sheet-backdrop,
+  .more-sheet {
+    display: none;
+  }
+}
+
 @media (min-width: 700px) {
   .learning-page {
     gap: 24px;

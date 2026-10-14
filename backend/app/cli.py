@@ -12,8 +12,11 @@ from .account_tokens import purge_expired_account_email_tokens
 from .config import MEDIA_ORPHAN_UPLOAD_HOURS
 from .database import PostgresSessionLocal
 from .models import (
+    Comment,
     Course,
     CourseTeacher,
+    Conversation,
+    ConversationMember,
     Department,
     Enrollment,
     Exercise,
@@ -23,6 +26,10 @@ from .models import (
     InstitutionMembershipRequest,
     Lesson,
     MediaAsset,
+    Message,
+    Notification,
+    Post,
+    PostLike,
     Student,
     Teacher,
     User,
@@ -200,6 +207,97 @@ async def seed_demo(session_factory: Any = None) -> list[tuple[str, str, str]]:
                     status="INVITED",
                     created_by_user_id=admin_user.id,
                 )
+            )
+
+        demo_post_specs = (
+            (enrolled_user, "Demo: I am trying a short daily review before class.", teacher_user, "Demo reply: A quick review makes it easier to build momentum."),
+            (teacher_user, "Demo: What is one idea you want to practice this week?", enrolled_user, "Demo reply: I am working on keeping study sessions focused."),
+            (invited_user, "Demo: Looking forward to joining the learning community.", admin_user, "Demo reply: Welcome, we are glad you are here."),
+        )
+        demo_posts = []
+        for author, content, liker, comment_content in demo_post_specs:
+            post = await _get_or_create(
+                session,
+                Post,
+                {"author_id": author.id, "content": content},
+                {"visibility": "PUBLIC", "post_type": "POST"},
+            )
+            demo_posts.append(post)
+            await _get_or_create(
+                session,
+                PostLike,
+                {"post_id": post.id, "user_id": liker.id},
+            )
+            await _get_or_create(
+                session,
+                Comment,
+                {"post_id": post.id, "author_id": liker.id, "content": comment_content},
+            )
+
+        direct_key = ":".join(sorted((str(enrolled_user.id), str(teacher_user.id))))
+        direct_conversation = await _get_or_create(
+            session,
+            Conversation,
+            {"direct_key": direct_key},
+            {"type": "DIRECT", "created_by_id": teacher_user.id},
+        )
+        for member in (enrolled_user, teacher_user):
+            await _get_or_create(
+                session,
+                ConversationMember,
+                {"conversation_id": direct_conversation.id, "user_id": member.id},
+            )
+
+        group_conversation = await _get_or_create(
+            session,
+            Conversation,
+            {"type": "GROUP", "name": "Demo Study Group", "created_by_id": enrolled_user.id},
+            {"description": "A sample group for study plans and questions."},
+        )
+        group_members = (enrolled_user, teacher_user, invited_user)
+        for member in group_members:
+            await _get_or_create(
+                session,
+                ConversationMember,
+                {"conversation_id": group_conversation.id, "user_id": member.id},
+            )
+
+        for conversation, messages in (
+            (direct_conversation, (
+                (enrolled_user, "Demo hello from the enrolled student."),
+                (teacher_user, "Demo reply from the teacher."),
+                (enrolled_user, "Demo thanks, I will try that before the next lesson."),
+            )),
+            (group_conversation, (
+                (enrolled_user, "Demo group: what is everyone studying this week?"),
+                (teacher_user, "Demo group: share one useful resource when you find it."),
+            )),
+        ):
+            for sender, content in messages:
+                await _get_or_create(
+                    session,
+                    Message,
+                    {"conversation_id": conversation.id, "sender_id": sender.id, "content": content},
+                )
+
+        demo_notifications = (
+            (enrolled_user, teacher_user, "LIKE", "A teacher liked your post", demo_posts[0].id, demo_posts[0].id),
+            (teacher_user, enrolled_user, "COMMENT", "A student commented on your post", demo_posts[1].id, demo_posts[1].id),
+            (enrolled_user, teacher_user, "MESSAGE", "New message in your conversation", direct_conversation.id, None),
+        )
+        for recipient, actor, notification_type, title, target_id, post_id in demo_notifications:
+            await _get_or_create(
+                session,
+                Notification,
+                {
+                    "recipient_id": recipient.id,
+                    "actor_id": actor.id,
+                    "type": notification_type,
+                    "title": title,
+                    "target_type": "post" if post_id else "conversation",
+                    "target_id": target_id,
+                },
+                {"post_id": post_id},
             )
 
         await session.commit()

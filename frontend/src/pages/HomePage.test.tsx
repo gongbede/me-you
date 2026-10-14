@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getFeed } from '../api/social'
 import { HomePage } from './HomePage'
 
@@ -16,6 +16,10 @@ vi.mock('../api/social', () => ({
 
 vi.mock('../components/PostCard', () => ({
   PostCard: ({ post }: { post: { content: string } }) => <article>{post.content}</article>,
+}))
+
+vi.mock('./ReelsPage', () => ({
+  ReelsViewer: ({ embedded }: { embedded: boolean }) => <div data-testid="reels-viewer">{embedded ? 'Embedded Reels' : 'Reels'}</div>,
 }))
 
 const makePost = (id: string, content: string) => ({
@@ -33,7 +37,10 @@ const makePost = (id: string, content: string) => ({
 })
 
 describe('HomePage feed pagination', () => {
+  afterEach(cleanup)
   beforeEach(() => {
+    sessionStorage.clear()
+    vi.mocked(getFeed).mockReset()
     vi.mocked(getFeed)
       .mockResolvedValueOnce({ items: [makePost('one', 'First page')], offset: 0, limit: 20, has_more: true, next_cursor: 'cursor-next' })
       .mockResolvedValueOnce({ items: [makePost('two', 'Second page')], offset: 0, limit: 20, has_more: false, next_cursor: null })
@@ -47,5 +54,19 @@ describe('HomePage feed pagination', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Load more' }))
     expect(await screen.findByText('Second page')).toBeInTheDocument()
     expect(getFeed).toHaveBeenNthCalledWith(2, 'cursor-next')
+  })
+
+  it('remembers the last selected Home tab for the session', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } })
+    const view = render(<QueryClientProvider client={queryClient}><MemoryRouter><HomePage /></MemoryRouter></QueryClientProvider>)
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Reels' }))
+    expect(await screen.findByTestId('reels-viewer')).toBeInTheDocument()
+    expect(sessionStorage.getItem('home.activeTab')).toBe('reels')
+
+    view.unmount()
+    render(<QueryClientProvider client={queryClient}><MemoryRouter><HomePage /></MemoryRouter></QueryClientProvider>)
+    expect(await screen.findByRole('tab', { name: 'Reels' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByTestId('reels-viewer')).toBeInTheDocument()
   })
 })
