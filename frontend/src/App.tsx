@@ -24,6 +24,7 @@ import { ClassroomsPage } from './pages/ClassroomsPage'
 import { AdministrationPage } from './pages/AdministrationPage'
 import { NotificationsPage } from './pages/NotificationsPage'
 import { MessagesPage } from './pages/MessagesPage'
+import { ReelsPage } from './pages/ReelsPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -55,6 +56,7 @@ export default function App() {
                   <Route path="notifications" element={<NotificationsPage />} />
                   <Route path="messages" element={<MessagesPage />} />
                   <Route path="messages/:conversationId" element={<MessagesPage />} />
+                  <Route path="reels" element={<ReelsPage />} />
                   <Route path="my-courses" element={<MyCoursesPage />} />
                   <Route path="courses/:courseId" element={<CoursePage />} />
                   <Route path="courses/:courseId/classrooms" element={<ClassroomsPage />} />

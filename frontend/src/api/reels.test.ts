@@ -23,14 +23,23 @@ describe('reel upload flow', () => {
     const calls: string[] = []
     const reel = { id: 'reel-id' } as Reel
     const transport: ReelUploadTransport = {
-      createIntent: vi.fn(async () => {
+      createIntent: vi.fn(async (): Promise<Awaited<ReturnType<ReelUploadTransport['createIntent']>>> => {
         calls.push('intent')
         return {
-          asset: { id: 'asset-id' },
+          asset: {
+            id: 'asset-id',
+            byte_size: 2,
+            checksum_sha256: null,
+            content_type: 'video/mp4',
+            created_at: '2026-01-01T00:00:00Z',
+            original_filename: 'clip.mp4',
+            purpose: 'REEL',
+            status: 'UPLOAD_PENDING',
+          },
           upload_url: '/upload/token',
           required_headers: { 'Content-Type': 'video/mp4' },
           expires_at: '2026-01-01T00:10:00Z',
-        } as Awaited<ReturnType<ReelUploadTransport['createIntent']>>
+        }
       }),
       upload: vi.fn(async (_url, _headers, _file, onProgress) => {
         calls.push('upload')

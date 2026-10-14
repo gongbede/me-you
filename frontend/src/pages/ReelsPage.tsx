@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query'
-import { ArrowDown, Heart, LoaderCircle, MessageCircle, Pause, Play, Plus, Trash2, Volume2, VolumeX, X } from 'lucide-react'
+import { Heart, LoaderCircle, MessageCircle, Pause, Play, Plus, Trash2, Volume2, VolumeX, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { ApiError, getFriendlyErrorMessage } from '../api/client'
-import { setPostLike, type Post } from '../api/social'
+import { getFriendlyErrorMessage } from '../api/client'
+import { setPostLike } from '../api/social'
 import { CommentsSection } from '../components/CommentsSection'
 import { UserIdentity } from '../components/UserIdentity'
 import { useAuth } from '../hooks/useAuth'
@@ -49,6 +49,7 @@ function ReelUploadForm({
   const [durationWarning, setDurationWarning] = useState(false)
   const [progress, setProgress] = useState<number | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const previewUrlRef = useRef<string | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const uploadMutation = useMutation({
     mutationFn: async () => {
@@ -56,6 +57,7 @@ function ReelUploadForm({
       return uploadReel(file, caption, limits, setProgress)
     },
     onSuccess: (reel) => {
+      clearPreview()
       setFile(null)
       setCaption('')
       setFileError('')
@@ -66,20 +68,25 @@ function ReelUploadForm({
     onError: () => setProgress(null),
   })
 
-  useEffect(() => {
-    if (!file) {
-      setPreviewUrl(null)
-      return
-    }
-    const url = URL.createObjectURL(file)
-    setPreviewUrl(url)
-    setDurationWarning(false)
-    return () => URL.revokeObjectURL(url)
-  }, [file])
+  useEffect(() => () => {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current)
+  }, [])
+
+  function clearPreview() {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current)
+    previewUrlRef.current = null
+    setPreviewUrl(null)
+  }
 
   function selectFile(event: ChangeEvent<HTMLInputElement>) {
     const nextFile = event.currentTarget.files?.[0] ?? null
+    clearPreview()
+    if (nextFile) {
+      previewUrlRef.current = URL.createObjectURL(nextFile)
+      setPreviewUrl(previewUrlRef.current)
+    }
     setFileError(nextFile ? validateReelFile(nextFile, limits) ?? '' : '')
+    setDurationWarning(false)
     setFile(nextFile)
   }
 
@@ -162,7 +169,6 @@ function ReelSlide({
     if (!video) return
     if (active && !reducedMotion) {
       video.muted = true
-      setMuted(true)
       void video.play().catch(() => setPlaying(false))
     } else {
       video.pause()
@@ -189,7 +195,7 @@ function ReelSlide({
 
   return (
     <article className="reel-slide" ref={slideRef} aria-label={`Reel by ${reel.author.username}`}>
-      {reel.video_url ? <video ref={videoRef} className="reel-slide__video" src={reel.video_url} muted={muted} loop playsInline preload="metadata" aria-label={`Reel video by ${reel.author.username}`} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onClick={togglePlayback} /> : <div className="reel-slide__video reel-slide__video--error" role="alert">Video unavailable</div>}
+      {reel.video_url ? <video ref={videoRef} className="reel-slide__video" src={reel.video_url} muted={muted} loop playsInline preload="metadata" aria-label={`Reel video by ${reel.author.username}`} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onVolumeChange={(event) => setMuted(event.currentTarget.muted)} onClick={togglePlayback} /> : <div className="reel-slide__video reel-slide__video--error" role="alert">Video unavailable</div>}
       <div className="reel-slide__scrim" aria-hidden="true" />
       <button className="reel-play-toggle" type="button" aria-label={playing ? 'Pause Reel' : 'Play Reel'} aria-pressed={playing} onClick={togglePlayback}>{playing ? <Pause size={24} fill="currentColor" aria-hidden="true" /> : <Play size={24} fill="currentColor" aria-hidden="true" />}</button>
       <button className="reel-mute-toggle" type="button" aria-label={muted ? 'Unmute Reel' : 'Mute Reel'} aria-pressed={!muted} onClick={toggleMuted}>{muted ? <VolumeX size={20} aria-hidden="true" /> : <Volume2 size={20} aria-hidden="true" />}</button>
@@ -231,6 +237,7 @@ export function ReelsViewer({ embedded = false }: { embedded?: boolean }) {
   const loadMoreRef = useRef<HTMLDivElement>(null)
   const [viewerElement, setViewerElement] = useState<HTMLDivElement | null>(null)
   const reels: Reel[] = reelsQuery.data?.pages.flatMap((page) => page.items) ?? []
+  const { fetchNextPage, hasNextPage, isFetchingNextPage } = reelsQuery
   const setViewerRef = useCallback((element: HTMLDivElement | null) => {
     viewerRef.current = element
     setViewerElement(element)
@@ -247,15 +254,15 @@ export function ReelsViewer({ embedded = false }: { embedded?: boolean }) {
   useEffect(() => {
     const sentinel = loadMoreRef.current
     const root = viewerRef.current
-    if (!sentinel || !root || !reelsQuery.hasNextPage || typeof IntersectionObserver === 'undefined') return
+    if (!sentinel || !root || !hasNextPage || typeof IntersectionObserver === 'undefined') return
     const observer = new IntersectionObserver((entries) => {
-      if (entries.some((entry) => entry.isIntersecting) && !reelsQuery.isFetchingNextPage) {
-        void reelsQuery.fetchNextPage()
+      if (entries.some((entry) => entry.isIntersecting) && !isFetchingNextPage) {
+        void fetchNextPage()
       }
     }, { root, rootMargin: '240px 0px', threshold: 0 })
     observer.observe(sentinel)
     return () => observer.disconnect()
-  }, [reelsQuery.fetchNextPage, reelsQuery.hasNextPage, reelsQuery.isFetchingNextPage, reels.length])
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage, reels.length])
 
   function handleVisibility(reelId: string, isVisible: boolean) {
     setActiveId((current) => isVisible ? reelId : current === reelId ? null : current)
