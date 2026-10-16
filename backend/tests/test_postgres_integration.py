@@ -2521,6 +2521,60 @@ def test_migration_downgrade_refuses_message_notification_data(postgres_database
     asyncio.run(verify())
 
 
+def test_demo_class_sessions_are_idempotent_and_visible(postgres_database_url, monkeypatch):
+    from app.cli import seed_demo
+    from app.routes.classrooms import (
+        list_class_session_attendance,
+        list_class_sessions,
+    )
+
+    monkeypatch.setenv("ME_YOU_ENV", "development")
+
+    async def verify():
+        engine = create_async_engine(postgres_database_url)
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        try:
+            await seed_demo(session_factory)
+            await seed_demo(session_factory)
+            async with session_factory() as session:
+                teacher = await session.scalar(
+                    select(User).where(User.email == "demo.teacher@example.test")
+                )
+                student = await session.scalar(
+                    select(User).where(User.email == "demo.enrolled@example.test")
+                )
+                course = await session.scalar(
+                    select(Course).where(Course.code == "FOUND-101")
+                )
+                teacher_sessions = await list_class_sessions(
+                    course.id, teacher, session
+                )
+                student_sessions = await list_class_sessions(
+                    course.id, student, session
+                )
+
+                assert len(teacher_sessions) == len(student_sessions) == 2
+                assert {value["status"] for value in teacher_sessions} == {
+                    "LIVE",
+                    "SCHEDULED",
+                }
+                assert {value["id"] for value in teacher_sessions} == {
+                    value["id"] for value in student_sessions
+                }
+                live_session = next(
+                    value for value in teacher_sessions if value["status"] == "LIVE"
+                )
+                attendance = await list_class_session_attendance(
+                    uuid.UUID(live_session["id"]), teacher, session
+                )
+                assert len(attendance) == 1
+                assert attendance[0]["username"] == student.username
+        finally:
+            await engine.dispose()
+
+    asyncio.run(verify())
+
+
 def test_account_email_token_downgrade_preserves_lifecycle_data(postgres_database_url):
     from datetime import datetime, timedelta, timezone
 

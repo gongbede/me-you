@@ -12,7 +12,11 @@ from .account_tokens import purge_expired_account_email_tokens
 from .config import MEDIA_ORPHAN_UPLOAD_HOURS
 from .database import PostgresSessionLocal
 from .models import (
+    ClassSession,
+    ClassSessionAttendance,
     Comment,
+    ClassSession,
+    ClassSessionAttendance,
     Course,
     CourseTeacher,
     Conversation,
@@ -190,6 +194,39 @@ async def seed_demo(session_factory: Any = None) -> list[tuple[str, str, str]]:
             Enrollment,
             {"student_id": student.id, "course_id": courses[0].id},
         )
+        now = datetime.now(timezone.utc)
+        live_session = await _get_or_create(
+            session,
+            ClassSession,
+            {"course_id": courses[0].id, "title": "Demo live classroom"},
+            {
+                "created_by_id": teacher_user.id,
+                "description": "A sample live classroom for the demo course.",
+                "starts_at": now - timedelta(minutes=5),
+                "ends_at": now + timedelta(minutes=55),
+                "status": "LIVE",
+                "started_at": now - timedelta(minutes=5),
+            },
+        )
+        scheduled_start = now + timedelta(days=1)
+        scheduled_session = await _get_or_create(
+            session,
+            ClassSession,
+            {"course_id": courses[0].id, "title": "Demo classroom tomorrow"},
+            {
+                "created_by_id": teacher_user.id,
+                "description": "A sample scheduled classroom for the demo course.",
+                "starts_at": scheduled_start,
+                "ends_at": scheduled_start + timedelta(hours=1),
+                "status": "SCHEDULED",
+            },
+        )
+        for class_session in (live_session, scheduled_session):
+            await _get_or_create(
+                session,
+                ClassSessionAttendance,
+                {"session_id": class_session.id, "user_id": enrolled_user.id},
+            )
         invitation = await session.scalar(
             select(InstitutionMembershipRequest).where(
                 InstitutionMembershipRequest.institution_id == institution.id,
