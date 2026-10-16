@@ -7,6 +7,8 @@ import { useAuth } from '../hooks/useAuth'
 import { getTeachingCourses, listAdministeredInstitutions } from '../api/education'
 import { NotificationBell } from './NotificationBell'
 import { listConversations } from '../api/messaging'
+import { getMyProfile } from '../api/profile'
+import { ApiError } from '../api/client'
 
 const baseTabs = [
   { to: '/', label: 'Home', icon: House, end: true },
@@ -35,6 +37,19 @@ export function AppShell() {
     queryFn: listConversations,
     refetchInterval: isVisible ? 20_000 : false,
     refetchIntervalInBackground: false,
+  })
+  const profileQuery = useQuery({
+    queryKey: ['profile', 'me'],
+    queryFn: async () => {
+      try {
+        return await getMyProfile()
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 404) return null
+        throw error
+      }
+    },
+    enabled: Boolean(user),
+    retry: false,
   })
   const unreadMessages = messagesQuery.data?.reduce((total, conversation) => total + conversation.unread_count, 0) ?? 0
   const tabs = [
@@ -113,7 +128,15 @@ export function AppShell() {
         </nav>
         <div className="sidebar__bottom">
           <div className="sidebar__user">
-            <span className="avatar-initial" aria-hidden="true">{user?.username.slice(0, 1).toUpperCase()}</span>
+            {profileQuery.isError ? (
+              <button className="avatar-initial" type="button" aria-label="Retry loading avatar" onClick={() => void profileQuery.refetch()}>
+                <RotateCw size={16} aria-hidden="true" />
+              </button>
+            ) : profileQuery.data?.profile_picture_url ? (
+              <img className="avatar-initial sidebar__avatar-image" src={profileQuery.data.profile_picture_url} alt={`${profileQuery.data.display_name}'s avatar`} />
+            ) : (
+              <span className="avatar-initial" aria-hidden="true">{user?.username.slice(0, 1).toUpperCase()}</span>
+            )}
             <span className="sidebar__user-copy"><strong>{user?.username}</strong><small>{user?.email}</small></span>
           </div>
           <NavLink className="nav-link nav-link--quiet" to="/logout">

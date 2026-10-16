@@ -69,6 +69,19 @@ class OperationsTests(unittest.TestCase):
         self.assertEqual(response.json()["code"], "validation_error")
         self.assertNotIn('"input"', response.text)
 
+    def test_registration_rejects_whitespace_in_username(self):
+        with patch("app.main.RATE_LIMIT_ENABLED", False), TestClient(app) as client:
+            response = client.post(
+                "/register",
+                json={
+                    "username": "private handle",
+                    "email": "private@example.com",
+                    "password": "private-password",
+                },
+            )
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("username must not contain whitespace", response.text)
+
     def test_production_configuration_requires_db_secret_and_explicit_origins(self):
         validate_production_config(
             environment="production",

@@ -4,17 +4,20 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getTeachingCourses, listAdministeredInstitutions } from '../api/education'
 import { listConversations } from '../api/messaging'
+import { getMyProfile } from '../api/profile'
 import { AppShell } from './AppShell'
 
 vi.mock('../api/education', () => ({ getTeachingCourses: vi.fn(), listAdministeredInstitutions: vi.fn() }))
 vi.mock('../api/messaging', () => ({ listConversations: vi.fn() }))
+vi.mock('../api/profile', () => ({ getMyProfile: vi.fn() }))
 vi.mock('../hooks/useAuth', () => ({
-  useAuth: () => ({ user: { username: 'teacher', email: 'teacher@example.test' } }),
+  useAuth: () => ({ user: { id: 'teacher-id', username: 'teacher', email: 'teacher@example.test' } }),
 }))
 
 const getCourses = vi.mocked(getTeachingCourses)
 const getAdminInstitutions = vi.mocked(listAdministeredInstitutions)
 const getConversations = vi.mocked(listConversations)
+const getProfile = vi.mocked(getMyProfile)
 
 function renderAppShell(initialEntry = '/') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -33,6 +36,46 @@ describe('AppShell Teaching navigation', () => {
     getCourses.mockReset()
     getAdminInstitutions.mockReset().mockResolvedValue([])
     getConversations.mockReset().mockResolvedValue([])
+    getProfile.mockReset().mockResolvedValue({
+      user_id: 'teacher-id',
+      display_name: 'Teacher',
+      bio: null,
+      profile_picture_url: null,
+      location: null,
+      website: null,
+      visibility: 'NETWORK',
+      created_at: '',
+      updated_at: '',
+    })
+  })
+
+  it('shows the first-letter fallback when the user has no avatar', async () => {
+    renderAppShell()
+
+    const navigation = screen.getByRole('complementary', { name: 'Main navigation' })
+    expect(await within(navigation).findByText('T', { selector: '.avatar-initial' })).toBeInTheDocument()
+    expect(within(navigation).queryByRole('img', { name: "Teacher's avatar" })).not.toBeInTheDocument()
+  })
+
+  it('shows the user avatar image when their profile has one', async () => {
+    getProfile.mockResolvedValueOnce({
+      user_id: 'teacher-id',
+      display_name: 'Teacher',
+      bio: null,
+      profile_picture_url: 'https://example.test/teacher.png',
+      location: null,
+      website: null,
+      visibility: 'NETWORK',
+      created_at: '',
+      updated_at: '',
+    })
+    renderAppShell()
+
+    const navigation = screen.getByRole('complementary', { name: 'Main navigation' })
+    expect(await within(navigation).findByRole('img', { name: "Teacher's avatar" })).toHaveAttribute(
+      'src',
+      'https://example.test/teacher.png',
+    )
   })
 
   it('offers a retry when course lookup fails and restores Teaching on success', async () => {

@@ -3039,6 +3039,10 @@ button:disabled {
     font-weight: 900;
   }
 
+  .sidebar__avatar-image {
+    object-fit: cover;
+  }
+
   .sidebar__user-copy {
     display: grid;
     min-width: 0;
