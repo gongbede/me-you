@@ -346,8 +346,8 @@ async def delete_account(
     current_user: User = Depends(get_current_postgres_user),
     database: AsyncSession = Depends(get_postgres_session),
     request: Request = None,
-    response: Response = None,
     providers: ProviderRegistry = Depends(get_provider_registry),
+    response: Response = None,
 ):
     await confirm_current_password(data, current_user)
     await ensure_account_can_be_deactivated(

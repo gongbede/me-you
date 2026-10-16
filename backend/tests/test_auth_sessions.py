@@ -40,6 +40,8 @@ class AuthSession:
         for value in self.added:
             if getattr(value, "id", None) is None:
                 value.id = uuid.uuid4()
+            if isinstance(value, User) and value.is_active is None:
+                value.is_active = True
 
     async def commit(self):
         self.committed = True
@@ -138,7 +140,8 @@ def test_password_login_rejects_invalid_credentials_without_setting_cookie():
     assert "set-cookie" not in response.headers
 
 
-def test_google_login_uses_cookie_session_for_verified_existing_identity():
+def test_google_login_uses_cookie_session_for_verified_existing_identity(monkeypatch):
+    monkeypatch.setenv("ME_YOU_GOOGLE_CLIENT_ID", "test-google-client-id")
     user = User(
         id=uuid.uuid4(), username="google-user", email="google@example.test",
         password_hash="stored-hash", token_version=0, is_active=True,
