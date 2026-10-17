@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
-import { MessageCircle, UserRound, UserRoundPlus, UserRoundMinus } from 'lucide-react'
+import { Ban, MessageCircle, UserRound, UserRoundPlus, UserRoundMinus } from 'lucide-react'
 import { getFriendlyErrorMessage } from '../api/client'
 import { followUser, getPublicProfile, getUserFollowers, unfollowUser } from '../api/social'
 import { useAuth } from '../hooks/useAuth'
 import { createDirectConversation } from '../api/messaging'
+import { blockUser, listBlockedUsers, unblockUser } from '../api/moderation'
 
 export function PublicProfilePage() {
   const { userId = '' } = useParams()
@@ -37,6 +38,21 @@ export function PublicProfilePage() {
       navigate(`/messages/${conversation.id}`)
     },
   })
+  const blocksQuery = useQuery({
+    queryKey: ['moderation', 'blocks'],
+    queryFn: () => listBlockedUsers(),
+    enabled: Boolean(currentUser && userId !== currentUser.id),
+  })
+  const blockMutation = useMutation({
+    mutationFn: (blocked: boolean) => blocked ? unblockUser(userId) : blockUser(userId),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['moderation', 'blocks'] }),
+        queryClient.invalidateQueries({ queryKey: ['feed'] }),
+        queryClient.invalidateQueries({ queryKey: ['reels'] }),
+      ])
+    },
+  })
 
   if (profileQuery.isPending) return <div className="page-state" role="status">Loading profile…</div>
   if (profileQuery.isError) return (
@@ -50,12 +66,16 @@ export function PublicProfilePage() {
   const profile = profileQuery.data
   const isSelf = currentUser?.id === userId
   const isFollowing = Boolean(followersQuery.data?.some((follower) => follower.id === currentUser?.id))
+  const isBlocked = Boolean(blocksQuery.data?.some((blocked) => blocked.id === userId))
 
   return (
     <div className="page-stack profile-page">
       <section className="page-heading-row">
         <div><span className="eyebrow">COMMUNITY</span><h1>{profile.display_name}</h1></div>
         {!isSelf && currentUser && <button className="button button--outline" type="button" disabled={messageMutation.isPending} onClick={() => messageMutation.mutate()}><MessageCircle size={17} aria-hidden="true" />{messageMutation.isPending ? 'Opening…' : 'Message'}</button>}
+        {!isSelf && currentUser && <button className="button button--outline" type="button" disabled={blocksQuery.isPending || blockMutation.isPending} onClick={() => {
+          if (window.confirm(`${isBlocked ? 'Unblock' : 'Block'} ${profile.display_name}?`)) blockMutation.mutate(isBlocked)
+        }}><Ban size={17} aria-hidden="true" />{blockMutation.isPending ? 'Saving…' : isBlocked ? 'Unblock' : 'Block user'}</button>}
         {!isSelf && currentUser && !followersQuery.isPending && !followersQuery.isError && (
           <button
             className={`button ${isFollowing ? 'button--outline' : 'button--primary'}`}
@@ -71,6 +91,8 @@ export function PublicProfilePage() {
       {followersQuery.isError && <p className="form-alert" role="alert">{getFriendlyErrorMessage(followersQuery.error)}</p>}
       {followMutation.isError && <p className="form-alert" role="alert">{getFriendlyErrorMessage(followMutation.error)}</p>}
       {messageMutation.isError && <p className="form-alert" role="alert">{getFriendlyErrorMessage(messageMutation.error)}</p>}
+      {blocksQuery.isError && <p className="form-alert" role="alert">{getFriendlyErrorMessage(blocksQuery.error)}</p>}
+      {blockMutation.isError && <p className="form-alert" role="alert">{getFriendlyErrorMessage(blockMutation.error)}</p>}
       <section className="profile-card" aria-label={`${profile.display_name}'s profile`}>
         <div className="profile-card__identity">
           <div className="profile-avatar">

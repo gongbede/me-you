@@ -6,6 +6,7 @@ import { getFriendlyErrorMessage } from '../api/client'
 import { setPostLike } from '../api/social'
 import { CommentsSection } from '../components/CommentsSection'
 import { UserIdentity } from '../components/UserIdentity'
+import { ReportDialog } from '../components/ReportDialog'
 import { useAuth } from '../hooks/useAuth'
 import { deleteReel, getReelLimits, getReelsPage, uploadReel, validateReelFile, type Reel, type ReelFeedPage } from '../api/reels'
 
@@ -203,6 +204,7 @@ function ReelSlide({
         <button className={`reel-action${reel.liked_by_me ? ' is-liked' : ''}`} type="button" aria-pressed={reel.liked_by_me} aria-label={`${reel.liked_by_me ? 'Unlike' : 'Like'} Reel, ${reel.like_count} likes`} disabled={likeMutation.isPending} onClick={() => likeMutation.mutate(!reel.liked_by_me)}><Heart size={22} fill={reel.liked_by_me ? 'currentColor' : 'none'} aria-hidden="true" /><span>{reel.like_count}</span></button>
         <button className="reel-action" type="button" aria-expanded={commentsOpen} aria-label={`Comments, ${reel.comment_count}`} onClick={() => setCommentsOpen(true)}><MessageCircle size={22} aria-hidden="true" /><span>{reel.comment_count}</span></button>
         {reel.author_id === currentUserId && <button className="reel-action" type="button" aria-label="Delete Reel" onClick={deleteOwnReel}><Trash2 size={20} aria-hidden="true" /></button>}
+        {reel.author_id !== currentUserId && <ReportDialog targetType="REEL" targetId={reel.id} />}
       </aside>
       <div className="reel-slide__caption">
         <Link to={`/users/${reel.author_id}`} className="reel-author"><UserIdentity userId={reel.author_id} username={reel.author.username} displayName={reel.author.display_name} avatarUrl={reel.author.avatar_url} currentUserId={currentUserId} compact /></Link>

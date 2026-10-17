@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Text, Uuid
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
@@ -17,6 +17,7 @@ class Comment(Base):
     __table_args__ = (
         CheckConstraint("length(btrim(content)) > 0", name="ck_comments_content_not_blank"),
         Index("ix_comments_post_created_at", "post_id", "created_at"),
+        Index("ix_comments_is_hidden", "is_hidden", "created_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -33,6 +34,9 @@ class Comment(Base):
         nullable=False,
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    is_hidden: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

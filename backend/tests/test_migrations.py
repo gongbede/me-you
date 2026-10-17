@@ -26,6 +26,7 @@ from app.models import (
     Message,
     Notification,
     NotificationPreference,
+    Report,
     Post,
     PostLike,
     PhoneLoginCode,
@@ -39,6 +40,7 @@ from app.models import (
     Student,
     Teacher,
     User,
+    UserBlock,
 )
 
 
@@ -72,6 +74,7 @@ class MigrationFoundationTests(unittest.TestCase):
                 "assessment_submissions", "assessment_results", "lesson_progress", "activities", "login_throttles", "media_assets",
                 "rate_limit_counters",
                 "security_events",
+                "reports", "user_blocks",
                 "institution_membership_requests",
                 "account_email_tokens",
                 "auth_identities",
@@ -79,6 +82,8 @@ class MigrationFoundationTests(unittest.TestCase):
             },
         )
         self.assertIs(User.__table__, Base.metadata.tables["users"])
+        self.assertIs(Report.__table__, Base.metadata.tables["reports"])
+        self.assertIs(UserBlock.__table__, Base.metadata.tables["user_blocks"])
         self.assertIs(Profile.__table__, Base.metadata.tables["profiles"])
         self.assertIs(Post.__table__, Base.metadata.tables["posts"])
         self.assertIs(Comment.__table__, Base.metadata.tables["comments"])

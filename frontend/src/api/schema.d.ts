@@ -209,6 +209,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/content/{target_type}/{target_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Set Content Hidden */
+        patch: operations["set_content_hidden_admin_content__target_type___target_id__patch"];
+        trace?: never;
+    };
+    "/admin/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Reports */
+        get: operations["list_reports_admin_reports_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/reports/{report_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Report */
+        patch: operations["update_report_admin_reports__report_id__patch"];
+        trace?: never;
+    };
+    "/admin/users/{user_id}/suspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Suspend User */
+        post: operations["suspend_user_admin_users__user_id__suspend_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/users/{user_id}/unsuspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Unsuspend User */
+        post: operations["unsuspend_user_admin_users__user_id__unsuspend_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/": {
         parameters: {
             query?: never;
@@ -414,6 +499,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/content/{target_type}/{target_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Set Content Hidden */
+        patch: operations["set_content_hidden_api_v1_admin_content__target_type___target_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/admin/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Reports */
+        get: operations["list_reports_api_v1_admin_reports_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/reports/{report_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Report */
+        patch: operations["update_report_api_v1_admin_reports__report_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/admin/users/{user_id}/suspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Suspend User */
+        post: operations["suspend_user_api_v1_admin_users__user_id__suspend_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{user_id}/unsuspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Unsuspend User */
+        post: operations["unsuspend_user_api_v1_admin_users__user_id__unsuspend_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/google": {
         parameters: {
             query?: never;
@@ -476,6 +646,23 @@ export interface paths {
         put?: never;
         /** Verify Phone Code */
         post: operations["verify_phone_code_api_v1_auth_phone_verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/blocks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Blocked Users */
+        get: operations["list_blocked_users_api_v1_blocks_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1923,6 +2110,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/platform-admin/access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Platform Admin Access */
+        get: operations["platform_admin_access_api_v1_platform_admin_access_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/platform-admin/users": {
         parameters: {
             query?: never;
@@ -2201,6 +2405,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Report */
+        post: operations["create_report_api_v1_reports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/search": {
         parameters: {
             query?: never;
@@ -2230,6 +2451,24 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{user_id}/block": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Block User */
+        post: operations["block_user_api_v1_users__user_id__block_post"];
+        /** Unblock User */
+        delete: operations["unblock_user_api_v1_users__user_id__block_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2366,6 +2605,23 @@ export interface paths {
         put?: never;
         /** Verify Phone Code */
         post: operations["verify_phone_code_auth_phone_verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/blocks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Blocked Users */
+        get: operations["list_blocked_users_blocks_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3813,6 +4069,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/platform-admin/access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Platform Admin Access */
+        get: operations["platform_admin_access_platform_admin_access_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/platform-admin/users": {
         parameters: {
             query?: never;
@@ -4091,6 +4364,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Report */
+        post: operations["create_report_reports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/search": {
         parameters: {
             query?: never;
@@ -4120,6 +4410,24 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{user_id}/block": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Block User */
+        post: operations["block_user_users__user_id__block_post"];
+        /** Unblock User */
+        delete: operations["unblock_user_users__user_id__block_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -4290,6 +4598,18 @@ export interface components {
             csrf_token: string;
             /** Email */
             email: string;
+            /** Id */
+            id: string;
+            /** Username */
+            username: string;
+        };
+        /** BlockResponse */
+        BlockResponse: {
+            /** Blocked */
+            blocked: boolean;
+        };
+        /** BlockedUserResponse */
+        BlockedUserResponse: {
             /** Id */
             id: string;
             /** Username */
@@ -5539,6 +5859,53 @@ export interface components {
             /** Unread Count */
             unread_count: number;
         };
+        /** ReportCreate */
+        ReportCreate: {
+            /** Details */
+            details?: string | null;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "SPAM" | "HARASSMENT" | "INAPPROPRIATE" | "MISINFORMATION" | "OTHER";
+            /** Target Id */
+            target_id: string;
+            /**
+             * Target Type
+             * @enum {string}
+             */
+            target_type: "POST" | "COMMENT" | "REEL" | "USER" | "MESSAGE";
+        };
+        /** ReportResponse */
+        ReportResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Details */
+            details: string | null;
+            /** Id */
+            id: string;
+            /** Reason */
+            reason: string;
+            /** Reviewer Id */
+            reviewer_id?: string | null;
+            /** Status */
+            status: string;
+            /** Target Id */
+            target_id: string;
+            /** Target Type */
+            target_type: string;
+        };
+        /** ReportStatusUpdate */
+        ReportStatusUpdate: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "REVIEWED" | "DISMISSED" | "ACTIONED";
+        };
         /** ResultCreate */
         ResultCreate: {
             /** Feedback */
@@ -5597,11 +5964,8 @@ export interface components {
             institution_id: string | null;
             /** Name */
             name: string;
-            /**
-             * Resource Type
-             * @enum {string}
-             */
-            resource_type: "institution" | "course";
+            /** Resource Type */
+            resource_type: string;
         };
         /** StudentCreate */
         StudentCreate: {
@@ -6138,6 +6502,170 @@ export interface operations {
             };
         };
     };
+    set_content_hidden_admin_content__target_type___target_id__patch: {
+        parameters: {
+            query: {
+                hidden: boolean;
+            };
+            header?: never;
+            path: {
+                target_type: string;
+                target_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_reports_admin_reports_get: {
+        parameters: {
+            query?: {
+                status?: string;
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_report_admin_reports__report_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportStatusUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    suspend_user_admin_users__user_id__suspend_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unsuspend_user_admin_users__user_id__unsuspend_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     root_api_v1__get: {
         parameters: {
             query?: never;
@@ -6489,6 +7017,170 @@ export interface operations {
             };
         };
     };
+    set_content_hidden_api_v1_admin_content__target_type___target_id__patch: {
+        parameters: {
+            query: {
+                hidden: boolean;
+            };
+            header?: never;
+            path: {
+                target_type: string;
+                target_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_reports_api_v1_admin_reports_get: {
+        parameters: {
+            query?: {
+                status?: string;
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_report_api_v1_admin_reports__report_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportStatusUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    suspend_user_api_v1_admin_users__user_id__suspend_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unsuspend_user_api_v1_admin_users__user_id__unsuspend_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     google_sign_in_api_v1_auth_google_post: {
         parameters: {
             query?: never;
@@ -6595,6 +7287,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LoginResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_blocked_users_api_v1_blocks_get: {
+        parameters: {
+            query?: {
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockedUserResponse"][];
                 };
             };
             /** @description Validation Error */
@@ -10648,6 +11372,26 @@ export interface operations {
             };
         };
     };
+    platform_admin_access_api_v1_platform_admin_access_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     list_platform_users_api_v1_platform_admin_users_get: {
         parameters: {
             query?: {
@@ -11333,6 +12077,39 @@ export interface operations {
             };
         };
     };
+    create_report_api_v1_reports_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     global_search_api_v1_search_get: {
         parameters: {
             query: {
@@ -11391,6 +12168,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    block_user_api_v1_users__user_id__block_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unblock_user_api_v1_users__user_id__block_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockResponse"];
                 };
             };
             /** @description Validation Error */
@@ -11669,6 +12508,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LoginResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_blocked_users_blocks_get: {
+        parameters: {
+            query?: {
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockedUserResponse"][];
                 };
             };
             /** @description Validation Error */
@@ -15722,6 +16593,26 @@ export interface operations {
             };
         };
     };
+    platform_admin_access_platform_admin_access_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     list_platform_users_platform_admin_users_get: {
         parameters: {
             query?: {
@@ -16407,6 +17298,39 @@ export interface operations {
             };
         };
     };
+    create_report_reports_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     global_search_search_get: {
         parameters: {
             query: {
@@ -16465,6 +17389,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    block_user_users__user_id__block_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unblock_user_users__user_id__block_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockResponse"];
                 };
             };
             /** @description Validation Error */

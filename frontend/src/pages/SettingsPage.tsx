@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { LoaderCircle, RotateCw } from 'lucide-react'
 import {
   getNotificationPreferences,
@@ -6,6 +6,7 @@ import {
   type NotificationPreferences,
 } from '../api/notifications'
 import { getFriendlyErrorMessage } from '../api/client'
+import { listBlockedUsers, unblockUser } from '../api/moderation'
 
 const notificationLabels: Record<keyof NotificationPreferences, string> = {
   COMMENT: 'Comments and replies',
@@ -30,12 +31,25 @@ export function SettingsPage() {
       queryClient.setQueryData(queryKey, result)
     },
   })
+  const blocksQuery = useInfiniteQuery({
+    queryKey: ['moderation', 'blocks'],
+    queryFn: ({ pageParam }) => listBlockedUsers(pageParam),
+    initialPageParam: 0,
+    getNextPageParam: (page, pages) => page.length === 50 ? pages.length * 50 : undefined,
+  })
+  const unblockMutation = useMutation({
+    mutationFn: unblockUser,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['moderation', 'blocks'] })
+    },
+  })
 
   function togglePreference(type: keyof NotificationPreferences) {
     const preferences = preferencesQuery.data?.preferences
     if (!preferences) return
     saveMutation.mutate({ preferences: { [type]: !preferences[type] } })
   }
+  const blockedUsers = blocksQuery.data?.pages.flatMap((page) => page) ?? []
 
   return (
     <section className="page-shell">
@@ -75,6 +89,19 @@ export function SettingsPage() {
               {saveMutation.isError && <p className="form-alert" role="alert">{getFriendlyErrorMessage(saveMutation.error)}</p>}
             </div>
           )}
+        </section>
+
+        <section className="card">
+          <h2>Blocked users</h2>
+          {blocksQuery.isPending ? <p className="learning-loading" role="status">Loading blocked users…</p> : blocksQuery.isError ? (
+            <div className="inline-error" role="alert"><p>{getFriendlyErrorMessage(blocksQuery.error)}</p><button className="button button--outline" type="button" onClick={() => void blocksQuery.refetch()}>Retry</button></div>
+          ) : blockedUsers.length === 0 ? <p className="muted-copy">You haven’t blocked anyone.</p> : (
+            <ul className="settings-blocked-list">
+              {blockedUsers.map((blocked) => <li key={blocked.id}><span>@{blocked.username}</span><button className="button button--outline" type="button" disabled={unblockMutation.isPending} onClick={() => unblockMutation.mutate(blocked.id)}>Unblock</button></li>)}
+            </ul>
+          )}
+          {blocksQuery.hasNextPage && <button className="button button--outline" type="button" disabled={blocksQuery.isFetchingNextPage} onClick={() => void blocksQuery.fetchNextPage()}>{blocksQuery.isFetchingNextPage ? 'Loading…' : 'Load more blocked users'}</button>}
+          {unblockMutation.isError && <p className="form-alert" role="alert">{getFriendlyErrorMessage(unblockMutation.error)}</p>}
         </section>
 
         <section className="card">

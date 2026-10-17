@@ -28,6 +28,8 @@ from .student import Student
 from .teacher import Teacher
 from .notification import Notification
 from .notification_preference import NotificationPreference
+from .report import Report
+from .user_block import UserBlock
 from .post import Post
 from .post_like import PostLike
 from .phone_login_code import PhoneLoginCode
@@ -68,6 +70,8 @@ __all__ = [
 	"Follow",
 	"Notification",
 	"NotificationPreference",
+	"Report",
+	"UserBlock",
 	"Post",
 	"PostLike",
 	"PhoneLoginCode",

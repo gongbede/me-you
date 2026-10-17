@@ -284,6 +284,37 @@
         "title": "AuthSessionResponse",
         "type": "object"
       },
+      "BlockResponse": {
+        "properties": {
+          "blocked": {
+            "title": "Blocked",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "blocked"
+        ],
+        "title": "BlockResponse",
+        "type": "object"
+      },
+      "BlockedUserResponse": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "username"
+        ],
+        "title": "BlockedUserResponse",
+        "type": "object"
+      },
       "ClassSessionAttendanceResponse": {
         "properties": {
           "joined_at": {
@@ -3602,6 +3633,135 @@
         "title": "ReadStateResponse",
         "type": "object"
       },
+      "ReportCreate": {
+        "properties": {
+          "details": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Details"
+          },
+          "reason": {
+            "enum": [
+              "SPAM",
+              "HARASSMENT",
+              "INAPPROPRIATE",
+              "MISINFORMATION",
+              "OTHER"
+            ],
+            "title": "Reason",
+            "type": "string"
+          },
+          "target_id": {
+            "title": "Target Id",
+            "type": "string"
+          },
+          "target_type": {
+            "enum": [
+              "POST",
+              "COMMENT",
+              "REEL",
+              "USER",
+              "MESSAGE"
+            ],
+            "title": "Target Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_type",
+          "target_id",
+          "reason"
+        ],
+        "title": "ReportCreate",
+        "type": "object"
+      },
+      "ReportResponse": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "details": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Details"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "reviewer_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewer Id"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "target_id": {
+            "title": "Target Id",
+            "type": "string"
+          },
+          "target_type": {
+            "title": "Target Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "target_type",
+          "target_id",
+          "reason",
+          "details",
+          "status",
+          "created_at"
+        ],
+        "title": "ReportResponse",
+        "type": "object"
+      },
+      "ReportStatusUpdate": {
+        "properties": {
+          "status": {
+            "enum": [
+              "REVIEWED",
+              "DISMISSED",
+              "ACTIONED"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "ReportStatusUpdate",
+        "type": "object"
+      },
       "ResultCreate": {
         "properties": {
           "feedback": {
@@ -3768,10 +3928,6 @@
             "type": "string"
           },
           "resource_type": {
-            "enum": [
-              "institution",
-              "course"
-            ],
             "title": "Resource Type",
             "type": "string"
           }
@@ -4740,6 +4896,296 @@
         ]
       }
     },
+    "/admin/content/{target_type}/{target_id}": {
+      "patch": {
+        "operationId": "set_content_hidden_admin_content__target_type___target_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "target_type",
+            "required": true,
+            "schema": {
+              "title": "Target Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "target_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Target Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "hidden",
+            "required": true,
+            "schema": {
+              "title": "Hidden",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Content Hidden",
+        "tags": [
+          "moderation"
+        ]
+      }
+    },
+    "/admin/reports": {
+      "get": {
+        "operationId": "list_reports_admin_reports_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "default": "OPEN",
+              "pattern": "^(OPEN|REVIEWED|DISMISSED|ACTIONED)$",
+              "title": "Status",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ReportResponse"
+                  },
+                  "title": "Response List Reports Admin Reports Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Reports",
+        "tags": [
+          "moderation"
+        ]
+      }
+    },
+    "/admin/reports/{report_id}": {
+      "patch": {
+        "operationId": "update_report_admin_reports__report_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Report Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportStatusUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Report",
+        "tags": [
+          "moderation"
+        ]
+      }
+    },
+    "/admin/users/{user_id}/suspend": {
+      "post": {
+        "operationId": "suspend_user_admin_users__user_id__suspend_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Suspend User",
+        "tags": [
+          "moderation"
+        ]
+      }
+    },
+    "/admin/users/{user_id}/unsuspend": {
+      "post": {
+        "operationId": "unsuspend_user_admin_users__user_id__unsuspend_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Unsuspend User",
+        "tags": [
+          "moderation"
+        ]
+      }
+    },
     "/api/v1/": {
       "get": {
         "operationId": "root_api_v1__get",
@@ -5181,6 +5627,296 @@
         ]
       }
     },
+    "/api/v1/admin/content/{target_type}/{target_id}": {
+      "patch": {
+        "operationId": "set_content_hidden_api_v1_admin_content__target_type___target_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "target_type",
+            "required": true,
+            "schema": {
+              "title": "Target Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "target_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Target Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "hidden",
+            "required": true,
+            "schema": {
+              "title": "Hidden",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Content Hidden",
+        "tags": [
+          "moderation"
+        ]
+      }
+    },
+    "/api/v1/admin/reports": {
+      "get": {
+        "operationId": "list_reports_api_v1_admin_reports_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "default": "OPEN",
+              "pattern": "^(OPEN|REVIEWED|DISMISSED|ACTIONED)$",
+              "title": "Status",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ReportResponse"
+                  },
+                  "title": "Response List Reports Api V1 Admin Reports Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Reports",
+        "tags": [
+          "moderation"
+        ]
+      }
+    },
+    "/api/v1/admin/reports/{report_id}": {
+      "patch": {
+        "operationId": "update_report_api_v1_admin_reports__report_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Report Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportStatusUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Report",
+        "tags": [
+          "moderation"
+        ]
+      }
+    },
+    "/api/v1/admin/users/{user_id}/suspend": {
+      "post": {
+        "operationId": "suspend_user_api_v1_admin_users__user_id__suspend_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Suspend User",
+        "tags": [
+          "moderation"
+        ]
+      }
+    },
+    "/api/v1/admin/users/{user_id}/unsuspend": {
+      "post": {
+        "operationId": "unsuspend_user_api_v1_admin_users__user_id__unsuspend_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Unsuspend User",
+        "tags": [
+          "moderation"
+        ]
+      }
+    },
     "/api/v1/auth/google": {
       "post": {
         "operationId": "google_sign_in_api_v1_auth_google_post",
@@ -5320,6 +6056,71 @@
         "summary": "Verify Phone Code",
         "tags": [
           "authentication"
+        ]
+      }
+    },
+    "/api/v1/blocks": {
+      "get": {
+        "operationId": "list_blocked_users_api_v1_blocks_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BlockedUserResponse"
+                  },
+                  "title": "Response List Blocked Users Api V1 Blocks Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Blocked Users",
+        "tags": [
+          "moderation"
         ]
       }
     },
@@ -12158,6 +12959,30 @@
         ]
       }
     },
+    "/api/v1/platform-admin/access": {
+      "get": {
+        "operationId": "platform_admin_access_api_v1_platform_admin_access_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Platform Admin Access",
+        "tags": [
+          "platform-administration"
+        ]
+      }
+    },
     "/api/v1/platform-admin/users": {
       "get": {
         "operationId": "list_platform_users_api_v1_platform_admin_users_get",
@@ -13276,6 +14101,52 @@
         "summary": "Register"
       }
     },
+    "/api/v1/reports": {
+      "post": {
+        "operationId": "create_report_api_v1_reports_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Report",
+        "tags": [
+          "moderation"
+        ]
+      }
+    },
     "/api/v1/search": {
       "get": {
         "operationId": "global_search_api_v1_search_get",
@@ -13286,7 +14157,7 @@
             "required": true,
             "schema": {
               "maxLength": 100,
-              "minLength": 1,
+              "minLength": 2,
               "title": "Query",
               "type": "string"
             }
@@ -13510,6 +14381,100 @@
         "summary": "List Security Events",
         "tags": [
           "security-events"
+        ]
+      }
+    },
+    "/api/v1/users/{user_id}/block": {
+      "delete": {
+        "operationId": "unblock_user_api_v1_users__user_id__block_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlockResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Unblock User",
+        "tags": [
+          "moderation"
+        ]
+      },
+      "post": {
+        "operationId": "block_user_api_v1_users__user_id__block_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlockResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Block User",
+        "tags": [
+          "moderation"
         ]
       }
     },
@@ -13947,6 +14912,71 @@
         "summary": "Verify Phone Code",
         "tags": [
           "authentication"
+        ]
+      }
+    },
+    "/blocks": {
+      "get": {
+        "operationId": "list_blocked_users_blocks_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BlockedUserResponse"
+                  },
+                  "title": "Response List Blocked Users Blocks Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Blocked Users",
+        "tags": [
+          "moderation"
         ]
       }
     },
@@ -20785,6 +21815,30 @@
         ]
       }
     },
+    "/platform-admin/access": {
+      "get": {
+        "operationId": "platform_admin_access_platform_admin_access_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Platform Admin Access",
+        "tags": [
+          "platform-administration"
+        ]
+      }
+    },
     "/platform-admin/users": {
       "get": {
         "operationId": "list_platform_users_platform_admin_users_get",
@@ -21903,6 +22957,52 @@
         "summary": "Register"
       }
     },
+    "/reports": {
+      "post": {
+        "operationId": "create_report_reports_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Report",
+        "tags": [
+          "moderation"
+        ]
+      }
+    },
     "/search": {
       "get": {
         "operationId": "global_search_search_get",
@@ -21913,7 +23013,7 @@
             "required": true,
             "schema": {
               "maxLength": 100,
-              "minLength": 1,
+              "minLength": 2,
               "title": "Query",
               "type": "string"
             }
@@ -22137,6 +23237,100 @@
         "summary": "List Security Events",
         "tags": [
           "security-events"
+        ]
+      }
+    },
+    "/users/{user_id}/block": {
+      "delete": {
+        "operationId": "unblock_user_users__user_id__block_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlockResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Unblock User",
+        "tags": [
+          "moderation"
+        ]
+      },
+      "post": {
+        "operationId": "block_user_users__user_id__block_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlockResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Block User",
+        "tags": [
+          "moderation"
         ]
       }
     },

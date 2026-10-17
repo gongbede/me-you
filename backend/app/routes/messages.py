@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ..database import get_postgres_session
-from ..models import Conversation, ConversationMember, Message, Notification, User
+from ..models import Conversation, ConversationMember, Message, Notification, User, UserBlock
 from ..notification_preferences import add_notification
 from ..pagination import descending_time_uuid_clause, time_uuid_cursor
 from ..schemas import CreateMessage, MessageResponse, ReadStateResponse, UpdateMessage
@@ -45,6 +45,21 @@ async def send_message(conversation_id: uuid.UUID, data: CreateMessage, current_
     )
     if conversation is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
+    if conversation.type == "DIRECT":
+        other_user_id = await database.scalar(
+            select(ConversationMember.user_id).where(
+                ConversationMember.conversation_id == conversation_id,
+                ConversationMember.user_id != current_user.id,
+            )
+        )
+        blocked = await database.scalar(
+            select(UserBlock.id).where(
+                ((UserBlock.blocker_id == current_user.id) & (UserBlock.blocked_id == other_user_id))
+                | ((UserBlock.blocker_id == other_user_id) & (UserBlock.blocked_id == current_user.id))
+            )
+        ) if other_user_id is not None else None
+        if blocked is not None:
+            raise HTTPException(status_code=404, detail="Conversation unavailable")
     message = Message(conversation_id=conversation_id, sender_id=current_user.id, sender=current_user, content=data.content)
     database.add(message)
     member_ids = list((await database.scalars(select(ConversationMember.user_id).where(ConversationMember.conversation_id == conversation_id, ConversationMember.user_id != current_user.id))).all())

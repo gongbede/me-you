@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, Text, Uuid
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
@@ -27,6 +27,7 @@ class Post(Base):
         ),
         Index("ix_posts_author_created_at", "author_id", "created_at"),
         Index("ix_posts_type_created_at", "post_type", "created_at"),
+        Index("ix_posts_is_hidden", "is_hidden", "created_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -46,6 +47,9 @@ class Post(Base):
     )
     media_asset_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("media_assets.id", ondelete="RESTRICT"), nullable=True
+    )
+    is_hidden: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

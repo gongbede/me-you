@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ..database import get_postgres_session
-from ..models import Comment, Notification, Post, User
+from ..models import Comment, Notification, Post, User, UserBlock
 from ..notification_preferences import add_notification
 from ..pagination import ascending_time_uuid_clause, time_uuid_cursor
 from ..privacy import require_post_visibility
@@ -109,6 +109,14 @@ async def list_comments(
         .join(User, User.id == Comment.author_id)
         .where(Comment.post_id == post_id, User.is_active.is_(True))
     )
+    if current_user is None or not getattr(current_user, "is_platform_admin", False):
+        statement = statement.where(Comment.is_hidden.is_(False))
+        if current_user is not None:
+            blocked_author = select(UserBlock.id).where(
+                ((UserBlock.blocker_id == current_user.id) & (UserBlock.blocked_id == Comment.author_id))
+                | ((UserBlock.blocker_id == Comment.author_id) & (UserBlock.blocked_id == current_user.id))
+            )
+            statement = statement.where(~blocked_author.exists())
     if cursor is not None:
         statement = statement.where(
             ascending_time_uuid_clause(Comment.created_at, Comment.id, cursor)

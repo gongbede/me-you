@@ -43,6 +43,7 @@ from .routes.media import router as media_router
 from .routes.likes import router as likes_router
 from .routes.me import router as me_router
 from .routes.messages import router as messages_router
+from .routes.moderation import router as moderation_router
 from .routes.notifications import router as notifications_router
 from .routes.posts import router as posts_router
 from .routes.profile import router as profile_router
@@ -155,6 +156,7 @@ routers = (
     notifications_router,
     conversations_router,
     messages_router,
+    moderation_router,
     education_router,
     education_learning_router,
     institutions_router,

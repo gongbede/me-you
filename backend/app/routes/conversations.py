@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ..database import get_postgres_session
-from ..models import Conversation, ConversationMember, Message, User
+from ..models import Conversation, ConversationMember, Message, User, UserBlock
 from ..schemas import (
     AddConversationMember,
     ConversationMemberResponse,
@@ -136,7 +136,15 @@ async def create_direct(data: CreateDirectConversation, current_user: User = Dep
         select(User).where(User.id == target_id, User.is_active.is_(True))
     )
     if target is None:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="Conversation unavailable")
+    blocked = await database.scalar(
+        select(UserBlock.id).where(
+            ((UserBlock.blocker_id == current_user.id) & (UserBlock.blocked_id == target.id))
+            | ((UserBlock.blocker_id == target.id) & (UserBlock.blocked_id == current_user.id))
+        )
+    )
+    if blocked is not None:
+        raise HTTPException(status_code=404, detail="Conversation unavailable")
     direct_key = ":".join(sorted((str(current_user.id), str(target.id))))
     existing = await database.scalar(select(Conversation).where(Conversation.direct_key == direct_key))
     if existing is not None:

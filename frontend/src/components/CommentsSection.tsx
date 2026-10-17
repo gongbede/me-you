@@ -5,6 +5,7 @@ import { createComment, deleteComment, getCommentsPage, type Comment } from '../
 import { getFriendlyErrorMessage } from '../api/client'
 import { UserIdentity } from './UserIdentity'
 import { relativeTime } from './feedHelpers'
+import { ReportDialog } from './ReportDialog'
 
 export function CommentsSection({
   postId,
@@ -79,6 +80,7 @@ export function CommentsSection({
               />
               <p className="comment-item__content">{comment.content}</p>
               <time dateTime={comment.created_at}>{relativeTime(comment.created_at)}</time>
+              {comment.author_id !== currentUserId && <ReportDialog targetType="COMMENT" targetId={comment.id} />}
               {comment.author_id === currentUserId && (
                 <button
                   className="icon-button comment-item__delete"

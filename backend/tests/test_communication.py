@@ -93,7 +93,7 @@ class CommunicationCoreTests(unittest.IsolatedAsyncioTestCase):
         ]
 
     async def test_direct_conversation_reuses_existing_and_rejects_self(self):
-        session = CommunicationSession([self.target, self.conversation, self.conversation])
+        session = CommunicationSession([self.target, None, self.conversation, self.conversation])
         response = await create_direct(CreateDirectConversation(target_user_id=str(self.target.id)), self.user, session)
         self.assertEqual(response["id"], str(self.conversation.id))
 

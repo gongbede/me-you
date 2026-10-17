@@ -18,6 +18,13 @@ from ..security_audit import record_security_event
 router = APIRouter(prefix="/platform-admin", tags=["platform-administration"])
 
 
+@router.get("/access")
+async def platform_admin_access(
+    current_user: User = Depends(get_current_postgres_user),
+):
+    return {"is_platform_admin": bool(current_user.is_platform_admin)}
+
+
 def platform_user_response(user: User) -> dict:
     return {
         "id": str(user.id),

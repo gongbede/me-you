@@ -6,11 +6,16 @@ import {
   getNotificationPreferences,
   updateNotificationPreferences,
 } from '../api/notifications'
+import { listBlockedUsers, unblockUser } from '../api/moderation'
 import { SettingsPage } from './SettingsPage'
 
 vi.mock('../api/notifications', () => ({
   getNotificationPreferences: vi.fn(),
   updateNotificationPreferences: vi.fn(),
+}))
+vi.mock('../api/moderation', () => ({
+  listBlockedUsers: vi.fn(),
+  unblockUser: vi.fn(),
 }))
 
 const preferences = {
@@ -35,6 +40,8 @@ describe('SettingsPage', () => {
     vi.mocked(updateNotificationPreferences).mockResolvedValue({
       preferences: { ...preferences, FOLLOW: false },
     })
+    vi.mocked(listBlockedUsers).mockResolvedValue([])
+    vi.mocked(unblockUser).mockResolvedValue(undefined)
   })
 
   it('loads and saves notification preferences', async () => {
@@ -55,6 +62,15 @@ describe('SettingsPage', () => {
     vi.mocked(getNotificationPreferences).mockReturnValueOnce(new Promise(() => undefined))
     renderPage()
 
-    expect(screen.getByRole('status')).toHaveTextContent('Loading notification preferences')
+    expect(screen.getByText(/Loading notification preferences/)).toBeInTheDocument()
+  })
+
+  it('shows blocked users and supports unblocking', async () => {
+    vi.mocked(listBlockedUsers).mockResolvedValue([{ id: 'blocked-id', username: 'blocked-person' }])
+    renderPage()
+
+    expect(await screen.findByText('@blocked-person')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Unblock' }))
+    await waitFor(() => expect(vi.mocked(unblockUser).mock.calls[0]?.[0]).toBe('blocked-id'))
   })
 })

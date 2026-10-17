@@ -7,6 +7,7 @@ import { useAuth } from '../hooks/useAuth'
 import { CommentsSection } from './CommentsSection'
 import { relativeTime, updateOptimisticLike } from './feedHelpers'
 import { UserIdentity } from './UserIdentity'
+import { ReportDialog } from './ReportDialog'
 
 export function PostCard({
   post,
@@ -52,6 +53,7 @@ export function PostCard({
           currentUserId={user?.id ?? ''}
         />
         <time dateTime={post.created_at}>{relativeTime(post.created_at)}</time>
+        {post.author_id !== user?.id && <ReportDialog targetType={post.post_type === 'REEL' ? 'REEL' : 'POST'} targetId={post.id} />}
         {post.author_id === user?.id && (
           <button
             className="icon-button"

@@ -91,6 +91,13 @@ from .social import (
 from .profile import CreateProfile, ProfileDiscoveryResponse, ProfileResponse, UpdateProfile
 from .platform import SearchResponse, SearchResult
 from .administration import PlatformAdminUserResponse
+from .moderation import (
+    BlockedUserResponse,
+    BlockResponse,
+    ReportCreate,
+    ReportResponse,
+    ReportStatusUpdate,
+)
 from .media import (
 	MediaAssetResponse,
 	MediaAvatarSet,
@@ -206,6 +213,11 @@ __all__ = [
 	"PostResponse",
 	"ProfileResponse",
 	"PlatformAdminUserResponse",
+	"BlockedUserResponse",
+	"BlockResponse",
+	"ReportCreate",
+	"ReportResponse",
+	"ReportStatusUpdate",
 	"ProfileDiscoveryResponse",
 	"ReadStateResponse",
 	"SearchResponse",

@@ -1,5 +1,5 @@
-import { Bell, BookOpen, Building2, Ellipsis, House, LogOut, MessageSquare, RotateCw, Settings2, UserRound, Users, X } from 'lucide-react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { Bell, BookOpen, Building2, Ellipsis, House, LogOut, MessageSquare, RotateCw, Search, Settings2, UserRound, Users, X } from 'lucide-react'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { Logo } from './Logo'
@@ -11,6 +11,7 @@ import { getMyProfile } from '../api/profile'
 import { getUnreadNotificationCount } from '../api/notifications'
 import { ApiError } from '../api/client'
 import { InstallPromptBanner } from './InstallPromptBanner'
+import { getPlatformAdminAccess } from '../api/moderation'
 
 const baseTabs = [
   { to: '/', label: 'Home', icon: House, end: true },
@@ -21,6 +22,7 @@ const baseTabs = [
 ]
 
 const sidebarExtraTabs = [
+  { to: '/search', label: 'Search', icon: Search, end: false },
   { to: '/classrooms', label: 'Classrooms', icon: Users, end: false },
   { to: '/notifications', label: 'Notifications', icon: Bell, end: false },
   { to: '/settings', label: 'Settings', icon: Settings2, end: false },
@@ -29,6 +31,8 @@ const sidebarExtraTabs = [
 export function AppShell() {
   const { user } = useAuth()
   const location = useLocation()
+  const navigate = useNavigate()
+  const [searchText, setSearchText] = useState('')
   const [isVisible, setIsVisible] = useState(() => !document.hidden)
   const [isMoreOpen, setIsMoreOpen] = useState(false)
   const moreTriggerRef = useRef<HTMLButtonElement>(null)
@@ -40,6 +44,7 @@ export function AppShell() {
   }, [])
   const teachingQuery = useQuery({ queryKey: ['teaching', 'courses'], queryFn: getTeachingCourses })
   const administrationQuery = useQuery({ queryKey: ['administration', 'institutions'], queryFn: listAdministeredInstitutions })
+  const platformAdminQuery = useQuery({ queryKey: ['platform-admin', 'access'], queryFn: getPlatformAdminAccess, enabled: Boolean(user), retry: false })
   const messagesQuery = useQuery({
     queryKey: ['messages', 'conversations'],
     queryFn: listConversations,
@@ -73,10 +78,11 @@ export function AppShell() {
     ...(teachingQuery.data?.length ? [{ to: '/teaching', label: 'Teaching', icon: BookOpen, end: false }] : []),
     ...(administrationQuery.data?.length ? [{ to: '/administration', label: 'Administration', icon: Settings2, end: false }] : []),
     ...sidebarExtraTabs,
+    ...(platformAdminQuery.data?.is_platform_admin ? [{ to: '/admin/reports', label: 'Reports', icon: Bell, end: false }] : []),
     baseTabs[4],
   ]
   const learningPath = location.pathname.startsWith('/courses/') || location.pathname.startsWith('/lessons/')
-  const isMorePath = ['/profile', '/teaching', '/administration', '/classrooms', '/notifications', '/settings', '/logout'].some((path) => location.pathname === path || location.pathname.startsWith(`${path}/`))
+  const isMorePath = ['/profile', '/teaching', '/administration', '/classrooms', '/notifications', '/settings', '/logout', '/search', '/admin'].some((path) => location.pathname === path || location.pathname.startsWith(`${path}/`))
   const learningTabIsActive = (to: string, isActive: boolean) =>
     isActive || (to === '/my-courses' && learningPath) || (to === '/teaching' && location.pathname.startsWith('/teaching')) || (to === '/administration' && location.pathname.startsWith('/administration')) || (to === '/messages' && location.pathname.startsWith('/messages')) || (to === '/notifications' && location.pathname.startsWith('/notifications')) || (to === '/classrooms' && location.pathname.startsWith('/classrooms')) || (to === '/settings' && location.pathname.startsWith('/settings'))
 
@@ -171,7 +177,11 @@ export function AppShell() {
       <div className="app-column">
         <header className="topbar">
           <div className="topbar__mobile-brand"><Logo variant="mark" size={36} /></div>
-          <span className="topbar__greeting">A brighter day to learn something.</span>
+          <form className="topbar-search" role="search" onSubmit={(event) => { event.preventDefault(); navigate(`/search${searchText.trim() ? `?q=${encodeURIComponent(searchText.trim())}` : ''}`) }}>
+            <label className="sr-only" htmlFor="topbar-search-input">Search</label>
+            <Search size={17} aria-hidden="true" />
+            <input id="topbar-search-input" value={searchText} maxLength={100} onChange={(event) => setSearchText(event.currentTarget.value)} placeholder="Search people, posts, schools" />
+          </form>
           <div className="topbar__actions"><span className="topbar__spark" aria-hidden="true">✦</span><NotificationBell /></div>
         </header>
         <InstallPromptBanner />
@@ -196,6 +206,8 @@ export function AppShell() {
           <header className="more-sheet__header"><h2 id="more-sheet-title">More</h2><button className="icon-button" type="button" aria-label="Close More menu" onClick={closeMoreSheet}><X size={19} aria-hidden="true" /></button></header>
           <nav className="more-sheet__nav" aria-label="More navigation">
             <NavLink className={({ isActive }) => `more-sheet__link${isActive ? ' is-active' : ''}`} data-more-first to="/profile" onClick={closeMoreSheet}><UserRound size={19} aria-hidden="true" /><span>Profile</span></NavLink>
+            <NavLink className={({ isActive }) => `more-sheet__link${isActive ? ' is-active' : ''}`} to="/search" onClick={closeMoreSheet}><Search size={19} aria-hidden="true" /><span>Search</span></NavLink>
+            {platformAdminQuery.data?.is_platform_admin && <NavLink className={({ isActive }) => `more-sheet__link${isActive ? ' is-active' : ''}`} to="/admin/reports" onClick={closeMoreSheet}><Bell size={19} aria-hidden="true" /><span>Reports</span></NavLink>}
             {teachingQuery.data?.length ? <NavLink className={({ isActive }) => `more-sheet__link${isActive || location.pathname.startsWith('/teaching') ? ' is-active' : ''}`} to="/teaching" onClick={closeMoreSheet}><BookOpen size={19} aria-hidden="true" /><span>Teaching</span></NavLink> : null}
             {administrationQuery.data?.length ? <NavLink className={({ isActive }) => `more-sheet__link${isActive || location.pathname.startsWith('/administration') ? ' is-active' : ''}`} to="/administration" onClick={closeMoreSheet}><Settings2 size={19} aria-hidden="true" /><span>Administration</span></NavLink> : null}
             <NavLink className={({ isActive }) => `more-sheet__link${isActive ? ' is-active' : ''}`} to="/classrooms" onClick={closeMoreSheet}><Users size={19} aria-hidden="true" /><span>Classrooms</span></NavLink>

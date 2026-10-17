@@ -2,7 +2,7 @@ from collections.abc import Iterable
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .models import Notification, NotificationPreference
+from .models import Notification, NotificationPreference, UserBlock
 from .schemas.social import NotificationType
 
 
@@ -14,6 +14,17 @@ async def add_notification(
     database: AsyncSession,
     notification: Notification,
 ) -> bool:
+    if notification.actor_id is not None:
+        blocked = await database.scalar(
+            select(UserBlock.id).where(
+                ((UserBlock.blocker_id == notification.recipient_id)
+                 & (UserBlock.blocked_id == notification.actor_id))
+                | ((UserBlock.blocker_id == notification.actor_id)
+                   & (UserBlock.blocked_id == notification.recipient_id))
+            )
+        )
+        if blocked is not None:
+            return False
     if notification.type not in SECURITY_NOTIFICATION_TYPES:
         enabled = await database.scalar(
             select(NotificationPreference.enabled).where(
@@ -49,11 +60,32 @@ async def add_notifications(
         )
     ).all()
     disabled = {(preference.user_id, preference.notification_type) for preference in preferences}
+    actor_ids = {notification.actor_id for notification in batch if notification.actor_id is not None}
+    recipient_ids = {notification.recipient_id for notification in batch}
+    blocked_pairs = set()
+    if actor_ids and recipient_ids:
+        blocked_pairs = set(
+            (await database.execute(
+                select(UserBlock.blocker_id, UserBlock.blocked_id).where(
+                    UserBlock.blocker_id.in_(actor_ids | recipient_ids),
+                    UserBlock.blocked_id.in_(actor_ids | recipient_ids),
+                )
+            )).all()
+        )
     database.add_all(
         notification
         for notification in batch
-        if notification.type in SECURITY_NOTIFICATION_TYPES
-        or (notification.recipient_id, notification.type) not in disabled
+        if not (
+            notification.actor_id is not None
+            and (
+                (notification.recipient_id, notification.actor_id) in blocked_pairs
+                or (notification.actor_id, notification.recipient_id) in blocked_pairs
+            )
+        )
+        and (
+            notification.type in SECURITY_NOTIFICATION_TYPES
+            or (notification.recipient_id, notification.type) not in disabled
+        )
     )
 
 

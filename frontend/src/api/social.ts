@@ -11,6 +11,10 @@ export function getFeed(cursor?: string): Promise<FeedPage> {
   return apiRequest(`/api/v1/posts/feed?${query}`)
 }
 
+export function getPost(postId: string): Promise<Post> {
+  return apiRequest(`/api/v1/posts/${postId}`)
+}
+
 export function createPost(content: string): Promise<Post> {
   return apiRequest('/api/v1/posts', {
     method: 'POST',

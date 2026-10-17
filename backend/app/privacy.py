@@ -4,7 +4,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .models import InstitutionMembership, Post, User
+from .models import InstitutionMembership, Post, User, UserBlock
 from .permissions import list_user_institution_ids
 
 
@@ -60,6 +60,19 @@ async def require_post_visibility(
     viewer: User | None,
     database: AsyncSession,
 ) -> None:
+    if getattr(post, "is_hidden", False) and not (
+        viewer is not None and getattr(viewer, "is_platform_admin", False)
+    ):
+        raise HTTPException(status_code=404, detail="Post not found")
+    if viewer is not None and viewer.id != post.author_id:
+        blocked = await database.scalar(
+            select(UserBlock.id).where(
+                ((UserBlock.blocker_id == viewer.id) & (UserBlock.blocked_id == post.author_id))
+                | ((UserBlock.blocker_id == post.author_id) & (UserBlock.blocked_id == viewer.id))
+            )
+        )
+        if blocked is not None:
+            raise HTTPException(status_code=404, detail="Post not found")
     visibility = getattr(post, "visibility", None) or "PUBLIC"
     owner_is_active = await database.scalar(
         select(User.is_active).where(User.id == post.author_id)
@@ -98,10 +111,19 @@ def visible_post_clause(viewer: User):
     )
     from sqlalchemy import and_, or_
 
-    return or_(
+    blocked_pair = exists(
+        select(1).where(
+            ((UserBlock.blocker_id == viewer.id) & (UserBlock.blocked_id == Post.author_id))
+            | ((UserBlock.blocker_id == Post.author_id) & (UserBlock.blocked_id == viewer.id))
+        )
+    )
+    visible = or_(
         public_posts,
         authenticated_posts,
         own_posts,
         and_(network_posts, shared_membership),
         and_(private_posts, own_posts),
     )
+    if getattr(viewer, "is_platform_admin", False):
+        return and_(visible, ~blocked_pair)
+    return and_(visible, Post.is_hidden.is_(False), ~blocked_pair)

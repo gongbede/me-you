@@ -4,6 +4,7 @@ import { ArrowLeft, ChevronUp, LoaderCircle, MessageCircle, Plus, Send, Trash2 }
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { getFriendlyErrorMessage } from '../api/client'
 import { getUserFollowers, getUserFollowing } from '../api/social'
+import { ReportDialog } from '../components/ReportDialog'
 import { useAuth } from '../hooks/useAuth'
 import {
   createGroupConversation,
@@ -282,6 +283,7 @@ function ConversationThread({ conversationId, conversation }: { conversationId: 
             {!own && <span className="message-bubble__sender">{message.sender.username}</span>}
             {editing?.id === message.id ? <form className="message-edit-form" onSubmit={(event) => void saveEdit(event)}><textarea aria-label="Edit message" maxLength={10_000} value={editing.content} onChange={(event) => setEditing({ ...editing, content: event.currentTarget.value })} /><button className="button button--primary" type="submit" disabled={!editing.content.trim() || editMutation.isPending}>Save</button><button className="button button--outline" type="button" onClick={() => setEditing(null)}>Cancel</button></form> : <p>{deleted ? 'Message deleted' : message.content}</p>}
             <div className="message-bubble__meta"><time dateTime={message.created_at}>{timeLabel(message.created_at)}</time>{message.localStatus === 'sending' && <span>Sending…</span>}{message.localStatus === 'failed' && <><span>Not sent</span><button type="button" onClick={() => void send(message.content ?? '', message.id)}>Retry</button></>}{message.localStatus === 'sent' && <span>Sent</span>}</div>
+            {!own && !deleted && !message.localStatus && <ReportDialog targetType="MESSAGE" targetId={message.id} />}
             {own && !deleted && !message.localStatus && <div className="message-bubble__actions"><button type="button" onClick={() => setEditing({ id: message.id, content: message.content ?? '' })}>Edit</button><button type="button" onClick={() => void removeMessage(message.id)}><Trash2 size={14} aria-hidden="true" /> Delete</button></div>}
           </article>
         })}

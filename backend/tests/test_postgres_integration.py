@@ -12,7 +12,7 @@ import asyncpg
 import pytest
 from fastapi import HTTPException
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import event, func, select, text, update
+from sqlalchemy import delete, event, func, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.engine import make_url
@@ -1666,6 +1666,243 @@ def test_registration_duplicate_fields_return_identical_conflicts(postgres_datab
         assert errors[0] == errors[1] == (400, "Username or email already exists")
 
     asyncio.run(verify())
+
+
+def test_reports_blocks_direct_message_denial_and_admin_moderation(postgres_database_url):
+    from app.models import Conversation, ConversationMember, Notification, Post
+    from app.notification_preferences import add_notification
+    from app.rate_limit import PostgresRateLimitStore, get_rate_limit_store
+    from app.security import get_optional_postgres_user
+    from app.security import password_hash
+
+    async def verify():
+        engine = create_async_engine(postgres_database_url)
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        original_overrides = app.dependency_overrides.copy()
+        identities: dict[str, uuid.UUID] = {}
+        try:
+            async with session_factory() as session:
+                reporter = await create_user(session)
+                blocked_user = await create_user(session)
+                blocked_user.password_hash = password_hash.hash("valid-test-password")
+                blocked_email = blocked_user.email
+                admin = await create_user(session)
+                admin.is_platform_admin = True
+                reporter_post = Post(author_id=reporter.id, content="My public post", visibility="PUBLIC")
+                target_post = Post(author_id=blocked_user.id, content="Reported public post", visibility="PUBLIC")
+                session.add_all([reporter_post, target_post])
+                await session.flush()
+                conversation = Conversation(
+                    type="DIRECT",
+                    direct_key=":".join(sorted((str(reporter.id), str(blocked_user.id)))),
+                    created_by_id=reporter.id,
+                )
+                session.add(conversation)
+                await session.flush()
+                session.add_all([
+                    ConversationMember(conversation_id=conversation.id, user_id=reporter.id),
+                    ConversationMember(conversation_id=conversation.id, user_id=blocked_user.id),
+                ])
+                await session.commit()
+                identities.update({
+                    "reporter": reporter.id,
+                    "blocked": blocked_user.id,
+                    "admin": admin.id,
+                })
+                target_post_id = target_post.id
+                reporter_post_id = reporter_post.id
+                conversation_id = conversation.id
+
+            async def database_dependency():
+                async with session_factory() as session:
+                    yield session
+
+            async def user_dependency(request: Request):
+                async with session_factory() as session:
+                    return await session.get(User, uuid.UUID(request.headers["x-test-user"]))
+
+            app.dependency_overrides[get_postgres_session] = database_dependency
+            app.dependency_overrides[get_current_postgres_user] = user_dependency
+            app.dependency_overrides[get_optional_postgres_user] = user_dependency
+            app.dependency_overrides[get_rate_limit_store] = lambda: PostgresRateLimitStore(session_factory)
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                reporter_headers = {"x-test-user": str(identities["reporter"])}
+                blocked_headers = {"x-test-user": str(identities["blocked"])}
+                admin_headers = {"x-test-user": str(identities["admin"])}
+
+                report_payload = {
+                    "target_type": "POST",
+                    "target_id": str(target_post_id),
+                    "reason": "SPAM",
+                    "details": "Repeated spam",
+                }
+                created_report = await client.post("/reports", json=report_payload, headers=reporter_headers)
+                assert created_report.status_code == 201
+                assert (await client.post("/reports", json=report_payload, headers=reporter_headers)).status_code == 409
+                self_report = await client.post(
+                    "/reports",
+                    json={**report_payload, "target_id": str(reporter_post_id)},
+                    headers=reporter_headers,
+                )
+                assert self_report.status_code == 400
+                assert (await client.get("/admin/reports", headers=reporter_headers)).status_code == 403
+                assert (await client.get("/admin/reports", headers=admin_headers)).status_code == 200
+
+                assert (await client.get(f"/posts/{target_post_id}", headers=reporter_headers)).status_code == 200
+                assert (await client.post(f"/users/{identities['blocked']}/block", headers=reporter_headers)).status_code == 200
+                assert (await client.get(f"/posts/{target_post_id}", headers=reporter_headers)).status_code == 404
+                assert (await client.get(f"/posts/{reporter_post_id}", headers=blocked_headers)).status_code == 404
+                assert (await client.post(
+                    f"/conversations/{conversation_id}/messages",
+                    json={"content": "blocked message"},
+                    headers=reporter_headers,
+                )).status_code == 404
+                assert (await client.post(
+                    f"/conversations/{conversation_id}/messages",
+                    json={"content": "blocked reply"},
+                    headers=blocked_headers,
+                )).status_code == 404
+                blocked_direct = await client.post(
+                    "/conversations/direct",
+                    json={"target_user_id": str(identities["reporter"])},
+                    headers=blocked_headers,
+                )
+                nonexistent_direct = await client.post(
+                    "/conversations/direct",
+                    json={"target_user_id": str(uuid.uuid4())},
+                    headers=blocked_headers,
+                )
+                assert blocked_direct.status_code == nonexistent_direct.status_code == 404
+                assert blocked_direct.json()["detail"] == nonexistent_direct.json()["detail"]
+                assert (await client.get("/blocks", headers=reporter_headers)).json()[0]["id"] == str(identities["blocked"])
+
+                async with session_factory() as session:
+                    assert await add_notification(
+                        session,
+                        Notification(
+                            recipient_id=identities["blocked"],
+                            actor_id=identities["reporter"],
+                            type="MESSAGE",
+                            title="Blocked pair notification",
+                        ),
+                    ) is False
+                    assert await session.scalar(
+                        select(func.count(Notification.id)).where(
+                            Notification.recipient_id == identities["blocked"],
+                            Notification.title == "Blocked pair notification",
+                        )
+                    ) == 0
+
+                assert (await client.delete(
+                    f"/users/{identities['blocked']}/block", headers=reporter_headers
+                )).status_code == 200
+                hidden = await client.patch(
+                    f"/admin/content/POST/{target_post_id}?hidden=true", headers=admin_headers
+                )
+                assert hidden.status_code == 200
+                assert (await client.get(f"/posts/{target_post_id}", headers=reporter_headers)).status_code == 404
+                assert (await client.get(f"/posts/{target_post_id}", headers=admin_headers)).status_code == 200
+                suspended = await client.post(
+                    f"/admin/users/{identities['blocked']}/suspend", headers=admin_headers
+                )
+                assert suspended.status_code == 200
+                denied_login = await client.post(
+                    "/login",
+                    json={"email": blocked_email, "password": "valid-test-password"},
+                )
+                assert denied_login.status_code == 401
+                assert denied_login.json()["detail"] == "Invalid email or password"
+                unsuspended = await client.post(
+                    f"/admin/users/{identities['blocked']}/unsuspend", headers=admin_headers
+                )
+                assert unsuspended.status_code == 200
+                reviewed = await client.patch(
+                    f"/admin/reports/{created_report.json()['id']}",
+                    json={"status": "ACTIONED"},
+                    headers=admin_headers,
+                )
+                assert reviewed.status_code == 200
+                async with session_factory() as session:
+                    assert await session.scalar(
+                        select(func.count(SecurityEvent.id)).where(
+                            SecurityEvent.event_type == "moderation.report_status_changed",
+                            SecurityEvent.actor_user_id == identities["admin"],
+                        )
+                    ) == 1
+                unhidden = await client.patch(
+                    f"/admin/content/POST/{target_post_id}?hidden=false", headers=admin_headers
+                )
+                assert unhidden.status_code == 200
+                assert (await client.get(f"/posts/{target_post_id}", headers=reporter_headers)).status_code == 200
+                assert (await client.get(f"/posts/{target_post_id}", headers=admin_headers)).status_code == 200
+        finally:
+            app.dependency_overrides.clear()
+            app.dependency_overrides.update(original_overrides)
+            async with session_factory() as session:
+                if identities:
+                    await session.execute(
+                        delete(User).where(User.id.in_(list(identities.values()))),
+                    )
+                    await session.commit()
+            await engine.dispose()
+
+    asyncio.run(verify())
+
+
+def test_moderation_migration_up_and_down(postgres_database_url):
+    base_url = make_url(postgres_database_url)
+    database_name = f"me_you_moderation_migration_{uuid.uuid4().hex}"
+    migration_url = base_url.set(database=database_name).render_as_string(hide_password=False)
+    admin_connect = {
+        "user": base_url.username,
+        "password": base_url.password,
+        "host": base_url.host,
+        "port": base_url.port or 5432,
+        "database": "postgres",
+    }
+
+    async def run_migrations():
+        connection = await asyncpg.connect(**admin_connect)
+        try:
+            await connection.execute(f'CREATE DATABASE "{database_name}"')
+        finally:
+            await connection.close()
+        engine = create_async_engine(migration_url)
+        try:
+            assert _alembic(migration_url, "upgrade", "0024_notification_preferences").returncode == 0
+            assert _alembic(migration_url, "upgrade", "head").returncode == 0
+            async with engine.connect() as connection:
+                found = await connection.scalar(text(
+                    "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' "
+                    "AND table_name IN ('reports', 'user_blocks')"
+                ))
+                assert found == 2
+                hidden_columns = await connection.scalar(text(
+                    "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' "
+                    "AND column_name = 'is_hidden' AND table_name IN ('posts', 'comments')"
+                ))
+                assert hidden_columns == 2
+            assert _alembic(migration_url, "downgrade", "0024_notification_preferences").returncode == 0
+            async with engine.connect() as connection:
+                found = await connection.scalar(text(
+                    "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' "
+                    "AND table_name IN ('reports', 'user_blocks')"
+                ))
+                assert found == 0
+                hidden_columns = await connection.scalar(text(
+                    "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' "
+                    "AND column_name = 'is_hidden' AND table_name IN ('posts', 'comments')"
+                ))
+                assert hidden_columns == 0
+        finally:
+            await engine.dispose()
+            connection = await asyncpg.connect(**admin_connect)
+            try:
+                await connection.execute(f'DROP DATABASE IF EXISTS "{database_name}"')
+            finally:
+                await connection.close()
+
+    asyncio.run(run_migrations())
 
 
 def test_auth_security_events_persist_without_secrets(postgres_database_url):
