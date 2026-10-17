@@ -3,6 +3,6 @@ Task 2: Installable app (PWA) and offline shell — done — commit: 9a5cdac —
 Task 3: Report, block and admin moderation — done — commit: 15f7d98 — note: reports, user blocks, content hiding, suspension and admin review UI.
 Task 4: Search — done — commit: 120cdc5 + d813767 — note: debounced People / Posts / Schools search with visibility and block-aware API results; listed-school results open discovery pre-filtered.
 Task 0: Demo login recovery — done — commit: 19c0149 — note: added development-only password rotation, private credential output, and missing-account guidance.
-Task 5: Profiles, follows and settings — done — commit: pending — note: follower-only profile privacy, public profile content/follow views, and account/security settings.
+Task 5: Profiles, follows and settings — done — commit: b1bc2be — note: follower-only profile privacy, public profile content/follow views, and account/security settings.
 Task 6: Feed and post quality — not started — commit: pending — note: pending.
 Task 7: Reels completion — not started — commit: pending — note: pending.
