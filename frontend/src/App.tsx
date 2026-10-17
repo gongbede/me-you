@@ -30,6 +30,7 @@ import { SearchPage } from './pages/SearchPage'
 import { AdminReportsPage } from './pages/AdminReportsPage'
 import { PostDetailPage } from './pages/PostDetailPage'
 import { MusicPage, VideosPage } from './pages/MediaLibraryPage'
+import { MusicPlayerProvider } from './components/MusicPlayer'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -40,6 +41,7 @@ const queryClient = new QueryClient({
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <MusicPlayerProvider>
       <AuthProvider>
         <BrowserRouter>
           <AppErrorBoundary>
@@ -89,6 +91,7 @@ export default function App() {
           </AppErrorBoundary>
         </BrowserRouter>
       </AuthProvider>
+      </MusicPlayerProvider>
     </QueryClientProvider>
   )
 }

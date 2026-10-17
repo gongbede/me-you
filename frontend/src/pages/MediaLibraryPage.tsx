@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Music2, Video } from 'lucide-react'
 import { apiRequest, getFriendlyErrorMessage } from '../api/client'
 import { avatarUploadTransport } from '../api/avatar'
+import { useMusicPlayer } from '../hooks/useMusicPlayer'
 
 type MediaItem = {
   id: string
@@ -112,25 +113,25 @@ function LibraryPage({ kind }: { kind: 'video' | 'music' }) {
         {categories.map((value) => <button className={`chip${category === value ? ' is-active' : ''}`} key={value} type="button" onClick={() => setCategory(category === value ? '' : value)}>{value}</button>)}
       </div>
       {kind === 'music' && category && <button className="button button--outline" type="button" onClick={() => void apiRequest(`/api/v1/music/categories/${encodeURIComponent(category)}/follow`, { method: 'PUT' })}>Follow this category</button>}
-      {itemsQuery.isPending ? <p role="status">Loading {title.toLowerCase()}…</p> : itemsQuery.isError ? <div className="inline-error" role="alert"><p>{getFriendlyErrorMessage(itemsQuery.error)}</p><button className="button button--outline" type="button" onClick={() => void itemsQuery.refetch()}>Retry</button></div> : itemsQuery.data.length === 0 ? <p>No {title.toLowerCase()} found. Try another category or share the first one.</p> : <div className="learning-grid">{itemsQuery.data.map((item) => <MediaCard key={item.id} item={item} kind={kind} />)}</div>}
+      {itemsQuery.isPending ? <p role="status">Loading {title.toLowerCase()}…</p> : itemsQuery.isError ? <div className="inline-error" role="alert"><p>{getFriendlyErrorMessage(itemsQuery.error)}</p><button className="button button--outline" type="button" onClick={() => void itemsQuery.refetch()}>Retry</button></div> : itemsQuery.data.length === 0 ? <p>No {title.toLowerCase()} found. Try another category or share the first one.</p> : <div className="learning-grid">      {itemsQuery.data.map((item, index) => <MediaCard key={item.id} item={item} kind={kind} queue={itemsQuery.data} index={index} />)}</div>}
     </section>
   </div>
 }
 
-function MediaCard({ item, kind }: { item: MediaItem; kind: 'video' | 'music' }) {
+function MediaCard({ item, kind, queue, index }: { item: MediaItem; kind: 'video' | 'music'; queue: MediaItem[]; index: number }) {
+  const player = useMusicPlayer()
   const [url, setUrl] = useState('')
   const [error, setError] = useState('')
   async function loadMedia() {
     try {
       const result = await apiRequest<{ download_url: string }>(`/api/v1/media/${item.media_asset_id}/download`)
       setUrl(result.download_url)
-      if (kind === 'music') await apiRequest(`/api/v1/tracks/${item.id}/play`, { method: 'POST' })
-      else await apiRequest(`/api/v1/videos/${item.id}/view`, { method: 'POST' })
+      await apiRequest(`/api/v1/videos/${item.id}/view`, { method: 'POST' })
     } catch (caught) {
       setError(getFriendlyErrorMessage(caught))
     }
   }
-  return <article className="learning-card"><h2>{item.title}</h2><p>{kind === 'music' ? `${item.artist_name} · ` : ''}{item.category}</p>{url && (kind === 'video' ? <video src={url} controls playsInline aria-label={item.title} /> : <audio src={url} controls aria-label={item.title} />)}{error && <p className="form-alert" role="alert">{error}</p>}<button className="button button--outline" type="button" onClick={() => void loadMedia()}>{kind === 'video' ? 'Watch' : 'Play'}</button></article>
+  return <article className="learning-card"><h2>{item.title}</h2><p>{kind === 'music' ? `${item.artist_name} · ` : ''}{item.category}</p>{url && kind === 'video' && <video src={url} controls playsInline aria-label={item.title} />}{error && <p className="form-alert" role="alert">{error}</p>}{kind === 'video' ? <button className="button button--outline" type="button" onClick={() => void loadMedia()}>Watch</button> : <button className="button button--outline" type="button" onClick={() => void player.playQueue(queue, index)}>Play</button>}</article>
 }
 
 export function VideosPage() { return <LibraryPage kind="video" /> }

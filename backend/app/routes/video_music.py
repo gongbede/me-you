@@ -66,6 +66,28 @@ class VideoCommentCreate(BaseModel):
         return value.strip()
 
 
+class PlaylistCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=120)
+
+    @field_validator("title")
+    @classmethod
+    def playlist_title_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Playlist title cannot be blank")
+        return value.strip()
+
+
+class PlaylistReorder(BaseModel):
+    track_ids: list[uuid.UUID] = Field(min_length=1, max_length=100)
+
+    @field_validator("track_ids")
+    @classmethod
+    def track_ids_are_unique(cls, value: list[uuid.UUID]) -> list[uuid.UUID]:
+        if len(value) != len(set(value)):
+            raise ValueError("Track ids must not repeat")
+        return value
+
+
 async def visible_media(item: Video | Track, viewer: User | None, database: AsyncSession) -> bool:
     if item.is_hidden and not (viewer and viewer.is_platform_admin):
         return False
@@ -286,26 +308,62 @@ async def list_tracks(category: str | None = None, q: str = Query(default="", ma
 async def count_track_play(track_id: uuid.UUID, current: User = Depends(get_current_postgres_user), db: AsyncSession = Depends(get_postgres_session), limiter: RateLimitStore | None = Depends(get_rate_limit_store)):
     if limiter is None:
         raise HTTPException(503, "Rate limiting is unavailable")
-    count, retry = await limiter.increment(f"track_play:{track_id}", str(current.id), 3600)
-    if count > 1:
-        raise HTTPException(429, "Track play was already counted", headers={"Retry-After": str(retry)})
     item = await db.get(Track, track_id)
     if item is None or not await visible_media(item, current, db):
         raise HTTPException(404, "Track not found")
+    count, _retry = await limiter.increment(f"track_play:{track_id}", str(current.id), 3600)
+    if count > 1:
+        return
     item.play_count += 1
     await db.commit()
 
 
 @router.post("/playlists", status_code=201)
-async def create_playlist(data: dict, current: User = Depends(get_current_postgres_user), db: AsyncSession = Depends(get_postgres_session)):
-    title = data.get("title")
-    if not isinstance(title, str) or not title.strip() or len(title) > 120:
-        raise HTTPException(422, "Playlist title must be 1-120 characters")
-    playlist = Playlist(owner_id=current.id, title=title.strip())
+async def create_playlist(data: PlaylistCreate, current: User = Depends(get_current_postgres_user), db: AsyncSession = Depends(get_postgres_session)):
+    playlist = Playlist(owner_id=current.id, title=data.title)
     db.add(playlist)
     await db.commit()
     await db.refresh(playlist)
     return {"id": str(playlist.id), "title": playlist.title, "owner_id": str(current.id)}
+
+
+@router.get("/playlists")
+async def list_playlists(current: User = Depends(get_current_postgres_user), db: AsyncSession = Depends(get_postgres_session)):
+    playlists = (await db.scalars(select(Playlist).where(Playlist.owner_id == current.id).order_by(Playlist.created_at.desc()).limit(100))).all()
+    return [{"id": str(item.id), "title": item.title, "owner_id": str(item.owner_id)} for item in playlists]
+
+
+@router.get("/playlists/{playlist_id}")
+async def get_playlist(playlist_id: uuid.UUID, current: User = Depends(get_current_postgres_user), db: AsyncSession = Depends(get_postgres_session)):
+    playlist = await db.scalar(select(Playlist).where(Playlist.id == playlist_id, Playlist.owner_id == current.id))
+    if playlist is None:
+        raise HTTPException(404, "Playlist not found")
+    rows = (await db.execute(
+        select(Track).join(PlaylistItem, PlaylistItem.track_id == Track.id)
+        .where(PlaylistItem.playlist_id == playlist_id)
+        .order_by(PlaylistItem.position)
+    )).scalars().all()
+    return {"id": str(playlist.id), "title": playlist.title, "tracks": [track_data(track) for track in rows]}
+
+
+@router.put("/playlists/{playlist_id}")
+async def rename_playlist(playlist_id: uuid.UUID, data: PlaylistCreate, current: User = Depends(get_current_postgres_user), db: AsyncSession = Depends(get_postgres_session)):
+    playlist = await db.scalar(select(Playlist).where(Playlist.id == playlist_id, Playlist.owner_id == current.id))
+    if playlist is None:
+        raise HTTPException(404, "Playlist not found")
+    playlist.title = data.title
+    playlist.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    return {"id": str(playlist.id), "title": playlist.title}
+
+
+@router.delete("/playlists/{playlist_id}", status_code=204)
+async def delete_playlist(playlist_id: uuid.UUID, current: User = Depends(get_current_postgres_user), db: AsyncSession = Depends(get_postgres_session)):
+    playlist = await db.scalar(select(Playlist).where(Playlist.id == playlist_id, Playlist.owner_id == current.id))
+    if playlist is None:
+        raise HTTPException(404, "Playlist not found")
+    await db.delete(playlist)
+    await db.commit()
 
 
 @router.post("/playlists/{playlist_id}/tracks/{track_id}", status_code=204)
@@ -316,6 +374,35 @@ async def add_playlist_track(playlist_id: uuid.UUID, track_id: uuid.UUID, curren
         raise HTTPException(404, "Playlist or track not found")
     position = int(await db.scalar(select(func.coalesce(func.max(PlaylistItem.position), -1)).where(PlaylistItem.playlist_id == playlist_id))) + 1
     db.add(PlaylistItem(playlist_id=playlist_id, track_id=track_id, position=position))
+    await db.commit()
+
+
+@router.delete("/playlists/{playlist_id}/tracks/{track_id}", status_code=204)
+async def remove_playlist_track(playlist_id: uuid.UUID, track_id: uuid.UUID, current: User = Depends(get_current_postgres_user), db: AsyncSession = Depends(get_postgres_session)):
+    playlist = await db.scalar(select(Playlist).where(Playlist.id == playlist_id, Playlist.owner_id == current.id))
+    if playlist is None:
+        raise HTTPException(404, "Playlist not found")
+    item = await db.get(PlaylistItem, (playlist_id, track_id))
+    if item is not None:
+        await db.delete(item)
+        await db.commit()
+
+
+@router.put("/playlists/{playlist_id}/order", status_code=204)
+async def reorder_playlist(playlist_id: uuid.UUID, data: PlaylistReorder, current: User = Depends(get_current_postgres_user), db: AsyncSession = Depends(get_postgres_session)):
+    playlist = await db.scalar(select(Playlist).where(Playlist.id == playlist_id, Playlist.owner_id == current.id))
+    if playlist is None:
+        raise HTTPException(404, "Playlist not found")
+    entries = list((await db.scalars(select(PlaylistItem).where(PlaylistItem.playlist_id == playlist_id))).all())
+    by_track = {entry.track_id: entry for entry in entries}
+    if set(by_track) != set(data.track_ids):
+        raise HTTPException(422, "Order must include every playlist track exactly once")
+    offset = len(entries) + 1
+    for entry in entries:
+        entry.position += offset
+    await db.flush()
+    for position, track_id in enumerate(data.track_ids):
+        by_track[track_id].position = position
     await db.commit()
 
 

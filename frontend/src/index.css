@@ -4961,3 +4961,68 @@ button:disabled {
     bottom: 14px;
   }
 }
+
+.music-mini-player {
+  position: fixed;
+  z-index: 35;
+  right: 20px;
+  bottom: 18px;
+  left: 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: 0 8px 28px rgb(var(--shadow-ink) / 20%);
+}
+
+.music-mini-player__title {
+  display: flex;
+  min-width: 120px;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+}
+
+.music-mini-player__title span {
+  display: grid;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.music-mini-player__title small {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.music-mini-player audio {
+  width: min(100%, 720px);
+  margin-inline: auto;
+}
+
+@media (max-width: 699px) {
+  .music-mini-player {
+    right: 8px;
+    bottom: calc(68px + env(safe-area-inset-bottom));
+    left: 8px;
+    gap: 4px;
+    padding: 7px;
+  }
+
+  .music-mini-player__title {
+    min-width: 70px;
+    font-size: 0.78rem;
+  }
+
+  .music-mini-player__title span {
+    max-width: 90px;
+  }
+
+  .music-mini-player audio {
+    min-width: 0;
+  }
+}
