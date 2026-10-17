@@ -15,6 +15,14 @@ export function notificationText(notification: Notification): string {
 }
 
 export function notificationTargetPath(notification: Notification): string | null {
+  if (
+    notification.type === 'CLASS_ANNOUNCEMENT' &&
+    notification.target_type === 'class_session' &&
+    notification.target_id &&
+    typeof notification.payload?.course_id === 'string'
+  ) {
+    return `/courses/${notification.payload.course_id}/classrooms/${notification.target_id}`
+  }
   if (notification.type === 'MESSAGE' && notification.target_type === 'conversation' && notification.target_id) {
     return `/messages/${notification.target_id}`
   }

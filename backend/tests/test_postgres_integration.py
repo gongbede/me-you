@@ -179,6 +179,128 @@ def test_database_rejects_duplicate_username_and_email(postgres_database_url):
     asyncio.run(verify())
 
 
+def test_notification_preferences_and_mark_all_are_user_scoped(postgres_database_url):
+    from app.models import Notification, NotificationPreference
+    from app.notification_preferences import add_notification
+
+    async def verify():
+        engine = create_async_engine(postgres_database_url)
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        original_overrides = app.dependency_overrides.copy()
+        user_ids: list[uuid.UUID] = []
+        try:
+            async with session_factory() as session:
+                owner = await create_user(session)
+                other = await create_user(session)
+                user_ids.extend([owner.id, other.id])
+                owner_notification = Notification(
+                    recipient_id=owner.id,
+                    type="FOLLOW",
+                    title="Owner notification",
+                )
+                other_notification = Notification(
+                    recipient_id=other.id,
+                    type="FOLLOW",
+                    title="Other notification",
+                )
+                session.add_all([owner_notification, other_notification])
+                await session.commit()
+                owner_notification_id = owner_notification.id
+                other_notification_id = other_notification.id
+
+            async def database_dependency():
+                async with session_factory() as session:
+                    yield session
+
+            async def user_dependency(request: Request):
+                async with session_factory() as session:
+                    return await session.get(User, uuid.UUID(request.headers["x-test-user"]))
+
+            app.dependency_overrides[get_postgres_session] = database_dependency
+            app.dependency_overrides[get_current_postgres_user] = user_dependency
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                headers = {"x-test-user": str(user_ids[0])}
+                defaults = await client.get("/notifications/preferences", headers=headers)
+                assert defaults.status_code == 200
+                assert defaults.json()["preferences"]
+                assert all(defaults.json()["preferences"].values())
+
+                update_response = await client.put(
+                    "/notifications/preferences",
+                    headers=headers,
+                    json={"preferences": {"FOLLOW": False}},
+                )
+                assert update_response.status_code == 200
+                assert update_response.json()["preferences"]["FOLLOW"] is False
+
+                async with session_factory() as session:
+                    suppressed = Notification(
+                        recipient_id=user_ids[0],
+                        type="FOLLOW",
+                        title="Suppressed notification",
+                    )
+                    security_preference = NotificationPreference(
+                        user_id=user_ids[0],
+                        notification_type="SECURITY_ALERT",
+                        enabled=False,
+                    )
+                    security_notification = Notification(
+                        recipient_id=user_ids[0],
+                        type="SECURITY_ALERT",
+                        title="Security alert",
+                    )
+                    session.add(security_preference)
+                    assert await add_notification(session, suppressed) is False
+                    assert await add_notification(session, security_notification) is True
+                    await session.commit()
+                    assert await session.scalar(
+                        select(Notification.id).where(
+                            Notification.title == "Suppressed notification"
+                        )
+                    ) is None
+                    assert await session.scalar(
+                        select(Notification.id).where(
+                            Notification.title == "Security alert"
+                        )
+                    ) is not None
+
+                marked = await client.post("/notifications/read-all", headers=headers)
+                assert marked.status_code == 200
+                async with session_factory() as session:
+                    owner_read_at = await session.scalar(
+                        select(Notification.read_at).where(
+                            Notification.id == owner_notification_id
+                        )
+                    )
+                    other_read_at = await session.scalar(
+                        select(Notification.read_at).where(
+                            Notification.id == other_notification_id
+                        )
+                    )
+                    saved_preference = await session.get(
+                        NotificationPreference, (user_ids[0], "FOLLOW")
+                    )
+                    assert owner_read_at is not None
+                    assert other_read_at is None
+                    assert saved_preference is not None
+                    assert saved_preference.enabled is False
+        finally:
+            app.dependency_overrides.clear()
+            app.dependency_overrides.update(original_overrides)
+            if user_ids:
+                async with session_factory() as session:
+                    for user_id in user_ids:
+                        user = await session.get(User, user_id)
+                        if user is not None:
+                            await session.delete(user)
+                    await session.commit()
+            await engine.dispose()
+
+    asyncio.run(verify())
+
+
 def test_auth_identity_constraints_and_multiple_identities(postgres_database_url):
     async def verify():
         async with database_session(postgres_database_url) as session:
@@ -3986,5 +4108,44 @@ def test_orphan_upload_purge_and_asset_delete_remove_objects(postgres_database_u
                     assert await session.get(MediaAsset, ready_id) is None
             finally:
                 await engine.dispose()
+
+    asyncio.run(verify())
+
+
+def test_notification_preferences_migration_downgrades_and_upgrades(postgres_database_url):
+    from app.models import NotificationPreference
+
+    async def verify():
+        engine = create_async_engine(postgres_database_url)
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        user_id = None
+        try:
+            async with session_factory() as session:
+                user = await create_user(session)
+                user_id = user.id
+                session.add(
+                    NotificationPreference(
+                        user_id=user.id,
+                        notification_type="FOLLOW",
+                        enabled=False,
+                    )
+                )
+                await session.commit()
+
+            downgrade = _alembic(postgres_database_url, "downgrade", "0023_reels")
+            assert downgrade.returncode == 0, downgrade.stdout + downgrade.stderr
+            upgrade = _alembic(postgres_database_url, "upgrade", "head")
+            assert upgrade.returncode == 0, upgrade.stdout + upgrade.stderr
+
+            async with session_factory() as session:
+                assert await session.get(NotificationPreference, (user_id, "FOLLOW")) is None
+        finally:
+            if user_id is not None:
+                async with session_factory() as session:
+                    user = await session.get(User, user_id)
+                    if user is not None:
+                        await session.delete(user)
+                    await session.commit()
+            await engine.dispose()
 
     asyncio.run(verify())

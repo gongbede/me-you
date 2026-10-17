@@ -1854,6 +1854,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/notifications/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get your notification preferences */
+        get: operations["read_notification_preferences_api_v1_notifications_preferences_get"];
+        /** Update your notification preferences */
+        put: operations["update_notification_preferences_api_v1_notifications_preferences_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/notifications/read-all": {
         parameters: {
             query?: never;
@@ -3726,6 +3744,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/notifications/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get your notification preferences */
+        get: operations["read_notification_preferences_notifications_preferences_get"];
+        /** Update your notification preferences */
+        put: operations["update_notification_preferences_notifications_preferences_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/notifications/read-all": {
         parameters: {
             query?: never;
@@ -5273,6 +5309,20 @@ export interface components {
              */
             updated_at: string;
         };
+        /** NotificationPreferencesResponse */
+        NotificationPreferencesResponse: {
+            /** Preferences */
+            preferences: {
+                [key: string]: boolean;
+            };
+        };
+        /** NotificationPreferencesUpdate */
+        NotificationPreferencesUpdate: {
+            /** Preferences */
+            preferences: {
+                [key: string]: boolean;
+            };
+        };
         /** NotificationResponse */
         NotificationResponse: {
             actor: components["schemas"]["UserSummary"] | null;
@@ -5299,9 +5349,13 @@ export interface components {
             target_type: string | null;
             /** Title */
             title: string;
-            /** Type */
-            type: string;
+            type: components["schemas"]["NotificationType"];
         };
+        /**
+         * NotificationType
+         * @enum {string}
+         */
+        NotificationType: "COMMENT" | "FOLLOW" | "LIKE" | "MESSAGE" | "CLASS_ANNOUNCEMENT" | "EXERCISE_SUBMISSION" | "EXERCISE_REVIEWED";
         /** NotificationUnreadCountResponse */
         NotificationUnreadCountResponse: {
             /** Unread Count */
@@ -10468,6 +10522,59 @@ export interface operations {
             };
         };
     };
+    read_notification_preferences_api_v1_notifications_preferences_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPreferencesResponse"];
+                };
+            };
+        };
+    };
+    update_notification_preferences_api_v1_notifications_preferences_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationPreferencesUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPreferencesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     mark_all_notifications_read_api_v1_notifications_read_all_post: {
         parameters: {
             query?: never;
@@ -15476,6 +15583,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NotificationResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_notification_preferences_notifications_preferences_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPreferencesResponse"];
+                };
+            };
+        };
+    };
+    update_notification_preferences_notifications_preferences_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationPreferencesUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPreferencesResponse"];
                 };
             };
             /** @description Validation Error */

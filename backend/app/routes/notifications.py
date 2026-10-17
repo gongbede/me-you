@@ -3,18 +3,45 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func, select, update
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ..database import get_postgres_session
-from ..models import Notification, User
+from ..models import Notification, NotificationPreference, User
+from ..notification_preferences import (
+    NOTIFICATION_PREFERENCE_TYPES,
+    default_notification_preferences,
+)
 from ..pagination import descending_time_uuid_clause, time_uuid_cursor
-from ..schemas import NotificationResponse, NotificationUnreadCountResponse
+from ..schemas import (
+    NotificationPreferencesResponse,
+    NotificationPreferencesUpdate,
+    NotificationResponse,
+    NotificationUnreadCountResponse,
+)
 from ..security import get_current_postgres_user
 from .posts import user_summary
 
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
+
+
+async def get_notification_preferences(
+    user_id: uuid.UUID,
+    database: AsyncSession,
+) -> dict[str, bool]:
+    preferences = default_notification_preferences()
+    rows = await database.scalars(
+        select(NotificationPreference).where(
+            NotificationPreference.user_id == user_id,
+        )
+    )
+    preferences.update({
+        preference.notification_type: preference.enabled
+        for preference in rows.all()
+    })
+    return preferences
 
 
 def notification_response(notification: Notification) -> dict:
@@ -95,6 +122,53 @@ async def list_notifications(
             page[-1].created_at, page[-1].id
         )
     return [notification_response(notification) for notification in page]
+
+
+@router.get(
+    "/preferences",
+    response_model=NotificationPreferencesResponse,
+    summary="Get your notification preferences",
+)
+async def read_notification_preferences(
+    current_user: User = Depends(get_current_postgres_user),
+    database: AsyncSession = Depends(get_postgres_session),
+):
+    return {"preferences": await get_notification_preferences(current_user.id, database)}
+
+
+@router.put(
+    "/preferences",
+    response_model=NotificationPreferencesResponse,
+    summary="Update your notification preferences",
+)
+async def update_notification_preferences(
+    data: NotificationPreferencesUpdate,
+    current_user: User = Depends(get_current_postgres_user),
+    database: AsyncSession = Depends(get_postgres_session),
+):
+    values = [
+        {
+            "user_id": current_user.id,
+            "notification_type": notification_type.value,
+            "enabled": enabled,
+        }
+        for notification_type, enabled in data.preferences.items()
+        if notification_type.value in NOTIFICATION_PREFERENCE_TYPES
+    ]
+    if values:
+        statement = insert(NotificationPreference).values(values)
+        statement = statement.on_conflict_do_update(
+            index_elements=[
+                NotificationPreference.user_id,
+                NotificationPreference.notification_type,
+            ],
+            set_={"enabled": statement.excluded.enabled},
+        )
+        await database.execute(statement)
+        await database.commit()
+    return {
+        "preferences": await get_notification_preferences(current_user.id, database)
+    }
 
 
 @router.get(

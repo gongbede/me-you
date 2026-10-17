@@ -27,6 +27,7 @@ from .message import Message
 from .student import Student
 from .teacher import Teacher
 from .notification import Notification
+from .notification_preference import NotificationPreference
 from .post import Post
 from .post_like import PostLike
 from .phone_login_code import PhoneLoginCode
@@ -66,6 +67,7 @@ __all__ = [
 		"Message",
 	"Follow",
 	"Notification",
+	"NotificationPreference",
 	"Post",
 	"PostLike",
 	"PhoneLoginCode",

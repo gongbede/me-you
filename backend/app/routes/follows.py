@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_postgres_session
 from ..models import Follow, Notification, Profile, User
+from ..notification_preferences import add_notification
 from ..pagination import ascending_username_uuid_clause, username_uuid_cursor
 from ..privacy import can_view_profile
 from ..schemas import FollowUserResponse
@@ -49,7 +50,8 @@ async def follow_user(
 
     follow = Follow(follower_id=current_user.id, following_id=target.id)
     database.add(follow)
-    database.add(
+    await add_notification(
+        database,
         Notification(
             recipient_id=target.id,
             actor_id=current_user.id,

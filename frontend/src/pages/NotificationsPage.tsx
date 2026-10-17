@@ -1,8 +1,8 @@
-import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CheckCheck, LoaderCircle, RotateCw } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { getFriendlyErrorMessage } from '../api/client'
-import { getNotificationsPage, markAllNotificationsRead, markNotificationRead } from '../api/notifications'
+import { getNotificationsPage, getUnreadNotificationCount, markAllNotificationsRead, markNotificationRead } from '../api/notifications'
 import { NotificationItem } from '../components/NotificationItem'
 import { notificationTargetPath } from '../components/notificationHelpers'
 
@@ -17,6 +17,11 @@ export function NotificationsPage() {
     queryFn: ({ pageParam }) => getNotificationsPage(pageParam),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page) => page.nextCursor ?? undefined,
+  })
+  const unreadQuery = useQuery({
+    queryKey: unreadKey,
+    queryFn: getUnreadNotificationCount,
+    refetchOnWindowFocus: true,
   })
   const refresh = async () => Promise.all([
     queryClient.invalidateQueries({ queryKey: unreadKey }),
@@ -41,7 +46,7 @@ export function NotificationsPage() {
     <div className="page-stack notifications-page">
       <section className="page-heading-row learning-heading">
         <div><span className="eyebrow">YOUR COMMUNITY</span><h1>Notifications</h1><p>Updates about your community and learning.</p></div>
-        <button className="button button--outline" type="button" disabled={markAllMutation.isPending || !notifications.some((notification) => !notification.read_at)} onClick={() => markAllMutation.mutate()}><CheckCheck size={16} aria-hidden="true" /> Mark all as read</button>
+        <button className="button button--outline" type="button" disabled={markAllMutation.isPending || unreadQuery.isPending || unreadQuery.data?.unread_count === 0} onClick={() => markAllMutation.mutate()}><CheckCheck size={16} aria-hidden="true" /> Mark all as read</button>
       </section>
       {notificationsQuery.isPending ? <p className="learning-loading" role="status">Loading notifications…</p> : notificationsQuery.isError && !notificationsQuery.data ? (
         <div className="page-state page-state--error" role="alert"><h2>Notifications unavailable</h2><p>{getFriendlyErrorMessage(notificationsQuery.error)}</p><button className="button button--outline" type="button" onClick={() => void notificationsQuery.refetch()}><RotateCw size={16} aria-hidden="true" /> Retry</button></div>
@@ -56,6 +61,7 @@ export function NotificationsPage() {
         </ul>
       )}
       {(markOneMutation.isError || markAllMutation.isError || notificationsQuery.isFetchNextPageError) && <div className="inline-error" role="alert"><p>{getFriendlyErrorMessage(markOneMutation.error ?? markAllMutation.error ?? notificationsQuery.error)}</p><button className="button button--outline" type="button" onClick={() => notificationsQuery.isFetchNextPageError ? void notificationsQuery.fetchNextPage() : void refresh()}>Retry</button></div>}
+      {unreadQuery.isError && <div className="inline-error" role="alert"><p>{getFriendlyErrorMessage(unreadQuery.error)}</p><button className="button button--outline" type="button" onClick={() => void unreadQuery.refetch()}>Retry unread count</button></div>}
       {notificationsQuery.hasNextPage && <button className="button button--outline feed-load-more" type="button" disabled={notificationsQuery.isFetchingNextPage} onClick={() => void notificationsQuery.fetchNextPage()}>{notificationsQuery.isFetchingNextPage && <LoaderCircle className="spin" size={16} aria-hidden="true" />}{notificationsQuery.isFetchingNextPage ? 'Loading…' : 'Load more'}</button>}
     </div>
   )

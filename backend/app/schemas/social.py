@@ -1,10 +1,18 @@
 from datetime import datetime
+from enum import Enum
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-NotificationType = str
+class NotificationType(str, Enum):
+    COMMENT = "COMMENT"
+    FOLLOW = "FOLLOW"
+    LIKE = "LIKE"
+    MESSAGE = "MESSAGE"
+    CLASS_ANNOUNCEMENT = "CLASS_ANNOUNCEMENT"
+    EXERCISE_SUBMISSION = "EXERCISE_SUBMISSION"
+    EXERCISE_REVIEWED = "EXERCISE_REVIEWED"
 
 
 class UserSummary(BaseModel):
@@ -120,6 +128,14 @@ class NotificationResponse(BaseModel):
 
 class NotificationUnreadCountResponse(BaseModel):
     unread_count: int
+
+
+class NotificationPreferencesResponse(BaseModel):
+    preferences: dict[NotificationType, bool]
+
+
+class NotificationPreferencesUpdate(BaseModel):
+    preferences: dict[NotificationType, bool] = Field(min_length=1)
 
 
 class FeedResponse(BaseModel):

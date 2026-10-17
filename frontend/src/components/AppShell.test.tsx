@@ -5,11 +5,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getTeachingCourses, listAdministeredInstitutions } from '../api/education'
 import { listConversations } from '../api/messaging'
 import { getMyProfile } from '../api/profile'
+import { getUnreadNotificationCount } from '../api/notifications'
 import { AppShell } from './AppShell'
 
 vi.mock('../api/education', () => ({ getTeachingCourses: vi.fn(), listAdministeredInstitutions: vi.fn() }))
 vi.mock('../api/messaging', () => ({ listConversations: vi.fn() }))
 vi.mock('../api/profile', () => ({ getMyProfile: vi.fn() }))
+vi.mock('../api/notifications', () => ({ getUnreadNotificationCount: vi.fn() }))
 vi.mock('../hooks/useAuth', () => ({
   useAuth: () => ({ user: { id: 'teacher-id', username: 'teacher', email: 'teacher@example.test' } }),
 }))
@@ -18,6 +20,7 @@ const getCourses = vi.mocked(getTeachingCourses)
 const getAdminInstitutions = vi.mocked(listAdministeredInstitutions)
 const getConversations = vi.mocked(listConversations)
 const getProfile = vi.mocked(getMyProfile)
+const getUnreadNotifications = vi.mocked(getUnreadNotificationCount)
 
 function renderAppShell(initialEntry = '/') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -36,6 +39,7 @@ describe('AppShell Teaching navigation', () => {
     getCourses.mockReset()
     getAdminInstitutions.mockReset().mockResolvedValue([])
     getConversations.mockReset().mockResolvedValue([])
+    getUnreadNotifications.mockReset().mockResolvedValue({ unread_count: 0 })
     getProfile.mockReset().mockResolvedValue({
       user_id: 'teacher-id',
       display_name: 'Teacher',

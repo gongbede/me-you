@@ -1,4 +1,4 @@
-Task 1: Navigation, notifications and top bar — done — commit: 7e7099f — note: sidebar and notifications navigation updated with unread count and settings route.
+Task 1: Navigation, notifications and top bar — done — commit: bf9c125 plus this completion commit — note: added persisted per-type preferences and verified user-scoped mark-all-read.
 Task 2: Installable app (PWA) and offline shell — not started — commit: pending — note: pending.
 Task 3: Report, block and admin moderation — not started — commit: pending — note: pending.
 Task 4: Search — not started — commit: pending — note: pending.

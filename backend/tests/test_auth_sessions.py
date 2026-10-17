@@ -190,6 +190,7 @@ def test_cookie_requests_require_allowed_origin_and_session_bound_csrf(monkeypat
 
     monkeypatch.setattr(app_main, "CORS_ORIGINS", ("http://testserver",))
     monkeypatch.setattr(app_main, "TRUSTED_ORIGINS", ("https://*.app.github.dev",))
+    monkeypatch.setattr(app_main, "APP_ENV", "development")
     monkeypatch.setattr(app_main, "RATE_LIMIT_ENABLED", False)
     csrf_token = "c" * 43
     cookie_token = create_access_token(uuid.uuid4(), csrf_token=csrf_token)

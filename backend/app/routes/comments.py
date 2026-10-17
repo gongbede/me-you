@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from ..database import get_postgres_session
 from ..models import Comment, Notification, Post, User
+from ..notification_preferences import add_notification
 from ..pagination import ascending_time_uuid_clause, time_uuid_cursor
 from ..privacy import require_post_visibility
 from ..schemas import CommentResponse, CreateComment, UpdateComment
@@ -66,7 +67,8 @@ async def create_comment(
     )
     database.add(comment)
     if post.author_id != current_user.id:
-        database.add(
+        await add_notification(
+            database,
             Notification(
                 recipient_id=post.author_id,
                 actor_id=current_user.id,

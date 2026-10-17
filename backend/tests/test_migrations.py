@@ -25,6 +25,7 @@ from app.models import (
     Follow,
     Message,
     Notification,
+    NotificationPreference,
     Post,
     PostLike,
     PhoneLoginCode,
@@ -63,7 +64,7 @@ class MigrationFoundationTests(unittest.TestCase):
             set(Base.metadata.tables),
             {
                 "users", "profiles", "posts", "comments", "post_likes", "follows",
-                "notifications", "conversations", "conversation_members", "messages",
+                "notifications", "notification_preferences", "conversations", "conversation_members", "messages",
                 "institutions", "institution_memberships", "faculties", "departments",
                 "courses", "teachers", "students", "enrollments",
                 "course_teachers", "lessons", "exercises", "exercise_submissions", "assessments",
@@ -84,6 +85,10 @@ class MigrationFoundationTests(unittest.TestCase):
         self.assertIs(PostLike.__table__, Base.metadata.tables["post_likes"])
         self.assertIs(Follow.__table__, Base.metadata.tables["follows"])
         self.assertIs(Notification.__table__, Base.metadata.tables["notifications"])
+        self.assertIs(
+            NotificationPreference.__table__,
+            Base.metadata.tables["notification_preferences"],
+        )
         self.assertIs(Conversation.__table__, Base.metadata.tables["conversations"])
         self.assertIn(
             "ix_conversations_created_by_id",

@@ -1,8 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getNotificationsPage, getUnreadNotificationCount, markAllNotificationsRead, markNotificationRead } from '../api/notifications'
+import { getNotificationsPage, getUnreadNotificationCount, markAllNotificationsRead, markNotificationRead, type Notification } from '../api/notifications'
 import { NotificationsPage } from './NotificationsPage'
 
 vi.mock('../api/notifications', () => ({
@@ -12,7 +12,7 @@ vi.mock('../api/notifications', () => ({
   markNotificationRead: vi.fn(),
 }))
 
-const notification = {
+const notification: Notification = {
   id: 'notification-1',
   type: 'MESSAGE',
   title: 'New message',
@@ -28,12 +28,16 @@ const notification = {
 
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
-  return render(<QueryClientProvider client={queryClient}><MemoryRouter><NotificationsPage /></MemoryRouter></QueryClientProvider>)
+  function LocationProbe() {
+    return <output data-testid="pathname">{useLocation().pathname}</output>
+  }
+  return render(<QueryClientProvider client={queryClient}><MemoryRouter><LocationProbe /><NotificationsPage /></MemoryRouter></QueryClientProvider>)
 }
 
 describe('NotificationsPage', () => {
   afterEach(() => cleanup())
   beforeEach(() => {
+    vi.mocked(getNotificationsPage).mockResolvedValue({ items: [notification], nextCursor: null })
     vi.mocked(getUnreadNotificationCount).mockResolvedValue({ unread_count: 1 })
     vi.mocked(markNotificationRead).mockResolvedValue({ ...notification, read_at: '2026-10-12T12:01:00Z' })
     vi.mocked(markAllNotificationsRead).mockResolvedValue({ updated: 1 })
@@ -56,5 +60,24 @@ describe('NotificationsPage', () => {
     renderPage()
 
     expect(await screen.findByText('You’re all caught up.')).toBeInTheDocument()
+  })
+
+  it('marks all notifications read', async () => {
+    vi.mocked(getNotificationsPage).mockResolvedValueOnce({ items: [notification], nextCursor: null })
+    renderPage()
+
+    const markAllButton = await screen.findByRole('button', { name: 'Mark all as read' })
+    await waitFor(() => expect(markAllButton).toBeEnabled())
+    fireEvent.click(markAllButton)
+    await waitFor(() => expect(vi.mocked(markAllNotificationsRead)).toHaveBeenCalledOnce())
+  })
+
+  it('marks an unread notification read before opening its conversation', async () => {
+    vi.mocked(getNotificationsPage).mockResolvedValueOnce({ items: [notification], nextCursor: null })
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('link', { name: 'reader sent you a message.' }))
+    await waitFor(() => expect(vi.mocked(markNotificationRead).mock.calls[0]?.[0]).toBe('notification-1'))
+    expect(await screen.findByTestId('pathname')).toHaveTextContent('/messages/conversation-1')
   })
 })

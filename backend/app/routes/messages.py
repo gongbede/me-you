@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from ..database import get_postgres_session
 from ..models import Conversation, ConversationMember, Message, Notification, User
+from ..notification_preferences import add_notification
 from ..pagination import descending_time_uuid_clause, time_uuid_cursor
 from ..schemas import CreateMessage, MessageResponse, ReadStateResponse, UpdateMessage
 from ..security import get_current_postgres_user
@@ -48,7 +49,10 @@ async def send_message(conversation_id: uuid.UUID, data: CreateMessage, current_
     database.add(message)
     member_ids = list((await database.scalars(select(ConversationMember.user_id).where(ConversationMember.conversation_id == conversation_id, ConversationMember.user_id != current_user.id))).all())
     for recipient_id in member_ids:
-        database.add(Notification(recipient_id=recipient_id, actor_id=current_user.id, type="MESSAGE", title="New message", target_type="conversation", target_id=conversation_id))
+        await add_notification(
+            database,
+            Notification(recipient_id=recipient_id, actor_id=current_user.id, type="MESSAGE", title="New message", target_type="conversation", target_id=conversation_id),
+        )
     conversation.updated_at = datetime.now(timezone.utc)
     await database.commit()
     await database.refresh(message)

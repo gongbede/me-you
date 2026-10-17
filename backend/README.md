@@ -14,6 +14,8 @@ Security audit events are retained for 365 days by default. Run `python -m app.c
 
 Profiles default to `NETWORK` visibility, preserving existing shared-institution discovery. Profile visibility may be `PUBLIC`, `AUTHENTICATED`, `NETWORK`, or `PRIVATE`; posts default to `PUBLIC` for compatibility and may be `PUBLIC`, `AUTHENTICATED`, `NETWORK`, or `PRIVATE`. Inactive accounts are hidden from discovery and social collections. Student/teacher self-registration now creates a pending join request; an institution administrator must approve it. Administrators may also invite users, but invitees must accept before an active membership is created. Existing active memberships are retained. List endpoints are capped at 100 rows; cursor-enabled feeds, messages, notifications, comments, likes, followers/following, search, and security events return continuation cursors (array endpoints use `X-Next-Cursor`).
 
+Notification preferences are available at `GET` and `PUT /notifications/preferences`. Each notification type defaults to enabled; preferences only suppress in-app notifications and never suppress security alerts. `POST /notifications/read-all` marks only the authenticated user's notifications as read.
+
 ## Platform administrator bootstrap
 
 Run `python -m app.cli create-platform-admin` from `backend/` to create the first administrator or promote an existing account. New-account passwords are entered with `getpass` prompts, never command-line arguments. Use `python -m app.cli grant-platform-admin <email>` and `python -m app.cli revoke-platform-admin <email>` for later changes; revoking the last active platform administrator is refused.

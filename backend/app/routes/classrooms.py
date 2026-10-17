@@ -16,6 +16,7 @@ from ..models import (
     Student,
     User,
 )
+from ..notification_preferences import add_notifications
 from ..permissions import course_institution_id, require_course_teacher, require_enrolled_student
 from ..schemas import (
     ClassSessionAttendanceResponse,
@@ -315,13 +316,13 @@ async def create_class_session_message(session_id: uuid.UUID, data: ClassSession
             .join(Enrollment, Enrollment.student_id == Student.id)
             .where(Enrollment.course_id == value.course_id)
         )
-        database.add_all([
+        await add_notifications(database, [
             Notification(
                 recipient_id=user_id,
                 actor_id=current_user.id,
                 type="CLASS_ANNOUNCEMENT",
                 title="Classroom announcement",
-                payload={"session_id": str(value.id)},
+                payload={"session_id": str(value.id), "course_id": str(value.course_id)},
                 target_type="class_session",
                 target_id=value.id,
             )

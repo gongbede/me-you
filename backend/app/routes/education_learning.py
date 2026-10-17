@@ -30,6 +30,7 @@ from ..models import (
     Teacher,
     User,
 )
+from ..notification_preferences import add_notification
 from ..permissions import (
     course_institution_id,
     require_course_teacher,
@@ -376,7 +377,8 @@ async def create_exercise_submission(exercise_id: uuid.UUID, data: ExerciseSubmi
             metadata={"attempt_number": data.attempt_number},
         )
         for teacher_user_id in teacher_user_ids.all():
-            database.add(
+            await add_notification(
+                database,
                 Notification(
                     recipient_id=teacher_user_id,
                     actor_id=current_user.id,
@@ -495,7 +497,8 @@ async def review_exercise_submission(submission_id: uuid.UUID, data: ExerciseSub
     student = await database.scalar(select(Student).where(Student.id == value.student_id))
     if student is None:
         raise HTTPException(status_code=404, detail="Student not found")
-    database.add(
+    await add_notification(
+        database,
         Notification(
             recipient_id=student.user_id,
             actor_id=current_user.id,
