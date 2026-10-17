@@ -4,14 +4,14 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import func, select
+from sqlalchemy import and_, exists, func, not_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_postgres_session
 from ..models import (
     Follow, MediaAsset, MusicCategoryFollow, Notification, Playlist, PlaylistItem,
-    Track, User, Video, VideoComment, VideoLike, VideoView,
+    Track, User, UserBlock, Video, VideoComment, VideoLike, VideoView,
 )
 from ..notification_preferences import add_notifications
 from ..privacy import can_view_profile
@@ -68,6 +68,7 @@ class VideoCommentCreate(BaseModel):
 
 class PlaylistCreate(BaseModel):
     title: str = Field(min_length=1, max_length=120)
+    visibility: Literal["PUBLIC", "FOLLOWERS", "PRIVATE"] = "PUBLIC"
 
     @field_validator("title")
     @classmethod
@@ -93,6 +94,29 @@ async def visible_media(item: Video | Track, viewer: User | None, database: Asyn
         return False
     owner = await database.get(User, item.owner_id)
     return bool(owner and await can_view_profile(owner, item.visibility, viewer, database))
+
+
+def visible_media_clause(model: type[Video] | type[Track], viewer: User | None):
+    owner_active = exists(select(User.id).where(User.id == model.owner_id, User.is_active.is_(True)))
+    if viewer is None:
+        return and_(owner_active, model.visibility == "PUBLIC")
+    follows_owner = exists(select(Follow.follower_id).where(
+        Follow.follower_id == viewer.id, Follow.following_id == model.owner_id
+    ))
+    blocked_pair = exists(select(UserBlock.id).where(or_(
+        and_(UserBlock.blocker_id == viewer.id, UserBlock.blocked_id == model.owner_id),
+        and_(UserBlock.blocker_id == model.owner_id, UserBlock.blocked_id == viewer.id),
+    )))
+    allowed_visibility = or_(
+        model.owner_id == viewer.id,
+        model.visibility == "PUBLIC",
+        and_(model.visibility == "FOLLOWERS", follows_owner),
+    )
+    return and_(
+        owner_active,
+        allowed_visibility,
+        or_(model.owner_id == viewer.id, not_(blocked_pair)),
+    )
 
 
 async def require_asset(asset_id: uuid.UUID, owner_id: uuid.UUID, purpose: str, database: AsyncSession) -> MediaAsset:
@@ -141,6 +165,7 @@ async def create_video(
         recent = await db.scalar(select(Notification.id).where(
             Notification.actor_id == current.id, Notification.type == "NEW_VIDEO",
             Notification.created_at >= datetime.now(timezone.utc) - timedelta(hours=1),
+            Notification.target_type == "VIDEO",
         ).limit(1))
         if recent is None:
             # Fan-out is capped at 500 recipients per upload.
@@ -164,7 +189,9 @@ async def list_videos(
     current: User | None = Depends(get_optional_postgres_user),
     db: AsyncSession = Depends(get_postgres_session),
 ):
-    statement = select(Video).where(Video.is_hidden.is_(False))
+    statement = select(Video)
+    if not (current and current.is_platform_admin):
+        statement = statement.where(Video.is_hidden.is_(False))
     if mine:
         if current is None:
             raise HTTPException(401, "Authentication required")
@@ -173,12 +200,9 @@ async def list_videos(
         statement = statement.where(Video.category == category)
     if q:
         statement = statement.where(Video.title.ilike(f"%{q}%"))
-    candidates = list((await db.scalars(statement.order_by(Video.created_at.desc()).offset(offset).limit(limit))).all())
-    result = []
-    for item in candidates:
-        if await visible_media(item, current, db):
-            result.append(video_data(item))
-    return result
+    statement = statement.where(visible_media_clause(Video, current))
+    candidates = list((await db.scalars(statement.order_by(Video.created_at.desc(), Video.id.desc()).offset(offset).limit(limit))).all())
+    return [video_data(item) for item in candidates]
 
 
 @router.put("/videos/{video_id}")
@@ -203,8 +227,17 @@ async def list_video_comments(video_id: uuid.UUID, offset: int = Query(default=0
     item = await db.get(Video, video_id)
     if item is None or not await visible_media(item, current, db):
         raise HTTPException(404, "Video not found")
-    comments = (await db.scalars(select(VideoComment).where(VideoComment.video_id == video_id).order_by(VideoComment.created_at).offset(offset).limit(limit))).all()
+    comments = (await db.scalars(select(VideoComment).where(VideoComment.video_id == video_id).order_by(VideoComment.created_at, VideoComment.id).offset(offset).limit(limit))).all()
     return [{"id": str(comment.id), "video_id": str(comment.video_id), "author_id": str(comment.author_id), "content": comment.content, "created_at": comment.created_at} for comment in comments]
+
+
+@router.delete("/videos/comments/{comment_id}", status_code=204)
+async def delete_video_comment(comment_id: uuid.UUID, current: User = Depends(get_current_postgres_user), db: AsyncSession = Depends(get_postgres_session)):
+    comment = await db.get(VideoComment, comment_id)
+    if comment is None or (comment.author_id != current.id and not current.is_platform_admin):
+        raise HTTPException(404, "Comment not found")
+    await db.delete(comment)
+    await db.commit()
 
 
 @router.get("/videos/{video_id}")
@@ -280,10 +313,14 @@ async def create_track(data: TrackCreate, current: User = Depends(get_current_po
     item = Track(owner_id=current.id, media_asset_id=asset.id, title=data.title.strip(), artist_name=data.artist_name.strip(), category=data.category, visibility=data.visibility, rights_confirmed_at=datetime.now(timezone.utc))
     db.add(item)
     await db.flush()
-    recent = await db.scalar(select(Notification.id).where(
-        Notification.actor_id == current.id, Notification.type == "NEW_TRACK",
-        Notification.created_at >= datetime.now(timezone.utc) - timedelta(hours=1),
-    ).limit(1))
+    if data.visibility in {"PUBLIC", "FOLLOWERS"}:
+        recent = await db.scalar(select(Notification.id).where(
+            Notification.actor_id == current.id, Notification.type == "NEW_TRACK",
+            Notification.created_at >= datetime.now(timezone.utc) - timedelta(hours=1),
+            Notification.target_type == "TRACK",
+        ).limit(1))
+    else:
+        recent = True
     if recent is None:
         followers = set((await db.scalars(select(Follow.follower_id).where(Follow.following_id == current.id).limit(NOTIFICATION_FANOUT_LIMIT))).all())
         category_followers = set((await db.scalars(select(MusicCategoryFollow.user_id).where(MusicCategoryFollow.category == data.category).limit(NOTIFICATION_FANOUT_LIMIT))).all())
@@ -293,15 +330,47 @@ async def create_track(data: TrackCreate, current: User = Depends(get_current_po
     return track_data(item)
 
 
+@router.put("/tracks/{track_id}")
+async def update_track(track_id: uuid.UUID, data: TrackCreate, current: User = Depends(get_current_postgres_user), db: AsyncSession = Depends(get_postgres_session)):
+    if not data.rights_confirmed:
+        raise HTTPException(422, "Confirm that you own this audio or have permission to share it")
+    if data.category not in MUSIC_CATEGORIES:
+        raise HTTPException(422, "Unsupported music category")
+    item = await db.scalar(select(Track).where(Track.id == track_id, Track.owner_id == current.id))
+    if item is None:
+        raise HTTPException(404, "Track not found")
+    item.title = data.title.strip()
+    item.artist_name = data.artist_name.strip()
+    item.category = data.category
+    item.visibility = data.visibility
+    item.rights_confirmed_at = datetime.now(timezone.utc)
+    item.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(item)
+    return track_data(item)
+
+
+@router.delete("/tracks/{track_id}", status_code=204)
+async def delete_track(track_id: uuid.UUID, current: User = Depends(get_current_postgres_user), db: AsyncSession = Depends(get_postgres_session)):
+    item = await db.scalar(select(Track).where(Track.id == track_id, Track.owner_id == current.id))
+    if item is None:
+        raise HTTPException(404, "Track not found")
+    await db.delete(item)
+    await db.commit()
+
+
 @router.get("/tracks")
 async def list_tracks(category: str | None = None, q: str = Query(default="", max_length=100), offset: int = Query(default=0, ge=0), limit: int = Query(default=20, ge=1, le=50), current: User | None = Depends(get_optional_postgres_user), db: AsyncSession = Depends(get_postgres_session)):
-    statement = select(Track).where(Track.is_hidden.is_(False))
+    statement = select(Track)
+    if not (current and current.is_platform_admin):
+        statement = statement.where(Track.is_hidden.is_(False))
     if category:
         statement = statement.where(Track.category == category)
     if q:
         statement = statement.where(Track.title.ilike(f"%{q}%"))
-    tracks = list((await db.scalars(statement.order_by(Track.created_at.desc()).offset(offset).limit(limit))).all())
-    return [track_data(item) for item in tracks if await visible_media(item, current, db)]
+    statement = statement.where(visible_media_clause(Track, current))
+    tracks = list((await db.scalars(statement.order_by(Track.created_at.desc(), Track.id.desc()).offset(offset).limit(limit))).all())
+    return [track_data(item) for item in tracks]
 
 
 @router.post("/tracks/{track_id}/play", status_code=204)
@@ -320,7 +389,7 @@ async def count_track_play(track_id: uuid.UUID, current: User = Depends(get_curr
 
 @router.post("/playlists", status_code=201)
 async def create_playlist(data: PlaylistCreate, current: User = Depends(get_current_postgres_user), db: AsyncSession = Depends(get_postgres_session)):
-    playlist = Playlist(owner_id=current.id, title=data.title)
+    playlist = Playlist(owner_id=current.id, title=data.title, visibility=data.visibility)
     db.add(playlist)
     await db.commit()
     await db.refresh(playlist)
@@ -335,12 +404,21 @@ async def list_playlists(current: User = Depends(get_current_postgres_user), db:
 
 @router.get("/playlists/{playlist_id}")
 async def get_playlist(playlist_id: uuid.UUID, current: User = Depends(get_current_postgres_user), db: AsyncSession = Depends(get_postgres_session)):
-    playlist = await db.scalar(select(Playlist).where(Playlist.id == playlist_id, Playlist.owner_id == current.id))
-    if playlist is None:
+    playlist = await db.get(Playlist, playlist_id)
+    owner = await db.get(User, playlist.owner_id) if playlist is not None else None
+    if playlist is None or owner is None or (
+        playlist.owner_id != current.id
+        and not await can_view_profile(owner, playlist.visibility, current, db)
+    ):
         raise HTTPException(404, "Playlist not found")
     rows = (await db.execute(
         select(Track).join(PlaylistItem, PlaylistItem.track_id == Track.id)
         .where(PlaylistItem.playlist_id == playlist_id)
+        .where(
+            Track.visibility != "PRIVATE"
+            if playlist.owner_id != current.id
+            else True
+        )
         .order_by(PlaylistItem.position)
     )).scalars().all()
     return {"id": str(playlist.id), "title": playlist.title, "tracks": [track_data(track) for track in rows]}
@@ -352,6 +430,7 @@ async def rename_playlist(playlist_id: uuid.UUID, data: PlaylistCreate, current:
     if playlist is None:
         raise HTTPException(404, "Playlist not found")
     playlist.title = data.title
+    playlist.visibility = data.visibility
     playlist.updated_at = datetime.now(timezone.utc)
     await db.commit()
     return {"id": str(playlist.id), "title": playlist.title}
@@ -372,6 +451,12 @@ async def add_playlist_track(playlist_id: uuid.UUID, track_id: uuid.UUID, curren
     track = await db.get(Track, track_id)
     if playlist is None or track is None:
         raise HTTPException(404, "Playlist or track not found")
+    if not await visible_media(track, current, db):
+        raise HTTPException(404, "Track not found")
+    if playlist.visibility == "PUBLIC" and track.visibility == "PRIVATE" and track.owner_id != playlist.owner_id:
+        raise HTTPException(409, "Private tracks cannot be added to a public playlist")
+    if await db.get(PlaylistItem, (playlist_id, track_id)) is not None:
+        return
     position = int(await db.scalar(select(func.coalesce(func.max(PlaylistItem.position), -1)).where(PlaylistItem.playlist_id == playlist_id))) + 1
     db.add(PlaylistItem(playlist_id=playlist_id, track_id=track_id, position=position))
     await db.commit()

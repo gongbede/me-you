@@ -2,6 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.providers.storage import sniff_content_type
+from app.routes.media import max_bytes_for_purpose
 from app.routes.video_music import MUSIC_CATEGORIES, VIDEO_CATEGORIES, TrackCreate, VideoCreate
 
 
@@ -50,3 +51,25 @@ def test_track_requires_rights_checkbox_and_known_category():
 )
 def test_audio_upload_signature_detection(signature, content_type):
     assert sniff_content_type(signature) == content_type
+
+
+@pytest.mark.parametrize(
+    ("signature", "content_type"),
+    [
+        (b"\x00\x00\x00\x18ftypisom\x00\x00\x00\x00", "video/mp4"),
+        (b"\x1aE\xdf\xa3\x93\x42\x82\x88", "video/webm"),
+    ],
+)
+def test_video_upload_signature_detection(signature, content_type):
+    assert sniff_content_type(signature) == content_type
+
+
+def test_renamed_text_file_does_not_pass_media_signature_validation():
+    assert sniff_content_type(b"this is not a video, despite the .mp4 extension") is None
+
+
+def test_video_and_audio_size_limits_can_be_configured(monkeypatch):
+    monkeypatch.setattr("app.routes.media.VIDEO_MAX_BYTES", 1234)
+    monkeypatch.setattr("app.routes.media.AUDIO_MAX_BYTES", 567)
+    assert max_bytes_for_purpose("VIDEO") == 1234
+    assert max_bytes_for_purpose("AUDIO") == 567

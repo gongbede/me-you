@@ -35,12 +35,19 @@ from app.models import (
     InstitutionMembership,
     Lesson,
     MediaAsset,
+    MusicCategoryFollow,
+    Notification,
+    NotificationPreference,
+    Playlist,
+    PlaylistItem,
     SecurityEvent,
     Student,
     Teacher,
     Track,
+    UserBlock,
     User,
     Video,
+    VideoComment,
 )
 import app.routes.institutions as institution_routes
 from app.security import get_current_postgres_user
@@ -4851,6 +4858,287 @@ def test_video_and_music_migrations_round_trip_and_cascade_own_rows(postgres_dat
                     await session.execute(delete(Track).where(Track.owner_id == user_id))
                     await session.execute(delete(MediaAsset).where(MediaAsset.owner_id == user_id))
                     await session.execute(delete(User).where(User.id == user_id))
+                    await session.commit()
+            await engine.dispose()
+
+    asyncio.run(verify())
+
+
+def test_video_track_privacy_ownership_and_playlist_rules(postgres_database_url):
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+    from app.database import get_postgres_session
+    from app.models import Follow
+    from app.routes.video_music import router as media_router
+    from app.security import get_current_postgres_user, get_optional_postgres_user
+
+    async def verify():
+        engine = create_async_engine(postgres_database_url)
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        test_app = FastAPI()
+        test_app.include_router(media_router)
+        selected = {"id": None}
+        user_ids: list[uuid.UUID] = []
+        try:
+            async with session_factory() as session:
+                owner = await create_user(session)
+                follower = await create_user(session)
+                outsider = await create_user(session)
+                blocked = await create_user(session)
+                user_ids.extend([owner.id, follower.id, outsider.id, blocked.id])
+                session.add(Follow(follower_id=follower.id, following_id=owner.id))
+                session.add(UserBlock(blocker_id=owner.id, blocked_id=blocked.id))
+                now = datetime.now(timezone.utc)
+                assets = [
+                    MediaAsset(owner_id=owner.id, purpose="VIDEO", status="READY", storage_provider="test",
+                               storage_key=f"users/{owner.id}/{uuid.uuid4()}", content_type="video/mp4",
+                               byte_size=100, original_filename="video.mp4", upload_expires_at=now),
+                    MediaAsset(owner_id=owner.id, purpose="AUDIO", status="READY", storage_provider="test",
+                               storage_key=f"users/{owner.id}/{uuid.uuid4()}", content_type="audio/mpeg",
+                               byte_size=100, original_filename="track.mp3", upload_expires_at=now),
+                ]
+                session.add_all(assets)
+                await session.flush()
+                public_video = Video(owner_id=owner.id, media_asset_id=assets[0].id, title="Public lesson", category="Education")
+                private_track = Track(owner_id=owner.id, media_asset_id=assets[1].id, title="Private song",
+                                      artist_name="Artist", category="Jazz", visibility="PRIVATE")
+                session.add_all([public_video, private_track])
+                await session.commit()
+                owner_id, follower_id, outsider_id, blocked_id = owner.id, follower.id, outsider.id, blocked.id
+                video_id, track_id = public_video.id, private_track.id
+            async def db_dependency():
+                async with session_factory() as session:
+                    yield session
+            async def current_dependency():
+                async with session_factory() as session:
+                    return await session.get(User, selected["id"])
+            test_app.dependency_overrides[get_postgres_session] = db_dependency
+            test_app.dependency_overrides[get_current_postgres_user] = current_dependency
+            test_app.dependency_overrides[get_optional_postgres_user] = current_dependency
+            async with AsyncClient(transport=ASGITransport(app=test_app), base_url="http://test") as client:
+                selected["id"] = outsider_id
+                assert (await client.get(f"/videos/{video_id}")).status_code == 200
+                assert (await client.put(f"/videos/{video_id}", json={
+                    "title": "Hijack", "category": "Education",
+                })).status_code == 404
+                assert (await client.delete(f"/videos/{video_id}")).status_code == 404
+                assert (await client.post(f"/videos/{video_id}/like")).status_code == 204
+                assert (await client.post(f"/videos/{video_id}/comments", json={"content": "hello"})).status_code == 201
+                selected["id"] = blocked_id
+                assert (await client.get(f"/videos/{video_id}")).status_code == 404
+                assert (await client.post(f"/videos/{video_id}/like")).status_code == 404
+                assert (await client.post(f"/videos/{video_id}/comments", json={"content": "blocked"})).status_code == 404
+                selected["id"] = follower_id
+                assert (await client.get(f"/tracks?category=Jazz")).json() == []
+                selected["id"] = outsider_id
+                assert (await client.post(f"/playlists", json={"title": "Public list"})).status_code == 201
+                playlist = (await client.get("/playlists")).json()[0]
+                assert (await client.post(f"/playlists/{playlist['id']}/tracks/{track_id}")).status_code == 404
+                selected["id"] = owner_id
+                assert (await client.put(f"/videos/{video_id}", json={
+                    "title": "Private lesson", "category": "Education", "visibility": "PRIVATE",
+                })).status_code == 200
+                selected["id"] = outsider_id
+                assert (await client.get(f"/videos/{video_id}")).status_code == 404
+                selected["id"] = follower_id
+                assert (await client.get(f"/videos/{video_id}")).status_code == 404
+                selected["id"] = owner_id
+                follow = await client.put("/music/categories/Jazz/follow")
+                assert follow.status_code == 204
+                unfollow = await client.delete("/music/categories/Jazz/follow")
+                assert unfollow.status_code == 204
+                async with session_factory() as session:
+                    assert await session.get(MusicCategoryFollow, (owner_id, "Jazz")) is None
+        finally:
+            test_app.dependency_overrides.clear()
+            if user_ids:
+                async with session_factory() as session:
+                    await session.execute(delete(User).where(User.id.in_(user_ids)))
+                    await session.commit()
+            await engine.dispose()
+
+    asyncio.run(verify())
+
+
+def test_media_notifications_respect_visibility_blocks_preferences_and_deduplicate(postgres_database_url):
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+    from app.database import get_postgres_session
+    from app.models import Follow
+    from app.routes.video_music import router as media_router
+    from app.security import get_current_postgres_user
+
+    async def verify():
+        engine = create_async_engine(postgres_database_url)
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        test_app = FastAPI()
+        test_app.include_router(media_router)
+        selected = {"id": None}
+        user_ids: list[uuid.UUID] = []
+        try:
+            async with session_factory() as session:
+                owner = await create_user(session)
+                both = await create_user(session)
+                category_only = await create_user(session)
+                muted = await create_user(session)
+                blocked = await create_user(session)
+                user_ids.extend([owner.id, both.id, category_only.id, muted.id, blocked.id])
+                session.add_all([
+                    Follow(follower_id=both.id, following_id=owner.id),
+                    Follow(follower_id=muted.id, following_id=owner.id),
+                    Follow(follower_id=blocked.id, following_id=owner.id),
+                    MusicCategoryFollow(user_id=both.id, category="Jazz"),
+                    MusicCategoryFollow(user_id=category_only.id, category="Jazz"),
+                    UserBlock(blocker_id=owner.id, blocked_id=blocked.id),
+                    NotificationPreference(user_id=muted.id, notification_type="NEW_VIDEO", enabled=False),
+                    NotificationPreference(user_id=muted.id, notification_type="NEW_TRACK", enabled=False),
+                ])
+                now = datetime.now(timezone.utc)
+                assets = [
+                    MediaAsset(owner_id=owner.id, purpose="VIDEO", status="READY", storage_provider="test",
+                               storage_key=f"users/{owner.id}/{uuid.uuid4()}", content_type="video/mp4",
+                               byte_size=100, original_filename="one.mp4", upload_expires_at=now),
+                    MediaAsset(owner_id=owner.id, purpose="AUDIO", status="READY", storage_provider="test",
+                               storage_key=f"users/{owner.id}/{uuid.uuid4()}", content_type="audio/mpeg",
+                               byte_size=100, original_filename="one.mp3", upload_expires_at=now),
+                    MediaAsset(owner_id=owner.id, purpose="AUDIO", status="READY", storage_provider="test",
+                               storage_key=f"users/{owner.id}/{uuid.uuid4()}", content_type="audio/mpeg",
+                               byte_size=100, original_filename="private.mp3", upload_expires_at=now),
+                ]
+                session.add_all(assets)
+                await session.commit()
+                selected["id"] = owner.id
+                asset_ids = [str(asset.id) for asset in assets]
+                owner_id, both_id, category_id, muted_id, blocked_id = owner.id, both.id, category_only.id, muted.id, blocked.id
+
+            async def db_dependency():
+                async with session_factory() as session:
+                    yield session
+            async def current_dependency():
+                async with session_factory() as session:
+                    return await session.get(User, selected["id"])
+            test_app.dependency_overrides[get_postgres_session] = db_dependency
+            test_app.dependency_overrides[get_current_postgres_user] = current_dependency
+            async with AsyncClient(transport=ASGITransport(app=test_app), base_url="http://test") as client:
+                video = await client.post("/videos", json={
+                    "media_asset_id": asset_ids[0], "title": "Public", "category": "Education",
+                })
+                assert video.status_code == 201
+                rejected = await client.post("/tracks", json={
+                    "media_asset_id": asset_ids[1], "title": "Rights", "artist_name": "Artist",
+                    "category": "Jazz", "rights_confirmed": False,
+                })
+                assert rejected.status_code == 422
+                track = await client.post("/tracks", json={
+                    "media_asset_id": asset_ids[1], "title": "Public", "artist_name": "Artist",
+                    "category": "Jazz", "rights_confirmed": True,
+                })
+                assert track.status_code == 201
+                private = await client.post("/tracks", json={
+                    "media_asset_id": asset_ids[2], "title": "Private", "artist_name": "Artist",
+                    "category": "Jazz", "visibility": "PRIVATE", "rights_confirmed": True,
+                })
+                assert private.status_code == 201
+
+            async with session_factory() as session:
+                notifications = (await session.scalars(select(Notification).where(
+                    Notification.actor_id == owner_id,
+                    Notification.type.in_(["NEW_VIDEO", "NEW_TRACK"]),
+                ))).all()
+                videos = {notification.recipient_id for notification in notifications if notification.type == "NEW_VIDEO"}
+                tracks = {notification.recipient_id for notification in notifications if notification.type == "NEW_TRACK"}
+                assert videos == {both_id}
+                assert tracks == {both_id, category_id}
+                assert muted_id not in videos | tracks
+                assert blocked_id not in videos | tracks
+                assert sum(notification.type == "NEW_TRACK" and notification.recipient_id == both_id for notification in notifications) == 1
+        finally:
+            test_app.dependency_overrides.clear()
+            if user_ids:
+                async with session_factory() as session:
+                    await session.execute(delete(User).where(User.id.in_(user_ids)))
+                    await session.commit()
+            await engine.dispose()
+
+    asyncio.run(verify())
+
+
+def test_media_counters_are_deduplicated_and_rate_limited(postgres_database_url):
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+    from app.database import get_postgres_session
+    from app.rate_limit import get_rate_limit_store
+    from app.routes.video_music import router as media_router
+    from app.security import get_current_postgres_user
+
+    class Limiter:
+        def __init__(self):
+            self.counts = {}
+
+        async def increment(self, scope, key, window_seconds):
+            value = self.counts.get((scope, key), 0) + 1
+            self.counts[(scope, key)] = value
+            return value, 60
+
+        async def get_count(self, scope, key, window_seconds):
+            return self.counts.get((scope, key), 0), 60
+
+        async def clear(self, scope, key):
+            self.counts.pop((scope, key), None)
+
+    async def verify():
+        engine = create_async_engine(postgres_database_url)
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        test_app = FastAPI()
+        test_app.include_router(media_router)
+        selected = {"id": None}
+        user_ids: list[uuid.UUID] = []
+        limiter = Limiter()
+        try:
+            async with session_factory() as session:
+                owner = await create_user(session)
+                viewer = await create_user(session)
+                user_ids.extend([owner.id, viewer.id])
+                now = datetime.now(timezone.utc)
+                video_asset = MediaAsset(owner_id=owner.id, purpose="VIDEO", status="READY", storage_provider="test",
+                    storage_key=f"users/{owner.id}/{uuid.uuid4()}", content_type="video/mp4", byte_size=100,
+                    original_filename="view.mp4", upload_expires_at=now)
+                audio_asset = MediaAsset(owner_id=owner.id, purpose="AUDIO", status="READY", storage_provider="test",
+                    storage_key=f"users/{owner.id}/{uuid.uuid4()}", content_type="audio/mpeg", byte_size=100,
+                    original_filename="play.mp3", upload_expires_at=now)
+                session.add_all([video_asset, audio_asset])
+                await session.flush()
+                video = Video(owner_id=owner.id, media_asset_id=video_asset.id, title="Views", category="Education")
+                track = Track(owner_id=owner.id, media_asset_id=audio_asset.id, title="Plays", artist_name="Artist", category="Jazz")
+                session.add_all([video, track])
+                await session.commit()
+                selected["id"] = viewer.id
+                video_id, track_id = video.id, track.id
+            async def db_dependency():
+                async with session_factory() as session:
+                    yield session
+            async def user_dependency():
+                async with session_factory() as session:
+                    return await session.get(User, selected["id"])
+            test_app.dependency_overrides[get_postgres_session] = db_dependency
+            test_app.dependency_overrides[get_current_postgres_user] = user_dependency
+            test_app.dependency_overrides[get_rate_limit_store] = lambda: limiter
+            async with AsyncClient(transport=ASGITransport(app=test_app), base_url="http://test") as client:
+                assert (await client.post(f"/videos/{video_id}/view")).status_code == 204
+                assert (await client.post(f"/videos/{video_id}/view")).status_code == 204
+                assert (await client.post(f"/tracks/{track_id}/play")).status_code == 204
+                assert (await client.post(f"/tracks/{track_id}/play")).status_code == 204
+                for _ in range(59):
+                    response = await client.post(f"/videos/{video_id}/view")
+                assert response.status_code == 429
+            async with session_factory() as session:
+                assert (await session.get(Video, video_id)).view_count == 1
+                assert (await session.get(Track, track_id)).play_count == 1
+        finally:
+            test_app.dependency_overrides.clear()
+            if user_ids:
+                async with session_factory() as session:
+                    await session.execute(delete(User).where(User.id.in_(user_ids)))
                     await session.commit()
             await engine.dispose()
 
