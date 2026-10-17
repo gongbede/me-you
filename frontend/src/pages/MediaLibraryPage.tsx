@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Music2, Video } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { apiRequest, getFriendlyErrorMessage } from '../api/client'
 import { avatarUploadTransport } from '../api/avatar'
 import { useMusicPlayer } from '../hooks/useMusicPlayer'
@@ -14,6 +15,7 @@ type MediaItem = {
   artist_name?: string
   play_count?: number
   view_count?: number
+  visibility: 'PUBLIC' | 'FOLLOWERS' | 'PRIVATE'
 }
 
 const videoCategories = ['Education', 'Programming', 'Technology', 'Music', 'Entertainment', 'Sports', 'Lifestyle', 'Faith', 'Other']
@@ -90,6 +92,7 @@ function LibraryPage({ kind }: { kind: 'video' | 'music' }) {
   const queryClient = useQueryClient()
   const [category, setCategory] = useState('')
   const [search, setSearch] = useState('')
+  const [tab, setTab] = useState<'discover' | 'mine'>('discover')
   const key = [kind, 'library', category, search]
   const itemsQuery = useQuery({
     queryKey: key,
@@ -105,6 +108,11 @@ function LibraryPage({ kind }: { kind: 'video' | 'music' }) {
   const refresh = () => void queryClient.invalidateQueries({ queryKey: [kind, 'library'] })
   return <div className="page-stack" data-section={kind === 'video' ? 'videos' : 'music'}>
     <header className="page-heading-row learning-heading"><div><span className="eyebrow">DISCOVER</span><h1>{title}</h1><p>{kind === 'video' ? 'Browse and share videos from the community.' : 'Community-uploaded music only; no commercial catalogue.'}</p></div>{kind === 'video' ? <Video aria-hidden="true" /> : <Music2 aria-hidden="true" />}</header>
+    {kind === 'video' && <div className="chip-row" role="tablist" aria-label="Video sections">
+      <button className={`chip${tab === 'discover' ? ' is-active' : ''}`} role="tab" aria-selected={tab === 'discover'} type="button" onClick={() => setTab('discover')}>Discover</button>
+      <button className={`chip${tab === 'mine' ? ' is-active' : ''}`} role="tab" aria-selected={tab === 'mine'} type="button" onClick={() => setTab('mine')}>My videos</button>
+    </div>}
+    {tab === 'mine' && kind === 'video' ? <MyVideosPanel onChanged={refresh} /> : <>
     <MediaUpload kind={kind} onUploaded={refresh} />
     <section className="learning-section" aria-label={`${title} library`}>
       <label className="field"><span>Search {title.toLowerCase()}</span><input value={search} maxLength={100} onChange={(event) => setSearch(event.currentTarget.value)} /></label>
@@ -115,23 +123,85 @@ function LibraryPage({ kind }: { kind: 'video' | 'music' }) {
       {kind === 'music' && category && <button className="button button--outline" type="button" onClick={() => void apiRequest(`/api/v1/music/categories/${encodeURIComponent(category)}/follow`, { method: 'PUT' })}>Follow this category</button>}
       {itemsQuery.isPending ? <p role="status">Loading {title.toLowerCase()}…</p> : itemsQuery.isError ? <div className="inline-error" role="alert"><p>{getFriendlyErrorMessage(itemsQuery.error)}</p><button className="button button--outline" type="button" onClick={() => void itemsQuery.refetch()}>Retry</button></div> : itemsQuery.data.length === 0 ? <p>No {title.toLowerCase()} found. Try another category or share the first one.</p> : <div className="learning-grid">      {itemsQuery.data.map((item, index) => <MediaCard key={item.id} item={item} kind={kind} queue={itemsQuery.data} index={index} />)}</div>}
     </section>
+    </>}
   </div>
+}
+
+export function MyVideosPanel({ onChanged }: { onChanged: () => void }) {
+  const queryClient = useQueryClient()
+  const videosQuery = useQuery({
+    queryKey: ['videos', 'mine'],
+    queryFn: () => apiRequest<MediaItem[]>('/api/v1/videos?mine=true&limit=50'),
+  })
+  const [editing, setEditing] = useState<MediaItem | null>(null)
+  const [deleting, setDeleting] = useState<MediaItem | null>(null)
+  const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
+  const [category, setCategory] = useState(videoCategories[0])
+  const [visibility, setVisibility] = useState<MediaItem['visibility']>('PUBLIC')
+  const [actionError, setActionError] = useState('')
+  const saveMutation = useMutation({
+    mutationFn: () => {
+      if (!editing) throw new Error('Select a video to edit.')
+      return apiRequest(`/api/v1/videos/${editing.id}`, { method: 'PUT', body: { title, description, category, visibility } })
+    },
+    onSuccess: async () => {
+      setEditing(null)
+      await queryClient.invalidateQueries({ queryKey: ['videos', 'mine'] })
+      onChanged()
+    },
+    onError: (error) => setActionError(getFriendlyErrorMessage(error)),
+  })
+  const deleteMutation = useMutation({
+    mutationFn: (video: MediaItem) => apiRequest(`/api/v1/videos/${video.id}`, { method: 'DELETE' }),
+    onSuccess: async () => {
+      setDeleting(null)
+      await queryClient.invalidateQueries({ queryKey: ['videos', 'mine'] })
+      onChanged()
+    },
+    onError: (error) => setActionError(getFriendlyErrorMessage(error)),
+  })
+  if (videosQuery.isPending) return <p role="status">Loading your videos…</p>
+  if (videosQuery.isError) return <div className="inline-error" role="alert"><p>{getFriendlyErrorMessage(videosQuery.error)}</p><button className="button button--outline" type="button" onClick={() => void videosQuery.refetch()}>Retry</button></div>
+  return <section className="learning-section" aria-label="My videos">
+    {videosQuery.data.length === 0 ? <p>You haven’t published any videos yet.</p> : <div className="learning-grid">{videosQuery.data.map((item) => <article className="learning-card" key={item.id}>
+      <h2><Link to={`/videos/${item.id}`}>{item.title}</Link></h2>
+      <p>{item.category} · <span className="chip">{item.visibility}</span></p>
+      <button className="button button--outline" type="button" onClick={() => {
+        setEditing(item)
+        setTitle(item.title)
+        setDescription(item.description ?? '')
+        setCategory(item.category)
+        setVisibility(item.visibility)
+        setActionError('')
+      }}>Edit</button>
+      <button className="button button--quiet" type="button" onClick={() => { setDeleting(item); setActionError('') }}>Delete</button>
+    </article>)}</div>}
+    {actionError && <p className="form-alert" role="alert">{actionError}</p>}
+    {editing && <div className="report-dialog-backdrop"><section role="dialog" aria-modal="true" aria-labelledby="edit-video-title" className="report-dialog">
+      <h2 id="edit-video-title">Edit video</h2>
+      <form onSubmit={(event) => { event.preventDefault(); saveMutation.mutate() }}>
+        <label className="field"><span>Title</span><input required maxLength={120} value={title} onChange={(event) => setTitle(event.currentTarget.value)} /></label>
+        <label className="field"><span>Description</span><textarea maxLength={2000} value={description} onChange={(event) => setDescription(event.currentTarget.value)} /></label>
+        <label className="field"><span>Category</span><select value={category} onChange={(event) => setCategory(event.currentTarget.value)}>{videoCategories.map((value) => <option key={value}>{value}</option>)}</select></label>
+        <label className="field"><span>Visibility</span><select value={visibility} onChange={(event) => setVisibility(event.currentTarget.value as MediaItem['visibility'])}><option>PUBLIC</option><option>FOLLOWERS</option><option>PRIVATE</option></select></label>
+        {actionError && <p className="form-alert" role="alert">{actionError}</p>}
+        <button className="button button--primary" type="submit" disabled={saveMutation.isPending}>Save</button>
+        <button className="button button--outline" type="button" onClick={() => setEditing(null)}>Cancel</button>
+      </form>
+    </section></div>}
+    {deleting && <div className="report-dialog-backdrop"><section role="alertdialog" aria-modal="true" aria-labelledby="delete-video-title" className="report-dialog">
+      <h2 id="delete-video-title">Delete video?</h2><p>This will permanently delete “{deleting.title}”.</p>
+      {actionError && <p className="form-alert" role="alert">{actionError}</p>}
+      <button className="button button--quiet" type="button" disabled={deleteMutation.isPending} onClick={() => deleteMutation.mutate(deleting)}>Delete</button>
+      <button className="button button--outline" type="button" onClick={() => setDeleting(null)}>Cancel</button>
+    </section></div>}
+  </section>
 }
 
 function MediaCard({ item, kind, queue, index }: { item: MediaItem; kind: 'video' | 'music'; queue: MediaItem[]; index: number }) {
   const player = useMusicPlayer()
-  const [url, setUrl] = useState('')
-  const [error, setError] = useState('')
-  async function loadMedia() {
-    try {
-      const result = await apiRequest<{ download_url: string }>(`/api/v1/media/${item.media_asset_id}/download`)
-      setUrl(result.download_url)
-      await apiRequest(`/api/v1/videos/${item.id}/view`, { method: 'POST' })
-    } catch (caught) {
-      setError(getFriendlyErrorMessage(caught))
-    }
-  }
-  return <article className="learning-card"><h2>{item.title}</h2><p>{kind === 'music' ? `${item.artist_name} · ` : ''}{item.category}</p>{url && kind === 'video' && <video src={url} controls playsInline aria-label={item.title} />}{error && <p className="form-alert" role="alert">{error}</p>}{kind === 'video' ? <button className="button button--outline" type="button" onClick={() => void loadMedia()}>Watch</button> : <button className="button button--outline" type="button" onClick={() => void player.playQueue(queue, index)}>Play</button>}</article>
+  return <article className="learning-card"><h2>{kind === 'video' ? <Link to={`/videos/${item.id}`}>{item.title}</Link> : item.title}</h2><p>{kind === 'music' ? `${item.artist_name} · ` : ''}{item.category}</p>{kind === 'video' ? <Link className="button button--outline" to={`/videos/${item.id}`}>Watch</Link> : <button className="button button--outline" type="button" onClick={() => void player.playQueue(queue, index)}>Play</button>}</article>
 }
 
 export function VideosPage() { return <LibraryPage kind="video" /> }

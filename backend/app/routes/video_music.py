@@ -245,7 +245,9 @@ async def get_video(video_id: uuid.UUID, current: User | None = Depends(get_opti
     item = await db.get(Video, video_id)
     if item is None or not await visible_media(item, current, db):
         raise HTTPException(404, "Video not found")
-    return video_data(item)
+    like_count = await db.scalar(select(func.count(VideoLike.user_id)).where(VideoLike.video_id == item.id))
+    liked = bool(current and await db.get(VideoLike, (item.id, current.id)))
+    return {**video_data(item), "like_count": int(like_count or 0), "liked_by_me": liked}
 
 
 @router.delete("/videos/{video_id}", status_code=204)
@@ -267,6 +269,17 @@ async def like_video(video_id: uuid.UUID, current: User = Depends(get_current_po
         db.add(VideoLike(video_id=video_id, user_id=current.id))
         if item.owner_id != current.id:
             await add_notifications(db, [Notification(recipient_id=item.owner_id, actor_id=current.id, type="VIDEO_LIKE", title=f"{current.username} liked your video", target_type="VIDEO", target_id=item.id)])
+        await db.commit()
+
+
+@router.delete("/videos/{video_id}/like", status_code=204)
+async def unlike_video(video_id: uuid.UUID, current: User = Depends(get_current_postgres_user), db: AsyncSession = Depends(get_postgres_session)):
+    item = await db.get(Video, video_id)
+    if item is None or not await visible_media(item, current, db):
+        raise HTTPException(404, "Video not found")
+    like = await db.get(VideoLike, (video_id, current.id))
+    if like is not None:
+        await db.delete(like)
         await db.commit()
 
 
