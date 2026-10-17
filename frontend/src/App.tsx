@@ -32,6 +32,7 @@ import { PostDetailPage } from './pages/PostDetailPage'
 import { MusicPage, VideosPage } from './pages/MediaLibraryPage'
 import { MusicPlayerProvider } from './components/MusicPlayer'
 import { VideoWatchPage } from './pages/VideoWatchPage'
+import { PlaylistDetailPage, TrackDetailPage } from './pages/MusicManagement'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -42,9 +43,9 @@ const queryClient = new QueryClient({
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <MusicPlayerProvider>
       <AuthProvider>
         <BrowserRouter>
+          <MusicPlayerProvider>
           <AppErrorBoundary>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
@@ -72,6 +73,8 @@ export default function App() {
                   <Route path="videos" element={<VideosPage />} />
                   <Route path="videos/:videoId" element={<VideoWatchPage />} />
                   <Route path="music" element={<MusicPage />} />
+                  <Route path="music/tracks/:trackId" element={<TrackDetailPage />} />
+                  <Route path="music/playlists/:playlistId" element={<PlaylistDetailPage />} />
                   <Route path="my-courses" element={<MyCoursesPage />} />
                   <Route path="classrooms" element={<ClassroomsIndexPage />} />
                   <Route path="courses/:courseId" element={<CoursePage />} />
@@ -91,9 +94,9 @@ export default function App() {
               <Route path="*" element={<NotFoundPage />} />
             </Routes>
           </AppErrorBoundary>
+          </MusicPlayerProvider>
         </BrowserRouter>
       </AuthProvider>
-      </MusicPlayerProvider>
     </QueryClientProvider>
   )
 }

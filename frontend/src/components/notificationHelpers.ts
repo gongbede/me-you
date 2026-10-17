@@ -37,7 +37,7 @@ export function notificationTargetPath(notification: Notification): string | nul
     return `/?post=${notification.post_id}#post-${notification.post_id}`
   }
   if (notification.target_type === 'VIDEO' && notification.target_id) return `/videos/${notification.target_id}`
-  if (notification.target_type === 'TRACK' && notification.target_id) return `/music?id=${notification.target_id}`
+  if (notification.target_type === 'TRACK' && notification.target_id) return `/music/tracks/${notification.target_id}`
   if (notification.target_type === 'course' && notification.target_id) {
     return `/courses/${notification.target_id}`
   }

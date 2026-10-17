@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom'
 import { apiRequest, getFriendlyErrorMessage } from '../api/client'
 import { avatarUploadTransport } from '../api/avatar'
 import { useMusicPlayer } from '../hooks/useMusicPlayer'
+import { MyTracksPanel, PlaylistLibraryPanel } from './MusicManagement'
 
 type MediaItem = {
   id: string
@@ -92,7 +93,7 @@ function LibraryPage({ kind }: { kind: 'video' | 'music' }) {
   const queryClient = useQueryClient()
   const [category, setCategory] = useState('')
   const [search, setSearch] = useState('')
-  const [tab, setTab] = useState<'discover' | 'mine'>('discover')
+  const [tab, setTab] = useState<'discover' | 'mine' | 'playlists'>('discover')
   const key = [kind, 'library', category, search]
   const itemsQuery = useQuery({
     queryKey: key,
@@ -103,6 +104,19 @@ function LibraryPage({ kind }: { kind: 'video' | 'music' }) {
       return apiRequest<MediaItem[]>(`/api/v1/${kind === 'video' ? 'videos' : 'tracks'}?${params}`)
     },
   })
+  const followsQuery = useQuery({
+    queryKey: ['music', 'category-follows'],
+    queryFn: () => apiRequest<string[]>('/api/v1/music/categories/follows'),
+    enabled: kind === 'music',
+  })
+  const followMutation = useMutation({
+    mutationFn: (following: boolean) => {
+      if (!category) throw new Error('Choose a category first.')
+      const method = following ? 'DELETE' : 'PUT'
+      return apiRequest(`/api/v1/music/categories/${encodeURIComponent(category)}/follow`, { method })
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['music', 'category-follows'] }),
+  })
   const title = kind === 'video' ? 'Videos' : 'Music'
   const categories = kind === 'video' ? videoCategories : musicCategories
   const refresh = () => void queryClient.invalidateQueries({ queryKey: [kind, 'library'] })
@@ -112,7 +126,13 @@ function LibraryPage({ kind }: { kind: 'video' | 'music' }) {
       <button className={`chip${tab === 'discover' ? ' is-active' : ''}`} role="tab" aria-selected={tab === 'discover'} type="button" onClick={() => setTab('discover')}>Discover</button>
       <button className={`chip${tab === 'mine' ? ' is-active' : ''}`} role="tab" aria-selected={tab === 'mine'} type="button" onClick={() => setTab('mine')}>My videos</button>
     </div>}
+    {kind === 'music' && <div className="chip-row" role="tablist" aria-label="Music sections">
+      <button className={`chip${tab === 'discover' ? ' is-active' : ''}`} role="tab" aria-selected={tab === 'discover'} type="button" onClick={() => setTab('discover')}>Tracks</button>
+      <button className={`chip${tab === 'playlists' ? ' is-active' : ''}`} role="tab" aria-selected={tab === 'playlists'} type="button" onClick={() => setTab('playlists')}>Playlists</button>
+      <button className={`chip${tab === 'mine' ? ' is-active' : ''}`} role="tab" aria-selected={tab === 'mine'} type="button" onClick={() => setTab('mine')}>My tracks</button>
+    </div>}
     {tab === 'mine' && kind === 'video' ? <MyVideosPanel onChanged={refresh} /> : <>
+    {kind === 'music' && tab === 'playlists' ? <PlaylistLibraryPanel /> : kind === 'music' && tab === 'mine' ? <MyTracksPanel /> : <>
     <MediaUpload kind={kind} onUploaded={refresh} />
     <section className="learning-section" aria-label={`${title} library`}>
       <label className="field"><span>Search {title.toLowerCase()}</span><input value={search} maxLength={100} onChange={(event) => setSearch(event.currentTarget.value)} /></label>
@@ -120,9 +140,13 @@ function LibraryPage({ kind }: { kind: 'video' | 'music' }) {
         <button className={`chip${!category ? ' is-active' : ''}`} type="button" onClick={() => setCategory('')}>All</button>
         {categories.map((value) => <button className={`chip${category === value ? ' is-active' : ''}`} key={value} type="button" onClick={() => setCategory(category === value ? '' : value)}>{value}</button>)}
       </div>
-      {kind === 'music' && category && <button className="button button--outline" type="button" onClick={() => void apiRequest(`/api/v1/music/categories/${encodeURIComponent(category)}/follow`, { method: 'PUT' })}>Follow this category</button>}
+      {kind === 'music' && category && <div>
+        {followsQuery.isPending ? <p role="status">Loading follow status…</p> : followsQuery.isError ? <p role="alert" className="form-alert">{getFriendlyErrorMessage(followsQuery.error)}</p> : <button className="button button--outline" type="button" disabled={followMutation.isPending} onClick={() => followMutation.mutate(followsQuery.data.includes(category))}>{followsQuery.data.includes(category) ? 'Following' : 'Follow this category'}</button>}
+        {followMutation.isError && <p role="alert" className="form-alert">{getFriendlyErrorMessage(followMutation.error)}</p>}
+      </div>}
       {itemsQuery.isPending ? <p role="status">Loading {title.toLowerCase()}…</p> : itemsQuery.isError ? <div className="inline-error" role="alert"><p>{getFriendlyErrorMessage(itemsQuery.error)}</p><button className="button button--outline" type="button" onClick={() => void itemsQuery.refetch()}>Retry</button></div> : itemsQuery.data.length === 0 ? <p>No {title.toLowerCase()} found. Try another category or share the first one.</p> : <div className="learning-grid">      {itemsQuery.data.map((item, index) => <MediaCard key={item.id} item={item} kind={kind} queue={itemsQuery.data} index={index} />)}</div>}
     </section>
+    </>}
     </>}
   </div>
 }
@@ -201,7 +225,26 @@ export function MyVideosPanel({ onChanged }: { onChanged: () => void }) {
 
 function MediaCard({ item, kind, queue, index }: { item: MediaItem; kind: 'video' | 'music'; queue: MediaItem[]; index: number }) {
   const player = useMusicPlayer()
-  return <article className="learning-card"><h2>{kind === 'video' ? <Link to={`/videos/${item.id}`}>{item.title}</Link> : item.title}</h2><p>{kind === 'music' ? `${item.artist_name} · ` : ''}{item.category}</p>{kind === 'video' ? <Link className="button button--outline" to={`/videos/${item.id}`}>Watch</Link> : <button className="button button--outline" type="button" onClick={() => void player.playQueue(queue, index)}>Play</button>}</article>
+  return <article className="learning-card"><h2>{kind === 'video' ? <Link to={`/videos/${item.id}`}>{item.title}</Link> : <Link to={`/music/tracks/${item.id}`}>{item.title}</Link>}</h2><p>{kind === 'music' ? `${item.artist_name} · ` : ''}{item.category}</p>{kind === 'video' ? <Link className="button button--outline" to={`/videos/${item.id}`}>Watch</Link> : <><button className="button button--outline" type="button" onClick={() => void player.playQueue(queue, index)}>Play</button><AddToPlaylistButton trackId={item.id} /></>}</article>
+}
+
+function AddToPlaylistButton({ trackId }: { trackId: string }) {
+  const queryClient = useQueryClient()
+  const playlists = useQuery({ queryKey: ['music', 'playlists'], queryFn: () => apiRequest<Array<{ id: string; title: string }>>('/api/v1/playlists') })
+  const [playlistId, setPlaylistId] = useState('')
+  const mutation = useMutation({
+    mutationFn: () => apiRequest(`/api/v1/playlists/${playlistId}/tracks/${trackId}`, { method: 'POST' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['music', 'playlist', playlistId] }),
+  })
+  if (playlists.isPending) return <span role="status">Loading playlists…</span>
+  if (playlists.isError) return <span role="alert">{getFriendlyErrorMessage(playlists.error)}</span>
+  if (playlists.data.length === 0) return <Link className="button button--outline" to="/music">Create a playlist</Link>
+  return <span>
+    <label className="field"><span>Add to playlist</span><select aria-label="Add to playlist" value={playlistId} onChange={(event) => setPlaylistId(event.currentTarget.value)}><option value="">Choose playlist</option>{playlists.data.map((playlist) => <option key={playlist.id} value={playlist.id}>{playlist.title}</option>)}</select></label>
+    <button className="button button--outline" type="button" disabled={!playlistId || mutation.isPending} onClick={() => mutation.mutate()}>Add to playlist</button>
+    {mutation.isError && <p role="alert" className="form-alert">{getFriendlyErrorMessage(mutation.error)}</p>}
+    {mutation.isSuccess && <p role="status">Added to playlist.</p>}
+  </span>
 }
 
 export function VideosPage() { return <LibraryPage kind="video" /> }

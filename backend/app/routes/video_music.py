@@ -373,17 +373,31 @@ async def delete_track(track_id: uuid.UUID, current: User = Depends(get_current_
 
 
 @router.get("/tracks")
-async def list_tracks(category: str | None = None, q: str = Query(default="", max_length=100), offset: int = Query(default=0, ge=0), limit: int = Query(default=20, ge=1, le=50), current: User | None = Depends(get_optional_postgres_user), db: AsyncSession = Depends(get_postgres_session)):
+async def list_tracks(category: str | None = None, q: str = Query(default="", max_length=100), mine: bool = False, offset: int = Query(default=0, ge=0), limit: int = Query(default=20, ge=1, le=50), current: User | None = Depends(get_optional_postgres_user), db: AsyncSession = Depends(get_postgres_session)):
     statement = select(Track)
-    if not (current and current.is_platform_admin):
+    if mine:
+        if current is None:
+            raise HTTPException(401, "Authentication required")
+        statement = statement.where(Track.owner_id == current.id)
+    if not mine and not (current and current.is_platform_admin):
         statement = statement.where(Track.is_hidden.is_(False))
     if category:
         statement = statement.where(Track.category == category)
     if q:
         statement = statement.where(Track.title.ilike(f"%{q}%"))
     statement = statement.where(visible_media_clause(Track, current))
+    if not mine:
+        statement = statement.where(visible_media_clause(Track, current))
     tracks = list((await db.scalars(statement.order_by(Track.created_at.desc(), Track.id.desc()).offset(offset).limit(limit))).all())
     return [track_data(item) for item in tracks]
+
+
+@router.get("/tracks/{track_id}")
+async def get_track(track_id: uuid.UUID, current: User | None = Depends(get_optional_postgres_user), db: AsyncSession = Depends(get_postgres_session)):
+    item = await db.get(Track, track_id)
+    if item is None or not await visible_media(item, current, db):
+        raise HTTPException(404, "Track not found")
+    return track_data(item)
 
 
 @router.post("/tracks/{track_id}/play", status_code=204)
@@ -412,7 +426,7 @@ async def create_playlist(data: PlaylistCreate, current: User = Depends(get_curr
 @router.get("/playlists")
 async def list_playlists(current: User = Depends(get_current_postgres_user), db: AsyncSession = Depends(get_postgres_session)):
     playlists = (await db.scalars(select(Playlist).where(Playlist.owner_id == current.id).order_by(Playlist.created_at.desc()).limit(100))).all()
-    return [{"id": str(item.id), "title": item.title, "owner_id": str(item.owner_id)} for item in playlists]
+    return [{"id": str(item.id), "title": item.title, "owner_id": str(item.owner_id), "visibility": item.visibility} for item in playlists]
 
 
 @router.get("/playlists/{playlist_id}")
@@ -434,7 +448,11 @@ async def get_playlist(playlist_id: uuid.UUID, current: User = Depends(get_curre
         )
         .order_by(PlaylistItem.position)
     )).scalars().all()
-    return {"id": str(playlist.id), "title": playlist.title, "tracks": [track_data(track) for track in rows]}
+    return {
+        "id": str(playlist.id), "title": playlist.title,
+        "owner_id": str(playlist.owner_id), "visibility": playlist.visibility,
+        "tracks": [track_data(track) for track in rows],
+    }
 
 
 @router.put("/playlists/{playlist_id}")
@@ -511,6 +529,15 @@ async def follow_music_category(category: str, current: User = Depends(get_curre
     if await db.get(MusicCategoryFollow, (current.id, category)) is None:
         db.add(MusicCategoryFollow(user_id=current.id, category=category))
         await db.commit()
+
+
+@router.get("/music/categories/follows")
+async def list_music_category_follows(current: User = Depends(get_current_postgres_user), db: AsyncSession = Depends(get_postgres_session)):
+    return list((await db.scalars(
+        select(MusicCategoryFollow.category)
+        .where(MusicCategoryFollow.user_id == current.id)
+        .order_by(MusicCategoryFollow.category)
+    )).all())
 
 
 @router.delete("/music/categories/{category}/follow", status_code=204)
