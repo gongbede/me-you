@@ -1905,6 +1905,88 @@ def test_moderation_migration_up_and_down(postgres_database_url):
     asyncio.run(run_migrations())
 
 
+def test_social_search_escapes_wildcards_and_respects_visibility(postgres_database_url):
+    from app.models import Post, Profile, UserBlock
+    from app.rate_limit import PostgresRateLimitStore, get_rate_limit_store
+
+    async def verify():
+        engine = create_async_engine(postgres_database_url)
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        original_overrides = app.dependency_overrides.copy()
+        user_ids: list[uuid.UUID] = []
+        institution_ids: list[uuid.UUID] = []
+        try:
+            async with session_factory() as session:
+                viewer = await create_user(session)
+                user_ids.append(viewer.id)
+                literal_user = await create_user(session, username="river%person")
+                wildcard_user = await create_user(session, username="riverXperson")
+                blocked_user = await create_user(session, username="blockquery-person")
+                user_ids.extend([literal_user.id, wildcard_user.id, blocked_user.id])
+                session.add_all([
+                    Profile(user_id=literal_user.id, display_name="River percent person", visibility="PUBLIC"),
+                    Profile(user_id=wildcard_user.id, display_name="River x person", visibility="PUBLIC"),
+                    Profile(user_id=blocked_user.id, display_name="Blockquery person", visibility="PUBLIC"),
+                    Profile(user_id=viewer.id, display_name="Search viewer", visibility="PUBLIC"),
+                ])
+                session.add(UserBlock(blocker_id=viewer.id, blocked_id=blocked_user.id))
+                listed_school = await create_institution(session, name="Campus-token Listed")
+                unlisted_school = await create_institution(session, name="Campus-token Hidden")
+                listed_school.is_listed = True
+                institution_ids.extend([listed_school.id, unlisted_school.id])
+                visible_post = Post(author_id=literal_user.id, content="reelquery visible content", visibility="PUBLIC")
+                hidden_post = Post(author_id=literal_user.id, content="reelquery hidden content", visibility="PUBLIC", is_hidden=True)
+                session.add_all([visible_post, hidden_post])
+                await session.commit()
+                viewer_id = viewer.id
+                listed_school_id = listed_school.id
+                visible_post_id = visible_post.id
+
+            async def database_dependency():
+                async with session_factory() as session:
+                    yield session
+
+            async def user_dependency(request: Request):
+                async with session_factory() as session:
+                    return await session.get(User, uuid.UUID(request.headers["x-test-user"]))
+
+            app.dependency_overrides[get_postgres_session] = database_dependency
+            app.dependency_overrides[get_current_postgres_user] = user_dependency
+            app.dependency_overrides[get_rate_limit_store] = lambda: PostgresRateLimitStore(session_factory)
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                headers = {"x-test-user": str(viewer_id)}
+                literal_result = await client.get("/search", params={"query": "river%person"}, headers=headers)
+                assert literal_result.status_code == 200
+                assert [item["id"] for item in literal_result.json()["items"] if item["resource_type"] == "person"] == [str(literal_user.id)]
+                schools = await client.get("/search", params={"query": "campus-token"}, headers=headers)
+                assert [item["id"] for item in schools.json()["items"] if item["resource_type"] == "school"] == [str(listed_school_id)]
+                posts = await client.get("/search", params={"query": "reelquery"}, headers=headers)
+                post_ids = [item["id"] for item in posts.json()["items"] if item["resource_type"] == "post"]
+                assert post_ids == [str(visible_post_id)]
+                blocked = await client.get("/search", params={"query": "blockquery"}, headers=headers)
+                assert not any(item["resource_type"] == "person" for item in blocked.json()["items"])
+                first_page = await client.get("/search", params={"query": "river", "limit": 1}, headers=headers)
+                assert first_page.status_code == 200
+                assert first_page.json()["has_more"] is True
+                second_page = await client.get("/search", params={"query": "river", "limit": 1, "offset": 1}, headers=headers)
+                assert second_page.status_code == 200
+                assert first_page.json()["items"][0]["id"] != second_page.json()["items"][0]["id"]
+                assert (await client.get("/search", params={"query": " "}, headers=headers)).status_code == 422
+                assert (await client.get("/search", params={"query": "x" * 101}, headers=headers)).status_code == 422
+        finally:
+            app.dependency_overrides.clear()
+            app.dependency_overrides.update(original_overrides)
+            async with session_factory() as session:
+                if user_ids:
+                    await session.execute(delete(User).where(User.id.in_(user_ids)))
+                if institution_ids:
+                    await session.execute(delete(Institution).where(Institution.id.in_(institution_ids)))
+                await session.commit()
+            await engine.dispose()
+
+    asyncio.run(verify())
+
+
 def test_auth_security_events_persist_without_secrets(postgres_database_url):
     import json
 

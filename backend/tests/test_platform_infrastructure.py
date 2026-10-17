@@ -200,6 +200,10 @@ class PlatformInfrastructureTests(unittest.IsolatedAsyncioTestCase):
             await list_actor_activities(self.other.id, session, offset=-1)
 
     async def test_search_is_normalized_authorized_and_paginated(self):
+        class PermissiveRateLimit:
+            async def increment(self, _scope, _key, _window_seconds):
+                return 1, 60
+
         first_id = uuid.uuid4()
         second_id = uuid.uuid4()
         session = PlatformSession(
@@ -208,7 +212,10 @@ class PlatformInfrastructureTests(unittest.IsolatedAsyncioTestCase):
                 {"resource_type": "institution", "id": second_id, "name": "Science Academy", "code": None, "institution_id": None},
             ]
         )
-        response = await global_search("  SCI   ", self.user, session, offset=0, limit=1)
+        response = await global_search(
+            "  SCI   ", self.user, session, offset=0, limit=1,
+            limiter=PermissiveRateLimit(),
+        )
         self.assertEqual(response["query"], "sci")
         self.assertEqual(len(response["items"]), 1)
         self.assertEqual(response["items"][0]["id"], str(first_id))
@@ -223,6 +230,11 @@ class PlatformInfrastructureTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("ORDER BY lower", sql)
         self.assertIn(self.user.id, compiled.params.values())
         self.assertIn("%sci%", compiled.params.values())
+
+    def test_search_escapes_sql_wildcards(self):
+        from app.routes.search import escape_search_query
+
+        self.assertEqual(escape_search_query(r"river%_\\bank"), r"river\%\_\\\\bank")
 
     async def test_search_rejects_short_and_empty_normalized_queries(self):
         session = PlatformSession()

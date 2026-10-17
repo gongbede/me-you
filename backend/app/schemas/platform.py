@@ -1,11 +1,9 @@
-from typing import Literal
-
 from pydantic import BaseModel
 
 
 class SearchResult(BaseModel):
     id: str
-    resource_type: Literal["institution", "course"]
+    resource_type: str
     name: str
     code: str | None
     institution_id: str | None

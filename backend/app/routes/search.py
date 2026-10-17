@@ -1,12 +1,17 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import String, Uuid, func, literal, or_, select, tuple_, union_all
+from sqlalchemy import String, Uuid, and_, exists, func, literal, or_, select, tuple_, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_postgres_session
-from ..models import Course, Department, Faculty, Institution, InstitutionMembership, User
+from ..models import (
+    Course, Department, Faculty, Institution, InstitutionMembership,
+    Post, Profile, User, UserBlock,
+)
 from ..pagination import decode_cursor, encode_cursor
+from ..privacy import visible_post_clause
+from ..rate_limit import RateLimitStore, get_rate_limit_store
 from ..schemas import SearchResponse
 from ..security import get_current_postgres_user
 
@@ -18,14 +23,19 @@ def normalize_search_query(query: str) -> str:
     return " ".join(query.split()).casefold()
 
 
+def escape_search_query(query: str) -> str:
+    return query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 @router.get("", response_model=SearchResponse, summary="Search resources in your institutions")
 async def global_search(
-    query: str = Query(min_length=1, max_length=100),
+    query: str = Query(min_length=2, max_length=100),
     current_user: User = Depends(get_current_postgres_user),
     database: AsyncSession = Depends(get_postgres_session),
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=20, ge=1, le=100),
     cursor: str | None = None,
+    limiter: RateLimitStore | None = Depends(get_rate_limit_store),
 ):
     normalized = normalize_search_query(query)
     if len(normalized) < 2:
@@ -33,8 +43,16 @@ async def global_search(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Search query must contain at least 2 non-whitespace characters",
         )
-    escaped_query = normalized.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    escaped_query = escape_search_query(normalized)
     pattern = f"%{escaped_query}%"
+    if limiter is None:
+        raise HTTPException(status_code=503, detail="Rate limiting is unavailable")
+    count, retry_after = await limiter.increment("search_user", str(current_user.id), 60)
+    if count > 60:
+        raise HTTPException(
+            status_code=429, detail="Search limit reached",
+            headers={"Retry-After": str(retry_after)},
+        )
 
     institution_results = select(
         literal("institution").label("resource_type"),
@@ -72,7 +90,65 @@ async def global_search(
         ),
     )
 
-    results = union_all(institution_results, course_results).subquery()
+    shared_profile_membership = exists(
+        select(1).where(
+            InstitutionMembership.user_id == User.id,
+            InstitutionMembership.institution_id.in_(
+                select(InstitutionMembership.institution_id).where(
+                    InstitutionMembership.user_id == current_user.id
+                )
+            ),
+        )
+    )
+    blocked_person = exists(
+        select(1).where(
+            ((UserBlock.blocker_id == current_user.id) & (UserBlock.blocked_id == User.id))
+            | ((UserBlock.blocker_id == User.id) & (UserBlock.blocked_id == current_user.id))
+        )
+    )
+    people_results = select(
+        literal("person").label("resource_type"),
+        User.id.label("id"),
+        func.coalesce(Profile.display_name, User.username).label("name"),
+        User.username.label("code"),
+        literal(None, type_=Uuid(as_uuid=True)).label("institution_id"),
+    ).outerjoin(Profile, Profile.user_id == User.id).where(
+        User.is_active.is_(True),
+        ~blocked_person,
+        or_(
+            User.username.ilike(pattern, escape="\\"),
+            Profile.display_name.ilike(pattern, escape="\\"),
+        ),
+        or_(
+            User.id == current_user.id,
+            Profile.visibility.in_(("PUBLIC", "AUTHENTICATED")),
+            and_(Profile.visibility == "NETWORK", shared_profile_membership),
+        ),
+    )
+    post_results = select(
+        literal("post").label("resource_type"),
+        Post.id.label("id"),
+        func.left(Post.content, 160).label("name"),
+        literal(None, type_=String()).label("code"),
+        literal(None, type_=Uuid(as_uuid=True)).label("institution_id"),
+    ).where(
+        Post.content.ilike(pattern, escape="\\"),
+        visible_post_clause(current_user),
+    )
+    school_results = select(
+        literal("school").label("resource_type"),
+        Institution.id.label("id"),
+        Institution.name.label("name"),
+        literal(None, type_=String()).label("code"),
+        Institution.id.label("institution_id"),
+    ).where(
+        Institution.is_listed.is_(True),
+        Institution.name.ilike(pattern, escape="\\"),
+    )
+
+    results = union_all(
+        institution_results, course_results, people_results, post_results, school_results
+    ).subquery()
     statement = (
         select(
             results.c.resource_type,
