@@ -1,12 +1,12 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import select
+from sqlalchemy import exists, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_postgres_session
-from ..models import Follow, Notification, Profile, User
+from ..models import Follow, Notification, Profile, User, UserBlock
 from ..notification_preferences import add_notification
 from ..pagination import ascending_username_uuid_clause, username_uuid_cursor
 from ..privacy import can_view_profile
@@ -38,6 +38,14 @@ async def follow_user(
     target = await require_user(user_id, database)
     if target.id == current_user.id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot follow yourself")
+    blocked = await database.scalar(
+        select(UserBlock.id).where(
+            ((UserBlock.blocker_id == current_user.id) & (UserBlock.blocked_id == target.id))
+            | ((UserBlock.blocker_id == target.id) & (UserBlock.blocked_id == current_user.id))
+        )
+    )
+    if blocked is not None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     existing_follow = await database.scalar(
         select(Follow).where(
@@ -121,6 +129,15 @@ async def list_followers(
         .join(Follow, Follow.follower_id == User.id)
         .where(Follow.following_id == user_id, User.is_active.is_(True))
     )
+    if current_user is not None:
+        statement = statement.where(
+            ~exists(
+                select(1).where(
+                    ((UserBlock.blocker_id == current_user.id) & (UserBlock.blocked_id == User.id))
+                    | ((UserBlock.blocker_id == User.id) & (UserBlock.blocked_id == current_user.id))
+                )
+            )
+        )
     if cursor is not None:
         statement = statement.where(
             ascending_username_uuid_clause(User.username, User.id, cursor)
@@ -168,6 +185,15 @@ async def list_following(
         .join(Follow, Follow.following_id == User.id)
         .where(Follow.follower_id == user_id, User.is_active.is_(True))
     )
+    if current_user is not None:
+        statement = statement.where(
+            ~exists(
+                select(1).where(
+                    ((UserBlock.blocker_id == current_user.id) & (UserBlock.blocked_id == User.id))
+                    | ((UserBlock.blocker_id == User.id) & (UserBlock.blocked_id == current_user.id))
+                )
+            )
+        )
     if cursor is not None:
         statement = statement.where(
             ascending_username_uuid_clause(User.username, User.id, cursor)

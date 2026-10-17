@@ -12,7 +12,7 @@ import asyncpg
 import pytest
 from fastapi import HTTPException
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import delete, event, func, select, text, update
+from sqlalchemy import delete, event, func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.engine import make_url
@@ -1212,13 +1212,34 @@ def test_reset_demo_passwords_changes_only_existing_demo_accounts(postgres_datab
     async def verify():
         engine = create_async_engine(postgres_database_url)
         session_factory = async_sessionmaker(engine, expire_on_commit=False)
-        created_ids: list[uuid.UUID] = []
+        demo_emails = (
+            "demo.admin@example.test",
+            "demo.teacher@example.test",
+            "demo.enrolled@example.test",
+            "demo.invited@example.test",
+        )
+        original_demo: dict[str, tuple[uuid.UUID, str, int]] = {}
+        new_demo_ids: list[uuid.UUID] = []
+        unrelated_ids: list[uuid.UUID] = []
         monkeypatch.setenv("ME_YOU_ENV", "development")
         try:
             async with session_factory() as session:
-                demo_user = await create_user(
-                    session, email="demo.teacher@example.test"
+                existing_demo = list(
+                    (await session.scalars(select(User).where(User.email.in_(demo_emails)))).all()
                 )
+                for user in existing_demo:
+                    original_demo[user.email] = (
+                        user.id,
+                        user.password_hash,
+                        user.token_version,
+                    )
+                demo_user = next(
+                    (user for user in existing_demo if user.email == "demo.teacher@example.test"),
+                    None,
+                )
+                if demo_user is None:
+                    demo_user = await create_user(session, email="demo.teacher@example.test")
+                    new_demo_ids.append(demo_user.id)
                 demo_user.password_hash = password_hash.hash("old-demo-password")
                 other_demo_domain = await create_user(
                     session, email=f"unrelated-{uuid.uuid4().hex}@example.test"
@@ -1226,7 +1247,7 @@ def test_reset_demo_passwords_changes_only_existing_demo_accounts(postgres_datab
                 outside_demo_domain = await create_user(
                     session, email=f"unrelated-{uuid.uuid4().hex}@example.com"
                 )
-                created_ids.extend([demo_user.id, other_demo_domain.id, outside_demo_domain.id])
+                unrelated_ids.extend([other_demo_domain.id, outside_demo_domain.id])
                 other_demo_domain.password_hash = password_hash.hash("keep-example-password")
                 outside_demo_domain.password_hash = password_hash.hash("keep-com-password")
                 initial_versions = {
@@ -1238,17 +1259,25 @@ def test_reset_demo_passwords_changes_only_existing_demo_accounts(postgres_datab
                 demo_user_id = demo_user.id
                 other_demo_id = other_demo_domain.id
                 outside_demo_id = outside_demo_domain.id
+                baseline_demo = {
+                    user.email: (user.id, user.password_hash, user.token_version)
+                    for user in existing_demo
+                }
+                baseline_demo[demo_user.email] = (
+                    demo_user.id,
+                    demo_user.password_hash,
+                    demo_user.token_version,
+                )
 
             credentials, missing = await reset_demo_passwords(session_factory)
-            assert missing == [
-                "demo.admin@example.test",
-                "demo.enrolled@example.test",
-                "demo.invited@example.test",
-            ]
-            assert [(label, email) for label, email, _ in credentials] == [
-                ("Teacher", "demo.teacher@example.test")
-            ]
-            new_password = credentials[0][2]
+            expected_emails = set(baseline_demo)
+            expected_missing = [email for email in demo_emails if email not in expected_emails]
+            assert missing == expected_missing
+            assert {email for _, email, _ in credentials} == expected_emails
+            new_password = next(
+                password for _, email, password in credentials
+                if email == "demo.teacher@example.test"
+            )
             async with session_factory() as session:
                 demo_user = await session.get(User, demo_user_id)
                 other_demo_domain = await session.get(User, other_demo_id)
@@ -1260,6 +1289,13 @@ def test_reset_demo_passwords_changes_only_existing_demo_accounts(postgres_datab
                 assert password_hash.verify("keep-example-password", other_demo_domain.password_hash)
                 assert outside_demo_domain.token_version == initial_versions[outside_demo_id]
                 assert password_hash.verify("keep-com-password", outside_demo_domain.password_hash)
+                for email, (account_id, original_hash, original_version) in baseline_demo.items():
+                    account = await session.get(User, account_id)
+                    assert account.token_version == original_version + 1
+                    if email == "demo.teacher@example.test":
+                        assert not password_hash.verify("old-demo-password", account.password_hash)
+                    else:
+                        assert account.password_hash != original_hash
                 with pytest.raises(HTTPException) as old_password:
                     await login(
                         LoginRequest(email=demo_user.email, password="old-demo-password"),
@@ -1273,8 +1309,15 @@ def test_reset_demo_passwords_changes_only_existing_demo_accounts(postgres_datab
                 assert response["id"] == str(demo_user_id)
         finally:
             async with session_factory() as session:
-                if created_ids:
-                    await session.execute(delete(User).where(User.id.in_(created_ids)))
+                for account_id, original_hash, original_version in original_demo.values():
+                    account = await session.get(User, account_id)
+                    if account is not None:
+                        account.password_hash = original_hash
+                        account.token_version = original_version
+                remove_ids = new_demo_ids + unrelated_ids
+                if remove_ids:
+                    await session.execute(delete(User).where(User.id.in_(remove_ids)))
+                if original_demo or remove_ids:
                     await session.commit()
             await engine.dispose()
 
@@ -4542,6 +4585,201 @@ def test_notification_preferences_migration_downgrades_and_upgrades(postgres_dat
                     user = await session.get(User, user_id)
                     if user is not None:
                         await session.delete(user)
+                    await session.commit()
+            await engine.dispose()
+
+    asyncio.run(verify())
+
+
+def test_profile_visibility_email_change_migration_round_trip(postgres_database_url):
+    from app.models import AccountEmailToken, Profile
+
+    async def verify():
+        engine = create_async_engine(postgres_database_url)
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        user_id = None
+        token_id = uuid.uuid4()
+        try:
+            async with session_factory() as session:
+                user = await create_user(session)
+                user_id = user.id
+                session.add(Profile(user_id=user.id, display_name="Follower profile", visibility="FOLLOWERS"))
+                session.add(
+                    AccountEmailToken(
+                        id=token_id,
+                        user_id=user.id,
+                        purpose="EMAIL_CHANGE",
+                        token_hash=uuid.uuid4().hex * 2,
+                        pending_email="pending@example.test",
+                        expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+                    )
+                )
+                await session.commit()
+
+            async with session_factory() as session:
+                assert (await session.get(Profile, user_id)).visibility == "FOLLOWERS"
+                assert (await session.get(AccountEmailToken, token_id)).pending_email == "pending@example.test"
+                await session.delete(await session.get(AccountEmailToken, token_id))
+                await session.delete(await session.get(User, user_id))
+                await session.commit()
+
+            downgrade = _alembic(postgres_database_url, "downgrade", "0025_reports_blocks_moderation")
+            assert downgrade.returncode == 0, downgrade.stdout + downgrade.stderr
+            upgrade = _alembic(postgres_database_url, "upgrade", "head")
+            assert upgrade.returncode == 0, upgrade.stdout + upgrade.stderr
+        finally:
+            if user_id is not None:
+                async with session_factory() as session:
+                    user = await session.get(User, user_id)
+                    if user is not None:
+                        await session.delete(user)
+                        await session.commit()
+            await engine.dispose()
+
+    asyncio.run(verify())
+
+
+def test_email_change_confirms_address_and_revokes_sessions(postgres_database_url):
+    from urllib.parse import parse_qs, urlparse
+
+    from starlette.requests import Request
+    from starlette.responses import Response
+
+    from app.providers import ProviderRegistry, ProviderSettings
+    from app.routes.account import confirm_email_change, request_email_change
+    from app.schemas import EmailChangeRequest, EmailTokenConfirm
+    from app.security import password_hash
+
+    class EmailProvider:
+        def __init__(self):
+            self.messages = []
+
+        async def send(self, message):
+            self.messages.append(message)
+
+    async def verify():
+        engine = create_async_engine(postgres_database_url)
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        user_ids: list[uuid.UUID] = []
+        provider = EmailProvider()
+        providers = ProviderRegistry(settings=ProviderSettings(), email=provider)
+        try:
+            async with session_factory() as session:
+                user = await create_user(session)
+                user.password_hash = password_hash.hash("current-password")
+                peer = await create_user(session)
+                user_ids.extend([user.id, peer.id])
+                peer_email = peer.email
+                await session.commit()
+                version = user.token_version
+
+                sent = await request_email_change(
+                    EmailChangeRequest(email="new-address@example.test", current_password="current-password"),
+                    user,
+                    session,
+                    providers,
+                )
+                duplicate = await request_email_change(
+                    EmailChangeRequest(email=peer_email, current_password="current-password"),
+                    user,
+                    session,
+                    providers,
+                )
+                assert sent == duplicate == {
+                    "message": "If the address is eligible, a confirmation message will be sent"
+                }
+                assert len(provider.messages) == 1
+                confirmation_url = provider.messages[0].text_body.rsplit(" ", 1)[-1]
+                token = parse_qs(urlparse(confirmation_url).query)["token"][0]
+                scope = {
+                    "type": "http",
+                    "method": "POST",
+                    "path": "/api/v1/account/email-change/confirm",
+                    "headers": [],
+                    "client": ("127.0.0.1", 1234),
+                    "server": ("test", 80),
+                    "scheme": "http",
+                    "query_string": b"",
+                }
+                await confirm_email_change(
+                    EmailTokenConfirm(token=token),
+                    session,
+                    Request(scope),
+                    Response(),
+                )
+                assert user.email == "new-address@example.test"
+                assert user.email_verified_at is not None
+                assert user.token_version == version + 1
+                assert provider.messages[0].recipient == "new-address@example.test"
+                assert "action=email-change" in provider.messages[0].text_body
+                assert await session.scalar(
+                    select(func.count()).select_from(SecurityEvent).where(
+                        SecurityEvent.event_type == "account.email_changed",
+                        SecurityEvent.actor_user_id == user.id,
+                    )
+                ) == 1
+        finally:
+            async with session_factory() as session:
+                if user_ids:
+                    await session.execute(
+                        delete(SecurityEvent).where(
+                            or_(
+                                SecurityEvent.actor_user_id.in_(user_ids),
+                                SecurityEvent.target_user_id.in_(user_ids),
+                            )
+                        )
+                    )
+                    await session.execute(delete(User).where(User.id.in_(user_ids)))
+                    await session.commit()
+            await engine.dispose()
+
+    asyncio.run(verify())
+
+
+def test_follower_only_profile_and_content_are_visible_only_to_followers(postgres_database_url):
+    from app.models import Follow, Post, Profile
+    from app.providers import ProviderRegistry, ProviderSettings
+    from app.routes.profile import get_user_profile, list_user_posts
+
+    async def verify():
+        engine = create_async_engine(postgres_database_url)
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        user_ids: list[uuid.UUID] = []
+        providers = ProviderRegistry(settings=ProviderSettings())
+        try:
+            async with session_factory() as session:
+                owner = await create_user(session)
+                follower = await create_user(session)
+                outsider = await create_user(session)
+                user_ids.extend([owner.id, follower.id, outsider.id])
+                session.add(Profile(user_id=owner.id, display_name="Followers only", visibility="FOLLOWERS"))
+                session.add(Follow(follower_id=follower.id, following_id=owner.id))
+                post = Post(author_id=owner.id, content="private to followers", visibility="PUBLIC")
+                session.add(post)
+                await session.commit()
+                owner_id = owner.id
+
+            async with session_factory() as session:
+                follower_profile = await get_user_profile(owner_id, follower, session, providers)
+                assert follower_profile["is_following"] is True
+                assert follower_profile["post_count"] == 1
+                assert follower_profile["reel_count"] == 0
+                posts = await list_user_posts(
+                    owner_id, follower, session, providers, post_type="POST", limit=20
+                )
+                assert [post["content"] for post in posts["items"]] == ["private to followers"]
+                with pytest.raises(HTTPException) as invisible_profile:
+                    await get_user_profile(owner_id, outsider, session, providers)
+                assert invisible_profile.value.status_code == 404
+                with pytest.raises(HTTPException) as invisible_posts:
+                    await list_user_posts(
+                        owner_id, outsider, session, providers, post_type="POST", limit=20
+                    )
+                assert invisible_posts.value.status_code == 404
+        finally:
+            async with session_factory() as session:
+                if user_ids:
+                    await session.execute(delete(User).where(User.id.in_(user_ids)))
                     await session.commit()
             await engine.dispose()
 

@@ -4,7 +4,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .models import InstitutionMembership, Post, User, UserBlock
+from .models import Follow, InstitutionMembership, Post, User, UserBlock
 from .permissions import list_user_institution_ids
 
 
@@ -44,6 +44,15 @@ async def can_view_profile(
         return False
     if viewer is not None and viewer.id == owner.id:
         return True
+    if viewer is not None:
+        blocked = await database.scalar(
+            select(UserBlock.id).where(
+                ((UserBlock.blocker_id == viewer.id) & (UserBlock.blocked_id == owner.id))
+                | ((UserBlock.blocker_id == owner.id) & (UserBlock.blocked_id == viewer.id))
+            )
+        )
+        if blocked is not None:
+            return False
     if visibility == "PUBLIC":
         return True
     if viewer is None:
@@ -52,6 +61,13 @@ async def can_view_profile(
         return True
     if visibility == "NETWORK":
         return await shares_active_institution(viewer.id, owner.id, database)
+    if visibility == "FOLLOWERS":
+        return await database.scalar(
+            select(Follow.follower_id).where(
+                Follow.follower_id == viewer.id,
+                Follow.following_id == owner.id,
+            )
+        ) is not None
     return False
 
 

@@ -55,6 +55,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/account/email-change": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request an email address change */
+        post: operations["request_email_change_account_email_change_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/account/email-change/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm an email address change */
+        post: operations["confirm_email_change_account_email_change_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/account/email-verification": {
         parameters: {
             query?: never;
@@ -339,6 +373,40 @@ export interface paths {
         put?: never;
         /** Deactivate the current account */
         post: operations["deactivate_account_api_v1_account_deactivate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/account/email-change": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request an email address change */
+        post: operations["request_email_change_api_v1_account_email_change_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/account/email-change/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm an email address change */
+        post: operations["confirm_email_change_api_v1_account_email_change_confirm_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2526,6 +2594,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users/{user_id}/posts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a visible user's posts or reels */
+        get: operations["list_user_posts_api_v1_users__user_id__posts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/{user_id}/profile": {
         parameters: {
             query?: never;
@@ -4485,6 +4570,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/users/{user_id}/posts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a visible user's posts or reels */
+        get: operations["list_user_posts_users__user_id__posts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/users/{user_id}/profile": {
         parameters: {
             query?: never;
@@ -4952,7 +5054,7 @@ export interface components {
              * @default NETWORK
              * @enum {string}
              */
-            visibility: "PUBLIC" | "AUTHENTICATED" | "NETWORK" | "PRIVATE";
+            visibility: "PUBLIC" | "AUTHENTICATED" | "NETWORK" | "FOLLOWERS" | "PRIVATE";
             /** Website */
             website?: string | null;
         };
@@ -4996,6 +5098,13 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** EmailChangeRequest */
+        EmailChangeRequest: {
+            /** Current Password */
+            current_password: string;
+            /** Email */
+            email: string;
         };
         /** EmailTokenConfirm */
         EmailTokenConfirm: {
@@ -5803,17 +5912,34 @@ export interface components {
             bio: string | null;
             /** Display Name */
             display_name: string;
+            /** Follower Count */
+            follower_count: number;
+            /** Following Count */
+            following_count: number;
+            /** Is Following */
+            is_following: boolean;
+            /**
+             * Joined At
+             * Format: date-time
+             */
+            joined_at: string;
             /** Location */
             location: string | null;
+            /** Post Count */
+            post_count: number;
             /** Profile Picture Url */
             profile_picture_url: string | null;
+            /** Reel Count */
+            reel_count: number;
             /** User Id */
             user_id: string;
+            /** Username */
+            username: string;
             /**
              * Visibility
              * @enum {string}
              */
-            visibility: "PUBLIC" | "AUTHENTICATED" | "NETWORK" | "PRIVATE";
+            visibility: "PUBLIC" | "AUTHENTICATED" | "NETWORK" | "FOLLOWERS" | "PRIVATE";
             /** Website */
             website: string | null;
         };
@@ -5843,7 +5969,7 @@ export interface components {
              * Visibility
              * @enum {string}
              */
-            visibility: "PUBLIC" | "AUTHENTICATED" | "NETWORK" | "PRIVATE";
+            visibility: "PUBLIC" | "AUTHENTICATED" | "NETWORK" | "FOLLOWERS" | "PRIVATE";
             /** Website */
             website: string | null;
         };
@@ -6093,7 +6219,7 @@ export interface components {
             /** Profile Picture Url */
             profile_picture_url?: string | null;
             /** Visibility */
-            visibility?: ("PUBLIC" | "AUTHENTICATED" | "NETWORK" | "PRIVATE") | null;
+            visibility?: ("PUBLIC" | "AUTHENTICATED" | "NETWORK" | "FOLLOWERS" | "PRIVATE") | null;
             /** Website */
             website?: string | null;
         };
@@ -6201,6 +6327,72 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["PasswordConfirmationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountLifecycleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    request_email_change_account_email_change_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmailChangeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountLifecycleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_email_change_account_email_change_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmailTokenConfirm"];
             };
         };
         responses: {
@@ -6716,6 +6908,72 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["PasswordConfirmationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountLifecycleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    request_email_change_api_v1_account_email_change_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmailChangeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountLifecycleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_email_change_api_v1_account_email_change_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmailTokenConfirm"];
             };
         };
         responses: {
@@ -12371,6 +12629,41 @@ export interface operations {
             };
         };
     };
+    list_user_posts_api_v1_users__user_id__posts_get: {
+        parameters: {
+            query?: {
+                post_type?: string;
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_user_profile_api_v1_users__user_id__profile_get: {
         parameters: {
             query?: never;
@@ -17579,6 +17872,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FollowUserResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_user_posts_users__user_id__posts_get: {
+        parameters: {
+            query?: {
+                post_type?: string;
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedResponse"];
                 };
             };
             /** @description Validation Error */

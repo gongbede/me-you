@@ -11,7 +11,7 @@ class AccountEmailToken(Base):
     __tablename__ = "account_email_tokens"
     __table_args__ = (
         CheckConstraint(
-            "purpose IN ('EMAIL_VERIFICATION', 'PASSWORD_RESET')",
+            "purpose IN ('EMAIL_VERIFICATION', 'PASSWORD_RESET', 'EMAIL_CHANGE')",
             name="ck_account_email_tokens_purpose",
         ),
         UniqueConstraint("token_hash", name="uq_account_email_tokens_hash"),
@@ -32,6 +32,7 @@ class AccountEmailToken(Base):
     )
     purpose: Mapped[str] = mapped_column(String(24), nullable=False)
     token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    pending_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(

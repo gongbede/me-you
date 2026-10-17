@@ -74,6 +74,40 @@ export function requestEmailVerification(): Promise<ApiSchemas['AccountLifecycle
   return apiRequest('/api/v1/account/email-verification', { method: 'POST' })
 }
 
+export function getMyAccount(): Promise<ApiSchemas['UserResponse']> {
+  return apiRequest('/api/v1/account/me')
+}
+
+export function changeMyPassword(
+  input: ApiSchemas['PasswordChangeRequest'],
+): Promise<ApiSchemas['PasswordChangeResponse']> {
+  return apiRequest('/api/v1/account/password', { method: 'PUT', body: input })
+}
+
+export function requestEmailChange(
+  input: ApiSchemas['EmailChangeRequest'],
+): Promise<ApiSchemas['AccountLifecycleResponse']> {
+  return apiRequest('/api/v1/account/email-change', { method: 'POST', body: input })
+}
+
+export function confirmEmailChange(
+  input: ApiSchemas['EmailTokenConfirm'],
+): Promise<ApiSchemas['AccountLifecycleResponse']> {
+  return apiRequest('/api/v1/account/email-change/confirm', { method: 'POST', body: input, auth: false })
+}
+
+export function revokeAllSessions(
+  input: ApiSchemas['PasswordConfirmationRequest'],
+): Promise<ApiSchemas['AccountLifecycleResponse']> {
+  return apiRequest('/api/v1/account/sessions/revoke', { method: 'POST', body: input })
+}
+
+export function deleteMyAccount(
+  input: ApiSchemas['PasswordConfirmationRequest'],
+): Promise<ApiSchemas['AccountLifecycleResponse']> {
+  return apiRequest('/api/v1/account/me', { method: 'DELETE', body: input })
+}
+
 export function confirmEmailVerification(
   input: ApiSchemas['EmailTokenConfirm'],
 ): Promise<ApiSchemas['AccountLifecycleResponse']> {

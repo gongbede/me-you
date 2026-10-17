@@ -17,6 +17,7 @@ from .providers import EmailProvider, EmailRequest
 TOKEN_LIFETIMES = {
     "EMAIL_VERIFICATION": timedelta(hours=24),
     "PASSWORD_RESET": timedelta(minutes=30),
+    "EMAIL_CHANGE": timedelta(hours=24),
 }
 INVALID_TOKEN_DETAIL = "This account action token is invalid or expired"
 
@@ -30,6 +31,9 @@ async def issue_account_email_token(
     provider: EmailProvider,
     user: User,
     purpose: str,
+    *,
+    recipient: str | None = None,
+    pending_email: str | None = None,
 ) -> None:
     lifetime = TOKEN_LIFETIMES[purpose]
     now = datetime.now(timezone.utc)
@@ -38,6 +42,7 @@ async def issue_account_email_token(
         user_id=user.id,
         purpose=purpose,
         token_hash=account_token_hash(raw_token),
+        pending_email=pending_email,
         expires_at=now + lifetime,
         created_at=now,
     )
@@ -53,13 +58,18 @@ async def issue_account_email_token(
     database.add(token)
     await database.commit()
 
-    path = "verify-email" if purpose == "EMAIL_VERIFICATION" else "reset-password"
-    subject = "Verify your Me&You email" if purpose == "EMAIL_VERIFICATION" else "Reset your Me&You password"
+    if purpose == "EMAIL_CHANGE":
+        path = "verify-email"
+        subject = "Confirm your new Me&You email"
+    else:
+        path = "verify-email" if purpose == "EMAIL_VERIFICATION" else "reset-password"
+        subject = "Verify your Me&You email" if purpose == "EMAIL_VERIFICATION" else "Reset your Me&You password"
+    action = "&action=email-change" if purpose == "EMAIL_CHANGE" else ""
     await provider.send(
         EmailRequest(
-            recipient=user.email,
+            recipient=recipient or user.email,
             subject=subject,
-            text_body=f"Use this single-use link before it expires: {APP_PUBLIC_BASE_URL}/{path}?token={raw_token}",
+            text_body=f"Use this single-use link before it expires: {APP_PUBLIC_BASE_URL}/{path}?token={raw_token}{action}",
         )
     )
 

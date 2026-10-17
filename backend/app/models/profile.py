@@ -15,7 +15,7 @@ class Profile(Base):
     __tablename__ = "profiles"
     __table_args__ = (
         CheckConstraint(
-            "visibility IN ('PUBLIC', 'AUTHENTICATED', 'NETWORK', 'PRIVATE')",
+            "visibility IN ('PUBLIC', 'AUTHENTICATED', 'NETWORK', 'FOLLOWERS', 'PRIVATE')",
             name="ck_profiles_visibility",
         ),
         Index("ix_profiles_avatar_asset_id", "avatar_asset_id"),

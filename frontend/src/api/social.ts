@@ -70,8 +70,32 @@ export function getUserFollowers(userId: string): Promise<ApiSchemas['FollowUser
   return getAllCursorItems(`/api/v1/users/${userId}/followers`)
 }
 
+export function getUserFollowersPage(
+  userId: string,
+  cursor?: string,
+): Promise<{ items: ApiSchemas['FollowUserResponse'][]; nextCursor: string | null }> {
+  return getCursorPage(`/api/v1/users/${userId}/followers`, cursor)
+}
+
 export function getUserFollowing(userId: string): Promise<ApiSchemas['FollowUserResponse'][]> {
   return getAllCursorItems(`/api/v1/users/${userId}/following`)
+}
+
+export function getUserFollowingPage(
+  userId: string,
+  cursor?: string,
+): Promise<{ items: ApiSchemas['FollowUserResponse'][]; nextCursor: string | null }> {
+  return getCursorPage(`/api/v1/users/${userId}/following`, cursor)
+}
+
+export function getUserPosts(
+  userId: string,
+  postType: 'POST' | 'REEL',
+  cursor?: string,
+): Promise<FeedPage> {
+  const query = new URLSearchParams({ post_type: postType, limit: '20' })
+  if (cursor) query.set('cursor', cursor)
+  return apiRequest(`/api/v1/users/${userId}/posts?${query}`)
 }
 
 async function getAllCursorItems<TItem>(path: string): Promise<TItem[]> {
@@ -87,4 +111,14 @@ async function getAllCursorItems<TItem>(path: string): Promise<TItem[]> {
   } while (cursor)
 
   return items
+}
+
+async function getCursorPage<TItem>(
+  path: string,
+  cursor?: string,
+): Promise<{ items: TItem[]; nextCursor: string | null }> {
+  const query = new URLSearchParams({ limit: '50' })
+  if (cursor) query.set('cursor', cursor)
+  const page = await apiRequestWithCursor<TItem[]>(`${path}?${query}`)
+  return { items: page.data, nextCursor: page.nextCursor }
 }

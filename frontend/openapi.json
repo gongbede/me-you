@@ -1176,6 +1176,7 @@
               "PUBLIC",
               "AUTHENTICATED",
               "NETWORK",
+              "FOLLOWERS",
               "PRIVATE"
             ],
             "title": "Visibility",
@@ -1303,6 +1304,28 @@
           "updated_at"
         ],
         "title": "DepartmentResponse",
+        "type": "object"
+      },
+      "EmailChangeRequest": {
+        "properties": {
+          "current_password": {
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Current Password",
+            "type": "string"
+          },
+          "email": {
+            "maxLength": 255,
+            "minLength": 3,
+            "title": "Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "current_password"
+        ],
+        "title": "EmailChangeRequest",
         "type": "object"
       },
       "EmailTokenConfirm": {
@@ -3460,6 +3483,23 @@
             "title": "Display Name",
             "type": "string"
           },
+          "follower_count": {
+            "title": "Follower Count",
+            "type": "integer"
+          },
+          "following_count": {
+            "title": "Following Count",
+            "type": "integer"
+          },
+          "is_following": {
+            "title": "Is Following",
+            "type": "boolean"
+          },
+          "joined_at": {
+            "format": "date-time",
+            "title": "Joined At",
+            "type": "string"
+          },
           "location": {
             "anyOf": [
               {
@@ -3470,6 +3510,10 @@
               }
             ],
             "title": "Location"
+          },
+          "post_count": {
+            "title": "Post Count",
+            "type": "integer"
           },
           "profile_picture_url": {
             "anyOf": [
@@ -3482,8 +3526,16 @@
             ],
             "title": "Profile Picture Url"
           },
+          "reel_count": {
+            "title": "Reel Count",
+            "type": "integer"
+          },
           "user_id": {
             "title": "User Id",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
             "type": "string"
           },
           "visibility": {
@@ -3491,6 +3543,7 @@
               "PUBLIC",
               "AUTHENTICATED",
               "NETWORK",
+              "FOLLOWERS",
               "PRIVATE"
             ],
             "title": "Visibility",
@@ -3515,7 +3568,14 @@
           "profile_picture_url",
           "location",
           "website",
-          "visibility"
+          "visibility",
+          "username",
+          "joined_at",
+          "post_count",
+          "reel_count",
+          "follower_count",
+          "following_count",
+          "is_following"
         ],
         "title": "ProfileDiscoveryResponse",
         "type": "object"
@@ -3578,6 +3638,7 @@
               "PUBLIC",
               "AUTHENTICATED",
               "NETWORK",
+              "FOLLOWERS",
               "PRIVATE"
             ],
             "title": "Visibility",
@@ -4287,6 +4348,7 @@
                   "PUBLIC",
                   "AUTHENTICATED",
                   "NETWORK",
+                  "FOLLOWERS",
                   "PRIVATE"
                 ],
                 "type": "string"
@@ -4528,6 +4590,93 @@
           }
         ],
         "summary": "Deactivate the current account",
+        "tags": [
+          "account"
+        ]
+      }
+    },
+    "/account/email-change": {
+      "post": {
+        "operationId": "request_email_change_account_email_change_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailChangeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountLifecycleResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Request an email address change",
+        "tags": [
+          "account"
+        ]
+      }
+    },
+    "/account/email-change/confirm": {
+      "post": {
+        "operationId": "confirm_email_change_account_email_change_confirm_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailTokenConfirm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountLifecycleResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Confirm an email address change",
         "tags": [
           "account"
         ]
@@ -5259,6 +5408,93 @@
           }
         ],
         "summary": "Deactivate the current account",
+        "tags": [
+          "account"
+        ]
+      }
+    },
+    "/api/v1/account/email-change": {
+      "post": {
+        "operationId": "request_email_change_api_v1_account_email_change_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailChangeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountLifecycleResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Request an email address change",
+        "tags": [
+          "account"
+        ]
+      }
+    },
+    "/api/v1/account/email-change/confirm": {
+      "post": {
+        "operationId": "confirm_email_change_api_v1_account_email_change_confirm_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailTokenConfirm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountLifecycleResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Confirm an email address change",
         "tags": [
           "account"
         ]
@@ -14725,6 +14961,93 @@
         ]
       }
     },
+    "/api/v1/users/{user_id}/posts": {
+      "get": {
+        "operationId": "list_user_posts_api_v1_users__user_id__posts_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "post_type",
+            "required": false,
+            "schema": {
+              "default": "POST",
+              "pattern": "^(POST|REEL)$",
+              "title": "Post Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List a visible user's posts or reels",
+        "tags": [
+          "profile"
+        ]
+      }
+    },
     "/api/v1/users/{user_id}/profile": {
       "get": {
         "operationId": "get_user_profile_api_v1_users__user_id__profile_get",
@@ -23578,6 +23901,93 @@
         "summary": "List users followed by a user",
         "tags": [
           "follows"
+        ]
+      }
+    },
+    "/users/{user_id}/posts": {
+      "get": {
+        "operationId": "list_user_posts_users__user_id__posts_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "post_type",
+            "required": false,
+            "schema": {
+              "default": "POST",
+              "pattern": "^(POST|REEL)$",
+              "title": "Post Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List a visible user's posts or reels",
+        "tags": [
+          "profile"
         ]
       }
     },

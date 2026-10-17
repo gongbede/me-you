@@ -3,7 +3,8 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..account_tokens import (
@@ -31,6 +32,7 @@ from ..schemas import (
     AccountLifecycleResponse,
     AuthSessionResponse,
     EmailTokenConfirm,
+    EmailChangeRequest,
     PasswordChangeRequest,
     PasswordChangeResponse,
     PasswordConfirmationRequest,
@@ -74,6 +76,7 @@ async def get_my_account(
         "id": str(current_user.id),
         "username": current_user.username,
         "email": current_user.email,
+        "email_verified_at": current_user.email_verified_at,
         "created_at": current_user.created_at,
     }
 
@@ -241,6 +244,103 @@ async def confirm_email_verification(
         )
     await database.commit()
     return {"message": "Email verified"}
+
+
+@router.post(
+    "/account/email-change",
+    response_model=AccountLifecycleResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Request an email address change",
+)
+async def request_email_change(
+    data: EmailChangeRequest,
+    current_user: User = Depends(get_current_postgres_user),
+    database: AsyncSession = Depends(get_postgres_session),
+    providers: ProviderRegistry = Depends(get_provider_registry),
+    request: Request = None,
+):
+    if not password_hash.verify(data.current_password, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+
+    new_email = data.email.strip().casefold()
+    if "@" not in new_email or len(new_email) > 255:
+        raise HTTPException(status_code=422, detail="Enter a valid email address")
+    existing_user_id = await database.scalar(
+        select(User.id).where(func.lower(User.email) == new_email)
+    )
+    if existing_user_id is None and new_email != current_user.email.casefold():
+        provider = provider_or_503(providers, "email")
+        await issue_account_email_token(
+            database,
+            provider,
+            current_user,
+            "EMAIL_CHANGE",
+            recipient=new_email,
+            pending_email=new_email,
+        )
+        if request is not None:
+            record_security_event(
+                database,
+                event_type="account.email_change_requested",
+                outcome="SUCCESS",
+                request=request,
+                actor_user_id=current_user.id,
+                target_user_id=current_user.id,
+            )
+            await database.commit()
+    return {"message": "If the address is eligible, a confirmation message will be sent"}
+
+
+@router.post(
+    "/account/email-change/confirm",
+    response_model=AccountLifecycleResponse,
+    summary="Confirm an email address change",
+)
+async def confirm_email_change(
+    data: EmailTokenConfirm,
+    database: AsyncSession = Depends(get_postgres_session),
+    request: Request = None,
+    response: Response = None,
+):
+    token, user = await lock_valid_account_token(database, data.token, "EMAIL_CHANGE")
+    new_email = token.pending_email
+    if not new_email:
+        raise HTTPException(status_code=400, detail="This account action token is invalid or expired")
+    existing_user_id = await database.scalar(
+        select(User.id).where(
+            func.lower(User.email) == new_email,
+            User.id != user.id,
+        )
+    )
+    if existing_user_id is not None:
+        raise HTTPException(status_code=400, detail="This account action token is invalid or expired")
+
+    now = datetime.now(timezone.utc)
+    token.consumed_at = now
+    user.email = new_email
+    user.email_verified_at = now
+    user.token_version = (getattr(user, "token_version", 0) or 0) + 1
+    await invalidate_account_email_tokens(database, user.id)
+    if request is not None:
+        record_security_event(
+            database,
+            event_type="account.email_changed",
+            outcome="SUCCESS",
+            request=request,
+            actor_user_id=user.id,
+            target_user_id=user.id,
+        )
+    try:
+        await database.commit()
+    except IntegrityError:
+        await database.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail="This account action token is invalid or expired",
+        ) from None
+    if response is not None:
+        clear_auth_cookie(response, session_invalidated=True)
+    return {"message": "Email address updated"}
 
 
 @router.post(

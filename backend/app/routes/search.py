@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_postgres_session
 from ..models import (
-    Course, Department, Faculty, Institution, InstitutionMembership,
+    Course, Department, Faculty, Follow, Institution, InstitutionMembership,
     Post, Profile, User, UserBlock,
 )
 from ..pagination import decode_cursor, encode_cursor
@@ -123,6 +123,15 @@ async def global_search(
             User.id == current_user.id,
             Profile.visibility.in_(("PUBLIC", "AUTHENTICATED")),
             and_(Profile.visibility == "NETWORK", shared_profile_membership),
+            and_(
+                Profile.visibility == "FOLLOWERS",
+                exists(
+                    select(1).where(
+                        Follow.follower_id == current_user.id,
+                        Follow.following_id == User.id,
+                    )
+                ),
+            ),
         ),
     )
     post_results = select(

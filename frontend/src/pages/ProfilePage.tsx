@@ -56,6 +56,7 @@ function ProfileForm({
             <option value="PUBLIC">Anyone</option>
             <option value="AUTHENTICATED">Signed-in members</option>
             <option value="NETWORK">My institution network</option>
+            <option value="FOLLOWERS">My followers</option>
             <option value="PRIVATE">Only me</option>
           </select>
         </div>

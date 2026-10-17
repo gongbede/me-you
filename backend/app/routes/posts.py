@@ -11,6 +11,7 @@ from ..database import get_postgres_session
 from ..models import (
     Comment,
     Follow,
+    Follow,
     InstitutionMembership,
     MediaAsset,
     Post,
@@ -118,6 +119,15 @@ async def post_responses(
                 Profile.visibility == "PUBLIC",
                 User.id == viewer.id,
                 Profile.visibility == "AUTHENTICATED",
+                and_(
+                    Profile.visibility == "FOLLOWERS",
+                    exists(
+                        select(1).where(
+                            Follow.follower_id == viewer.id,
+                            Follow.following_id == User.id,
+                        )
+                    ),
+                ),
                 and_(
                     Profile.visibility == "NETWORK",
                     exists(
@@ -370,5 +380,4 @@ async def delete_post(
 
     await database.delete(post)
     await database.commit()
-
 

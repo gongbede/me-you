@@ -251,6 +251,13 @@ class ProfileFoundationTests(unittest.IsolatedAsyncioTestCase):
                 "location",
                 "website",
                 "visibility",
+                "username",
+                "joined_at",
+                "post_count",
+                "reel_count",
+                "follower_count",
+                "following_count",
+                "is_following",
             },
         )
         self.assertEqual(response["user_id"], str(target_user.id))

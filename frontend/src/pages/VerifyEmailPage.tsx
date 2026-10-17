@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { confirmEmailVerification, requestEmailVerification } from '../api/auth'
+import { confirmEmailChange, confirmEmailVerification, requestEmailVerification } from '../api/auth'
 import { getFriendlyErrorMessage } from '../api/client'
 import { AuthFrame } from '../components/AuthFrame'
 import { useAuth } from '../hooks/useAuth'
@@ -9,6 +9,7 @@ export function VerifyEmailPage() {
   const { user } = useAuth()
   const [searchParams] = useSearchParams()
   const token = searchParams.get('token')
+  const isEmailChange = searchParams.get('action') === 'email-change'
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -19,7 +20,9 @@ export function VerifyEmailPage() {
     setLoading(true)
     try {
       const response = token
-        ? await confirmEmailVerification({ token })
+        ? isEmailChange
+          ? await confirmEmailChange({ token })
+          : await confirmEmailVerification({ token })
         : await requestEmailVerification()
       setMessage(response.message)
     } catch (reason) {
@@ -30,12 +33,12 @@ export function VerifyEmailPage() {
   }
 
   return (
-    <AuthFrame eyebrow="One small check" title="Verify your email." intro="Keep your account details up to date and yours alone.">
+    <AuthFrame eyebrow="One small check" title={isEmailChange ? 'Confirm your new email.' : 'Verify your email.'} intro="Keep your account details up to date and yours alone.">
       {message && <div className="form-success" role="status">{message}</div>}
       {error && <div className="form-alert" role="alert">{error}</div>}
       {token || user ? (
         <button className="button button--primary button--wide" type="button" onClick={() => void submit()} disabled={loading}>
-          {loading ? 'Working…' : token ? 'Confirm email' : 'Send verification email'}
+          {loading ? 'Working…' : token ? isEmailChange ? 'Confirm new email' : 'Confirm email' : 'Send verification email'}
         </button>
       ) : (
         <div className="form-note">Sign in to request a verification email.</div>

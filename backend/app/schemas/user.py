@@ -46,6 +46,11 @@ class EmailTokenConfirm(BaseModel):
     token: str = Field(min_length=32, max_length=200)
 
 
+class EmailChangeRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=255)
+    current_password: str = Field(min_length=8, max_length=128)
+
+
 class AccountLifecycleResponse(BaseModel):
     message: str
 

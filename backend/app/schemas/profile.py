@@ -5,7 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
-ProfileVisibility = Literal["PUBLIC", "AUTHENTICATED", "NETWORK", "PRIVATE"]
+ProfileVisibility = Literal["PUBLIC", "AUTHENTICATED", "NETWORK", "FOLLOWERS", "PRIVATE"]
 
 
 class CreateProfile(BaseModel):
@@ -48,3 +48,10 @@ class ProfileDiscoveryResponse(BaseModel):
     location: str | None
     website: str | None
     visibility: ProfileVisibility
+    username: str
+    joined_at: datetime
+    post_count: int
+    reel_count: int
+    follower_count: int
+    following_count: int
+    is_following: bool

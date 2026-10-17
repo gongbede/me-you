@@ -1,8 +1,16 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useNavigate, useParams, Link } from 'react-router-dom'
+import { useState } from 'react'
 import { Ban, MessageCircle, UserRound, UserRoundPlus, UserRoundMinus } from 'lucide-react'
 import { getFriendlyErrorMessage } from '../api/client'
-import { followUser, getPublicProfile, getUserFollowers, unfollowUser } from '../api/social'
+import {
+  followUser,
+  getPublicProfile,
+  getUserFollowersPage,
+  getUserFollowingPage,
+  getUserPosts,
+  unfollowUser,
+} from '../api/social'
 import { useAuth } from '../hooks/useAuth'
 import { createDirectConversation } from '../api/messaging'
 import { blockUser, listBlockedUsers, unblockUser } from '../api/moderation'
@@ -12,15 +20,27 @@ export function PublicProfilePage() {
   const { user: currentUser } = useAuth()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const [activeTab, setActiveTab] = useState<'posts' | 'reels' | 'followers' | 'following'>('posts')
   const profileQuery = useQuery({
     queryKey: ['profile', 'public', userId],
     queryFn: () => getPublicProfile(userId),
     enabled: Boolean(userId),
   })
-  const followersQuery = useQuery({
-    queryKey: ['profile', 'followers', userId],
-    queryFn: () => getUserFollowers(userId),
-    enabled: Boolean(userId && currentUser && userId !== currentUser.id && profileQuery.data),
+  const contentQuery = useInfiniteQuery({
+    queryKey: ['profile', 'content', userId, activeTab],
+    queryFn: ({ pageParam }) => getUserPosts(userId, activeTab === 'reels' ? 'REEL' : 'POST', pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (page) => page.next_cursor ?? undefined,
+    enabled: Boolean(profileQuery.data && (activeTab === 'posts' || activeTab === 'reels')),
+  })
+  const peopleQuery = useInfiniteQuery({
+    queryKey: ['profile', 'people', userId, activeTab],
+    queryFn: ({ pageParam }) => activeTab === 'followers'
+      ? getUserFollowersPage(userId, pageParam)
+      : getUserFollowingPage(userId, pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (page) => page.nextCursor ?? undefined,
+    enabled: Boolean(profileQuery.data && (activeTab === 'followers' || activeTab === 'following')),
   })
   const followMutation = useMutation({
     mutationFn: async (isFollowing: boolean) => {
@@ -28,7 +48,7 @@ export function PublicProfilePage() {
       else await followUser(userId)
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['profile', 'followers', userId] })
+      await queryClient.invalidateQueries({ queryKey: ['profile', 'public', userId] })
     },
   })
   const messageMutation = useMutation({
@@ -65,18 +85,20 @@ export function PublicProfilePage() {
 
   const profile = profileQuery.data
   const isSelf = currentUser?.id === userId
-  const isFollowing = Boolean(followersQuery.data?.some((follower) => follower.id === currentUser?.id))
+  const isFollowing = profile.is_following
   const isBlocked = Boolean(blocksQuery.data?.some((blocked) => blocked.id === userId))
+  const profilePosts = contentQuery.data?.pages.flatMap((page) => page.items) ?? []
+  const listedPeople = peopleQuery.data?.pages.flatMap((page) => page.items) ?? []
 
   return (
     <div className="page-stack profile-page">
       <section className="page-heading-row">
         <div><span className="eyebrow">COMMUNITY</span><h1>{profile.display_name}</h1></div>
-        {!isSelf && currentUser && <button className="button button--outline" type="button" disabled={messageMutation.isPending} onClick={() => messageMutation.mutate()}><MessageCircle size={17} aria-hidden="true" />{messageMutation.isPending ? 'Opening…' : 'Message'}</button>}
+        {!isSelf && currentUser && !isBlocked && <button className="button button--outline" type="button" disabled={messageMutation.isPending} onClick={() => messageMutation.mutate()}><MessageCircle size={17} aria-hidden="true" />{messageMutation.isPending ? 'Opening…' : 'Message'}</button>}
         {!isSelf && currentUser && <button className="button button--outline" type="button" disabled={blocksQuery.isPending || blockMutation.isPending} onClick={() => {
           if (window.confirm(`${isBlocked ? 'Unblock' : 'Block'} ${profile.display_name}?`)) blockMutation.mutate(isBlocked)
         }}><Ban size={17} aria-hidden="true" />{blockMutation.isPending ? 'Saving…' : isBlocked ? 'Unblock' : 'Block user'}</button>}
-        {!isSelf && currentUser && !followersQuery.isPending && !followersQuery.isError && (
+        {!isSelf && currentUser && !isBlocked && (
           <button
             className={`button ${isFollowing ? 'button--outline' : 'button--primary'}`}
             type="button"
@@ -88,7 +110,6 @@ export function PublicProfilePage() {
           </button>
         )}
       </section>
-      {followersQuery.isError && <p className="form-alert" role="alert">{getFriendlyErrorMessage(followersQuery.error)}</p>}
       {followMutation.isError && <p className="form-alert" role="alert">{getFriendlyErrorMessage(followMutation.error)}</p>}
       {messageMutation.isError && <p className="form-alert" role="alert">{getFriendlyErrorMessage(messageMutation.error)}</p>}
       {blocksQuery.isError && <p className="form-alert" role="alert">{getFriendlyErrorMessage(blocksQuery.error)}</p>}
@@ -101,7 +122,7 @@ export function PublicProfilePage() {
           <div className="profile-card__intro">
             <span className="eyebrow">PROFILE</span>
             <h2>{profile.display_name}</h2>
-            <p>Visible to {profile.visibility.toLowerCase()} viewers</p>
+            <p>@{profile.username} · Joined {new Date(profile.joined_at).toLocaleDateString()}</p>
           </div>
         </div>
         <div className="profile-details">
@@ -111,6 +132,47 @@ export function PublicProfilePage() {
             <div><span>WEBSITE</span><p>{profile.website ? <a href={profile.website} target="_blank" rel="noreferrer">{profile.website}</a> : 'Not added'}</p></div>
           </div>
         </div>
+      </section>
+      <section className="card profile-activity" aria-label="Profile activity">
+        <div className="profile-stats">
+          <span><strong>{profile.post_count}</strong> posts</span>
+          <span><strong>{profile.reel_count}</strong> reels</span>
+          <button type="button" onClick={() => setActiveTab('followers')}><strong>{profile.follower_count}</strong> followers</button>
+          <button type="button" onClick={() => setActiveTab('following')}><strong>{profile.following_count}</strong> following</button>
+        </div>
+        <div className="profile-tabs" role="tablist" aria-label="Profile content">
+          {(['posts', 'reels', 'followers', 'following'] as const).map((tab) => (
+            <button key={tab} role="tab" type="button" aria-selected={activeTab === tab} onClick={() => setActiveTab(tab)}>
+              {tab[0].toUpperCase() + tab.slice(1)}
+            </button>
+          ))}
+        </div>
+        {(activeTab === 'posts' || activeTab === 'reels') && (
+          contentQuery.isPending ? <p className="learning-loading" role="status">Loading {activeTab}…</p> : contentQuery.isError ? (
+            <div className="inline-error" role="alert"><p>{getFriendlyErrorMessage(contentQuery.error)}</p><button className="button button--outline" type="button" onClick={() => void contentQuery.refetch()}>Retry</button></div>
+          ) : profilePosts.length === 0 ? <p className="muted-copy">No {activeTab} to show.</p> : (
+            <>
+              <ul className="profile-post-list">
+                {profilePosts.map((post) => <li key={post.id}>
+                  <Link to={`/posts/${post.id}`}><span>{post.content}</span><time dateTime={post.created_at}>{new Date(post.created_at).toLocaleDateString()}</time></Link>
+                </li>)}
+              </ul>
+              {contentQuery.hasNextPage && <button className="button button--outline" type="button" disabled={contentQuery.isFetchingNextPage} onClick={() => void contentQuery.fetchNextPage()}>{contentQuery.isFetchingNextPage ? 'Loading…' : `Load more ${activeTab}`}</button>}
+            </>
+          )
+        )}
+        {(activeTab === 'followers' || activeTab === 'following') && (
+          peopleQuery.isPending ? <p className="learning-loading" role="status">Loading {activeTab}…</p> : peopleQuery.isError ? (
+            <div className="inline-error" role="alert"><p>{getFriendlyErrorMessage(peopleQuery.error)}</p><button className="button button--outline" type="button" onClick={() => void peopleQuery.refetch()}>Retry</button></div>
+          ) : listedPeople.length === 0 ? <p className="muted-copy">No {activeTab} yet.</p> : (
+            <>
+              <ul className="profile-people-list">
+                {listedPeople.map((person) => <li key={person.id}><Link to={`/users/${person.id}`}>@{person.username}</Link></li>)}
+              </ul>
+              {peopleQuery.hasNextPage && <button className="button button--outline" type="button" disabled={peopleQuery.isFetchingNextPage} onClick={() => void peopleQuery.fetchNextPage()}>{peopleQuery.isFetchingNextPage ? 'Loading…' : 'Load more'}</button>}
+            </>
+          )
+        )}
       </section>
     </div>
   )
