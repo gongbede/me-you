@@ -60,7 +60,7 @@ export function SearchPage() {
               {visibleItems.map((item) => {
                 const destination = item.resource_type === 'person' ? `/users/${item.id}`
                   : item.resource_type === 'post' ? `/posts/${item.id}`
-                    : `/schools/${item.institution_id ?? item.id}`
+                    : `/schools?search=${encodeURIComponent(item.name)}`
                 const Icon = item.resource_type === 'person' ? UserRound : Building2
                 return <li key={`${item.resource_type}-${item.id}`}><Link to={destination}><Icon size={20} aria-hidden="true" /><span><strong>{item.name}</strong>{item.code && <small>{item.resource_type === 'person' ? `@${item.code}` : item.code}</small>}</span></Link></li>
               })}

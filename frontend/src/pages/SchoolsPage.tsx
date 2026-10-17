@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowRight, Check, MailOpen, Search, School as SchoolIcon, X } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { getFriendlyErrorMessage } from '../api/client'
 import {
   acceptInvitation,
@@ -24,9 +24,11 @@ function accessError(error: unknown): string {
 
 export function SchoolsPage() {
   const queryClient = useQueryClient()
+  const [searchParams] = useSearchParams()
+  const initialSearch = searchParams.get('search') ?? ''
   const [institutionId, setInstitutionId] = useState('')
-  const [searchInput, setSearchInput] = useState('')
-  const [searchTerm, setSearchTerm] = useState('')
+  const [searchInput, setSearchInput] = useState(initialSearch)
+  const [searchTerm, setSearchTerm] = useState(initialSearch)
   const [schoolName, setSchoolName] = useState('')
   const [schoolType, setSchoolType] = useState<Institution['institution_type']>('SCHOOL')
   const [publicDescription, setPublicDescription] = useState('')

@@ -42,6 +42,7 @@ describe('SearchPage', () => {
     expect(screen.getByText('A river post')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('tab', { name: 'Schools' }))
     expect(screen.getByText('River School')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /River School/ })).toHaveAttribute('href', '/schools?search=River%20School')
   })
 
   it('reports an empty result state', async () => {
