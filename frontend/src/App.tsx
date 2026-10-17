@@ -29,6 +29,7 @@ import { SettingsPage } from './pages/SettingsPage'
 import { SearchPage } from './pages/SearchPage'
 import { AdminReportsPage } from './pages/AdminReportsPage'
 import { PostDetailPage } from './pages/PostDetailPage'
+import { MusicPage, VideosPage } from './pages/MediaLibraryPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -65,6 +66,8 @@ export default function App() {
                   <Route path="messages" element={<MessagesPage />} />
                   <Route path="messages/:conversationId" element={<MessagesPage />} />
                   <Route path="reels" element={<ReelsPage />} />
+                  <Route path="videos" element={<VideosPage />} />
+                  <Route path="music" element={<MusicPage />} />
                   <Route path="my-courses" element={<MyCoursesPage />} />
                   <Route path="classrooms" element={<ClassroomsIndexPage />} />
                   <Route path="courses/:courseId" element={<CoursePage />} />

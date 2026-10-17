@@ -12,11 +12,14 @@ from ..config import (
     APP_ENV,
     MEDIA_USER_QUOTA_BYTES,
     REEL_MAX_BYTES,
+    VIDEO_MAX_BYTES,
+    AUDIO_MAX_BYTES,
     S3_ENDPOINT_URL,
     STORAGE_SIGNED_URL_LIFETIME_SECONDS,
 )
 from ..database import get_postgres_session
 from ..models import InstitutionMembership, MediaAsset, Post, Profile, User
+from ..models import Track, Video
 from ..privacy import can_view_profile
 from ..providers import ProviderRegistry, get_provider_registry, provider_or_503
 from ..providers.storage import (
@@ -47,6 +50,8 @@ CONTENT_TYPES_BY_PURPOSE = {
         "image/jpeg", "image/png", "image/webp", "video/mp4", "video/webm", "audio/mpeg", "audio/ogg", "application/pdf",
     },
     "REEL": {"video/mp4", "video/webm"},
+    "VIDEO": {"video/mp4", "video/webm"},
+    "AUDIO": {"audio/mpeg", "audio/mp4", "audio/aac", "audio/ogg", "audio/wav", "audio/x-wav"},
     "MESSAGE_ATTACHMENT": {
         "image/jpeg", "image/png", "image/webp", "video/mp4", "video/webm", "audio/mpeg", "audio/ogg", "application/pdf",
     },
@@ -56,12 +61,20 @@ MAX_BYTES_BY_PURPOSE = {
     "POST_MEDIA": 250_000_000,
     "COURSE_MEDIA": 500_000_000,
     "REEL": REEL_MAX_BYTES,
+    "VIDEO": VIDEO_MAX_BYTES,
+    "AUDIO": AUDIO_MAX_BYTES,
     "MESSAGE_ATTACHMENT": 50_000_000,
 }
 
 
 def max_bytes_for_purpose(purpose: str) -> int:
-    return REEL_MAX_BYTES if purpose == "REEL" else MAX_BYTES_BY_PURPOSE[purpose]
+    if purpose == "REEL":
+        return REEL_MAX_BYTES
+    if purpose == "VIDEO":
+        return VIDEO_MAX_BYTES
+    if purpose == "AUDIO":
+        return AUDIO_MAX_BYTES
+    return MAX_BYTES_BY_PURPOSE[purpose]
 
 
 @router.get("/reel-limits", response_model=MediaReelLimitsResponse)
@@ -358,6 +371,18 @@ async def create_media_download_url(
                 owner, profile.visibility, current_user, database
             )
         )
+    if not authorized and asset.purpose in {"VIDEO", "AUDIO"}:
+        item_model = Video if asset.purpose == "VIDEO" else Track
+        item = await database.scalar(
+            select(item_model).where(item_model.media_asset_id == asset.id)
+        )
+        owner = await database.get(User, item.owner_id) if item is not None else None
+        authorized = bool(
+            item is not None
+            and owner is not None
+            and await can_view_profile(owner, item.visibility, current_user, database)
+            and (not item.is_hidden or (current_user is not None and current_user.is_platform_admin))
+        )
     if not authorized and current_user is not None and asset.institution_id is not None:
         authorized = (
             await database.scalar(
@@ -398,6 +423,10 @@ async def delete_media_asset(
         select(Post.id).where(Post.media_asset_id == asset.id)
     ) is not None:
         raise HTTPException(status_code=409, detail="Media asset is attached to a reel")
+    if asset.purpose in {"VIDEO", "AUDIO"}:
+        model = Video if asset.purpose == "VIDEO" else Track
+        if await database.scalar(select(model.id).where(model.media_asset_id == asset.id)) is not None:
+            raise HTTPException(status_code=409, detail="Media asset is attached to published media")
     storage = provider_or_503(providers, "storage")
     await storage.delete_object(asset.storage_key)
     await database.delete(asset)

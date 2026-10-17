@@ -37,6 +37,8 @@ from .profile import Profile
 from .rate_limit_counter import RateLimitCounter
 from .security_event import SecurityEvent
 from .user import User
+from .video import Video, VideoComment, VideoLike, VideoView
+from .music import MusicCategoryFollow, Playlist, PlaylistItem, Track
 
 
 __all__ = [
@@ -81,4 +83,12 @@ __all__ = [
 	"Student",
 	"Teacher",
 	"User",
+	"Video",
+	"VideoComment",
+	"VideoLike",
+	"VideoView",
+	"Track",
+	"Playlist",
+	"PlaylistItem",
+	"MusicCategoryFollow",
 ]

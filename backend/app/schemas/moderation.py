@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 
 class ReportCreate(BaseModel):
-    target_type: Literal["POST", "COMMENT", "REEL", "USER", "MESSAGE"]
+    target_type: Literal["POST", "COMMENT", "REEL", "VIDEO", "TRACK", "USER", "MESSAGE"]
     target_id: str
     reason: Literal["SPAM", "HARASSMENT", "INAPPROPRIATE", "MISINFORMATION", "OTHER"]
     details: str | None = Field(default=None, max_length=1000)

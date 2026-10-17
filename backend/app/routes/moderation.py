@@ -12,6 +12,8 @@ from ..models import (
     ConversationMember,
     Message,
     Post,
+    Video,
+    Track,
     Profile,
     Report,
     User,
@@ -55,6 +57,16 @@ async def check_report_target(
         await require_post_visibility(target, reporter, database)
         if target.author_id == reporter.id:
             raise HTTPException(status_code=400, detail="You cannot report your own content")
+    elif data.target_type in {"VIDEO", "TRACK"}:
+        target_model = Video if data.target_type == "VIDEO" else Track
+        target = await database.get(target_model, target_id)
+        if target is None or target.is_hidden or target.owner_id == reporter.id:
+            raise HTTPException(status_code=404, detail="Report target not found")
+        from ..privacy import can_view_profile
+        from ..models import User
+        owner = await database.get(User, target.owner_id)
+        if owner is None or not await can_view_profile(owner, target.visibility, reporter, database):
+            raise HTTPException(status_code=404, detail="Report target not found")
     elif data.target_type == "COMMENT":
         target = await database.get(Comment, target_id)
         if target is None or target.is_hidden:

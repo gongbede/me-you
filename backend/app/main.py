@@ -52,6 +52,7 @@ from .routes.registration import router as registration_router
 from .routes.reels import router as reels_router
 from .routes.search import router as search_router
 from .routes.security_events import router as security_events_router
+from .routes.video_music import router as video_music_router
 from .security import clear_auth_cookie, decode_access_token
 
 
@@ -165,6 +166,7 @@ routers = (
     media_router,
     health_router,
     security_events_router,
+    video_music_router,
 )
 for route_group in routers:
     app.include_router(route_group)

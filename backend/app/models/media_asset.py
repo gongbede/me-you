@@ -24,7 +24,7 @@ class MediaAsset(Base):
     __tablename__ = "media_assets"
     __table_args__ = (
         CheckConstraint(
-            "purpose IN ('PROFILE_IMAGE', 'POST_MEDIA', 'COURSE_MEDIA', 'REEL', 'MESSAGE_ATTACHMENT')",
+            "purpose IN ('PROFILE_IMAGE', 'POST_MEDIA', 'COURSE_MEDIA', 'REEL', 'VIDEO', 'AUDIO', 'MESSAGE_ATTACHMENT')",
             name="ck_media_assets_purpose",
         ),
         CheckConstraint(

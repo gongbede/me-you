@@ -29,6 +29,10 @@ const notificationLabels: Record<keyof NotificationPreferences, string> = {
   CLASS_ANNOUNCEMENT: 'Classroom announcements',
   EXERCISE_SUBMISSION: 'Exercise submissions',
   EXERCISE_REVIEWED: 'Exercise reviews',
+  NEW_VIDEO: 'New videos from people you follow',
+  VIDEO_COMMENT: 'Comments on your videos',
+  VIDEO_LIKE: 'Likes on your videos',
+  NEW_TRACK: 'New music tracks',
 }
 
 export function SettingsPage() {

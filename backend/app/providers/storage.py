@@ -31,10 +31,16 @@ def sniff_content_type(prefix: bytes) -> str | None:
         return "image/png"
     if len(prefix) >= 12 and prefix[:4] == b"RIFF" and prefix[8:12] == b"WEBP":
         return "image/webp"
+    if len(prefix) >= 12 and prefix[:4] == b"RIFF" and prefix[8:12] == b"WAVE":
+        return "audio/wav"
     if prefix.startswith(b"%PDF-"):
         return "application/pdf"
+    if len(prefix) >= 12 and prefix[4:8] == b"ftyp" and prefix[8:12] in {b"M4A ", b"M4B ", b"F4A "}:
+        return "audio/mp4"
     if len(prefix) >= 8 and prefix[4:8] == b"ftyp":
         return "video/mp4"
+    if len(prefix) >= 2 and prefix[0] == 0xFF and prefix[1] & 0xF6 == 0xF0:
+        return "audio/aac"
     if prefix.startswith(b"\x1aE\xdf\xa3"):
         return "video/webm"
     if prefix.startswith(b"OggS"):

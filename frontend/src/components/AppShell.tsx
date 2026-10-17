@@ -1,4 +1,4 @@
-import { Bell, BookOpen, Building2, ChevronDown, Ellipsis, House, LogOut, MessageSquare, Moon, RotateCw, Search, Settings2, Sun, UserRound, Users, X } from 'lucide-react'
+import { Bell, BookOpen, Building2, ChevronDown, Ellipsis, House, LogOut, MessageSquare, Moon, RotateCw, Search, Settings2, Sun, UserRound, Users, X, Video, Music2 } from 'lucide-react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
@@ -25,6 +25,8 @@ const baseTabs = [
 const desktopPrimaryTabs = baseTabs.slice(0, 4)
 
 const moreTabs = [
+  { to: '/videos', label: 'Videos', icon: Video, end: false },
+  { to: '/music', label: 'Music', icon: Music2, end: false },
   { to: '/classrooms', label: 'Classrooms', icon: Users, end: false },
   { to: '/search', label: 'Search', icon: Search, end: false },
   { to: '/notifications', label: 'Notifications', icon: Bell, end: false },
@@ -83,7 +85,7 @@ export function AppShell() {
   })
   const unreadNotifications = notificationUnreadQuery.data?.unread_count ?? 0
   const learningPath = location.pathname.startsWith('/courses/') || location.pathname.startsWith('/lessons/')
-  const isMorePath = ['/profile', '/teaching', '/administration', '/classrooms', '/notifications', '/settings', '/logout', '/search', '/admin'].some((path) => location.pathname === path || location.pathname.startsWith(`${path}/`))
+  const isMorePath = ['/profile', '/teaching', '/administration', '/classrooms', '/notifications', '/settings', '/logout', '/search', '/admin', '/videos', '/music'].some((path) => location.pathname === path || location.pathname.startsWith(`${path}/`))
   const learningTabIsActive = (to: string, isActive: boolean) =>
     isActive || (to === '/my-courses' && learningPath) || (to === '/teaching' && location.pathname.startsWith('/teaching')) || (to === '/administration' && location.pathname.startsWith('/administration')) || (to === '/messages' && location.pathname.startsWith('/messages')) || (to === '/notifications' && location.pathname.startsWith('/notifications')) || (to === '/classrooms' && location.pathname.startsWith('/classrooms')) || (to === '/settings' && location.pathname.startsWith('/settings'))
 

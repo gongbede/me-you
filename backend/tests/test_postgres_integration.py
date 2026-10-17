@@ -34,10 +34,13 @@ from app.models import (
     Institution,
     InstitutionMembership,
     Lesson,
+    MediaAsset,
     SecurityEvent,
     Student,
     Teacher,
+    Track,
     User,
+    Video,
 )
 import app.routes.institutions as institution_routes
 from app.security import get_current_postgres_user
@@ -3220,7 +3223,7 @@ def test_account_email_tokens_logout_and_anonymizing_deletion(postgres_database_
     from urllib.parse import parse_qs, urlparse
 
     from fastapi.security import HTTPAuthorizationCredentials
-    from app.models import AccountEmailToken, Comment, Conversation, MediaAsset, Message, Post, Profile, SecurityEvent
+    from app.models import AccountEmailToken, Comment, Conversation, Message, Post, Profile, SecurityEvent
     from app.providers import LocalDiskStorageProvider
     from app.providers import ProviderRegistry, ProviderSettings
     from app.routes.account import (
@@ -4794,6 +4797,60 @@ def test_follower_only_profile_and_content_are_visible_only_to_followers(postgre
             async with session_factory() as session:
                 if user_ids:
                     await session.execute(delete(User).where(User.id.in_(user_ids)))
+                    await session.commit()
+            await engine.dispose()
+
+    asyncio.run(verify())
+
+
+def test_video_and_music_migrations_round_trip_and_cascade_own_rows(postgres_database_url):
+    async def verify():
+        engine = create_async_engine(postgres_database_url)
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        user_id = None
+        try:
+            downgrade = _alembic(postgres_database_url, "downgrade", "0026_profile_email_change")
+            assert downgrade.returncode == 0, downgrade.stdout + downgrade.stderr
+            upgrade = _alembic(postgres_database_url, "upgrade", "head")
+            assert upgrade.returncode == 0, upgrade.stdout + upgrade.stderr
+            async with session_factory() as session:
+                user = await create_user(session)
+                user_id = user.id
+                video_asset = MediaAsset(
+                    owner_id=user.id, purpose="VIDEO", status="READY",
+                    storage_provider="local", storage_key=f"users/{user.id}/{uuid.uuid4()}",
+                    content_type="video/mp4", byte_size=12, original_filename="video.mp4",
+                    upload_expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+                )
+                audio_asset = MediaAsset(
+                    owner_id=user.id, purpose="AUDIO", status="READY",
+                    storage_provider="local", storage_key=f"users/{user.id}/{uuid.uuid4()}",
+                    content_type="audio/mpeg", byte_size=12, original_filename="audio.mp3",
+                    upload_expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+                )
+                session.add_all([video_asset, audio_asset])
+                await session.flush()
+                session.add_all([
+                    Video(owner_id=user.id, media_asset_id=video_asset.id, title="Test video", category="Education"),
+                    Track(owner_id=user.id, media_asset_id=audio_asset.id, title="Test track", artist_name="Artist", category="Jazz"),
+                ])
+                await session.commit()
+            async with session_factory() as session:
+                await session.execute(delete(Video).where(Video.owner_id == user_id))
+                await session.execute(delete(Track).where(Track.owner_id == user_id))
+                await session.execute(delete(MediaAsset).where(MediaAsset.owner_id == user_id))
+                await session.execute(delete(User).where(User.id == user_id))
+                await session.commit()
+            async with session_factory() as session:
+                assert await session.scalar(select(func.count()).select_from(Video).where(Video.owner_id == user_id)) == 0
+                assert await session.scalar(select(func.count()).select_from(Track).where(Track.owner_id == user_id)) == 0
+        finally:
+            if user_id is not None:
+                async with session_factory() as session:
+                    await session.execute(delete(Video).where(Video.owner_id == user_id))
+                    await session.execute(delete(Track).where(Track.owner_id == user_id))
+                    await session.execute(delete(MediaAsset).where(MediaAsset.owner_id == user_id))
+                    await session.execute(delete(User).where(User.id == user_id))
                     await session.commit()
             await engine.dispose()
 

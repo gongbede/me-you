@@ -23,6 +23,9 @@ from ..models import (
     MediaAsset,
     Post,
     Profile,
+    Video,
+    Track,
+    Playlist,
     Student,
     User,
 )
@@ -477,6 +480,9 @@ async def delete_account(
     current_user.token_version = (getattr(current_user, "token_version", 0) or 0) + 1
     await database.execute(delete(Profile).where(Profile.user_id == current_user.id))
     await database.execute(delete(Post).where(Post.author_id == current_user.id))
+    await database.execute(delete(Video).where(Video.owner_id == current_user.id))
+    await database.execute(delete(Track).where(Track.owner_id == current_user.id))
+    await database.execute(delete(Playlist).where(Playlist.owner_id == current_user.id))
     await database.execute(delete(Comment).where(Comment.author_id == current_user.id))
     await database.execute(
         update(Message)

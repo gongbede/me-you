@@ -11,7 +11,7 @@ class Report(Base):
     __tablename__ = "reports"
     __table_args__ = (
         CheckConstraint(
-            "target_type IN ('POST', 'COMMENT', 'REEL', 'USER', 'MESSAGE')",
+            "target_type IN ('POST', 'COMMENT', 'REEL', 'VIDEO', 'TRACK', 'USER', 'MESSAGE')",
             name="ck_reports_target_type",
         ),
         CheckConstraint(

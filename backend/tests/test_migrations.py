@@ -79,6 +79,8 @@ class MigrationFoundationTests(unittest.TestCase):
                 "account_email_tokens",
                 "auth_identities",
                 "phone_login_codes",
+                "videos", "video_likes", "video_views", "video_comments",
+                "tracks", "playlists", "playlist_items", "music_category_follows",
             },
         )
         self.assertIs(User.__table__, Base.metadata.tables["users"])
@@ -234,6 +236,11 @@ class MigrationFoundationTests(unittest.TestCase):
             ("0021_live_classrooms.py", "0021_live_classrooms", "0020_exercise_publication"),
             ("0022_institution_discovery.py", "0022_institution_discovery", "0021_live_classrooms"),
             ("0023_reels.py", "0023_reels", "0022_institution_discovery"),
+            ("0024_notification_preferences.py", "0024_notification_preferences", "0023_reels"),
+            ("0025_reports_blocks_moderation.py", "0025_reports_blocks_moderation", "0024_notification_preferences"),
+            ("0026_profile_email_change.py", "0026_profile_email_change", "0025_reports_blocks_moderation"),
+            ("0027_video_library.py", "0027_video_library", "0026_profile_email_change"),
+            ("0028_music_library.py", "0028_music_library", "0027_video_library"),
         )
         for filename, revision, down_revision in revisions:
             migration = load_module(

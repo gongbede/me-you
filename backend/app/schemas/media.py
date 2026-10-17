@@ -9,6 +9,8 @@ MediaPurpose = Literal[
     "POST_MEDIA",
     "COURSE_MEDIA",
     "REEL",
+    "VIDEO",
+    "AUDIO",
     "MESSAGE_ATTACHMENT",
 ]
 MediaStatus = Literal["UPLOAD_PENDING", "READY", "FAILED"]
