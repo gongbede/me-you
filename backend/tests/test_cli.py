@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.cli import main, seed_demo
+from app.cli import main, reset_demo_passwords, seed_demo
 
 
 def test_create_platform_admin_rejects_password_command_line_arguments():
@@ -44,4 +44,38 @@ def test_seed_demo_writes_credentials_to_private_file(tmp_path, capsys, monkeypa
     assert captured.out == f"{output}\n"
     assert "private-password" not in captured.out
     assert output.read_text(encoding="utf-8") == "Teacher: teacher@example.test / private-password\n"
+    assert stat.S_IMODE(output.stat().st_mode) == 0o600
+
+
+def test_reset_demo_passwords_refuses_to_run_outside_development(monkeypatch):
+    monkeypatch.setenv("ME_YOU_ENV", "production")
+
+    with pytest.raises(ValueError, match="ME_YOU_ENV=development"):
+        asyncio.run(reset_demo_passwords())
+
+
+def test_reset_demo_passwords_writes_private_credentials_without_printing_passwords(
+    tmp_path, capsys, monkeypatch
+):
+    output = tmp_path / "reset-demo-credentials.txt"
+    credentials = [("Teacher", "demo.teacher@example.test", "new-random-password")]
+
+    async def fake_reset():
+        return credentials, ["demo.invited@example.test"]
+
+    monkeypatch.setenv("ME_YOU_ENV", "development")
+    monkeypatch.setattr("app.cli.reset_demo_passwords", fake_reset)
+    monkeypatch.setattr("sys.argv", ["app.cli", "reset-demo-passwords", "--output", str(output)])
+
+    main()
+
+    captured = capsys.readouterr()
+    assert captured.out == (
+        f"{output}\nMissing demo account demo.invited@example.test; "
+        "run seed-demo to create demo accounts.\n"
+    )
+    assert "new-random-password" not in captured.out
+    assert output.read_text(encoding="utf-8") == (
+        "Teacher: demo.teacher@example.test / new-random-password\n"
+    )
     assert stat.S_IMODE(output.stat().st_mode) == 0o600

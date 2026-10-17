@@ -1203,6 +1203,84 @@ def test_seed_demo_is_idempotent(postgres_database_url, monkeypatch):
     asyncio.run(verify())
 
 
+def test_reset_demo_passwords_changes_only_existing_demo_accounts(postgres_database_url, monkeypatch):
+    from app.cli import reset_demo_passwords
+    from app.routes.login import login
+    from app.schemas import LoginRequest
+    from app.security import password_hash
+
+    async def verify():
+        engine = create_async_engine(postgres_database_url)
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        created_ids: list[uuid.UUID] = []
+        monkeypatch.setenv("ME_YOU_ENV", "development")
+        try:
+            async with session_factory() as session:
+                demo_user = await create_user(
+                    session, email="demo.teacher@example.test"
+                )
+                demo_user.password_hash = password_hash.hash("old-demo-password")
+                other_demo_domain = await create_user(
+                    session, email=f"unrelated-{uuid.uuid4().hex}@example.test"
+                )
+                outside_demo_domain = await create_user(
+                    session, email=f"unrelated-{uuid.uuid4().hex}@example.com"
+                )
+                created_ids.extend([demo_user.id, other_demo_domain.id, outside_demo_domain.id])
+                other_demo_domain.password_hash = password_hash.hash("keep-example-password")
+                outside_demo_domain.password_hash = password_hash.hash("keep-com-password")
+                initial_versions = {
+                    demo_user.id: demo_user.token_version,
+                    other_demo_domain.id: other_demo_domain.token_version,
+                    outside_demo_domain.id: outside_demo_domain.token_version,
+                }
+                await session.commit()
+                demo_user_id = demo_user.id
+                other_demo_id = other_demo_domain.id
+                outside_demo_id = outside_demo_domain.id
+
+            credentials, missing = await reset_demo_passwords(session_factory)
+            assert missing == [
+                "demo.admin@example.test",
+                "demo.enrolled@example.test",
+                "demo.invited@example.test",
+            ]
+            assert [(label, email) for label, email, _ in credentials] == [
+                ("Teacher", "demo.teacher@example.test")
+            ]
+            new_password = credentials[0][2]
+            async with session_factory() as session:
+                demo_user = await session.get(User, demo_user_id)
+                other_demo_domain = await session.get(User, other_demo_id)
+                outside_demo_domain = await session.get(User, outside_demo_id)
+                assert demo_user.token_version == initial_versions[demo_user_id] + 1
+                assert password_hash.verify(new_password, demo_user.password_hash)
+                assert not password_hash.verify("old-demo-password", demo_user.password_hash)
+                assert other_demo_domain.token_version == initial_versions[other_demo_id]
+                assert password_hash.verify("keep-example-password", other_demo_domain.password_hash)
+                assert outside_demo_domain.token_version == initial_versions[outside_demo_id]
+                assert password_hash.verify("keep-com-password", outside_demo_domain.password_hash)
+                with pytest.raises(HTTPException) as old_password:
+                    await login(
+                        LoginRequest(email=demo_user.email, password="old-demo-password"),
+                        session,
+                    )
+                assert old_password.value.status_code == 401
+                response = await login(
+                    LoginRequest(email=demo_user.email, password=new_password),
+                    session,
+                )
+                assert response["id"] == str(demo_user_id)
+        finally:
+            async with session_factory() as session:
+                if created_ids:
+                    await session.execute(delete(User).where(User.id.in_(created_ids)))
+                    await session.commit()
+            await engine.dispose()
+
+    asyncio.run(verify())
+
+
 def test_database_rejects_duplicate_exercise_submission_number(postgres_database_url):
     async def verify():
         async with database_session(postgres_database_url) as session:

@@ -25,4 +25,15 @@ docker compose up -d --wait postgres
 
 `seed-demo` prints generated account credentials only once; rerunning it creates no duplicates and prints no new credentials. Vite runs on port 5173 and proxies `/api` to the API. Check readiness with `curl http://localhost:8000/health/ready`. Stop the backend and database with `./scripts/dev-down.sh`.
 
+### Locked out of the demo accounts
+
+If a Codespace restart removed the original credentials file, reset the existing demo-account passwords and write fresh credentials to a private file:
+
+```bash
+cd backend
+ME_YOU_ENV=development .venv/bin/python -m app.cli reset-demo-passwords --output /tmp/me-you-demo-credentials.txt
+```
+
+The command prints only the output path and any missing demo accounts, not passwords. The credentials file is created with mode `600`. If it reports a missing account, run `seed-demo` once to create the demo accounts, then reset their passwords.
+
 Registration creates an account without sending or requiring an email-verification message, so the new account can log in immediately. Email verification and password recovery require an installed email provider; no local fake sender is configured.

@@ -341,6 +341,37 @@ async def seed_demo(session_factory: Any = None) -> list[tuple[str, str, str]]:
     return credentials
 
 
+async def reset_demo_passwords(
+    session_factory: Any = None,
+) -> tuple[list[tuple[str, str, str]], list[str]]:
+    if os.getenv("ME_YOU_ENV", "").lower() != "development":
+        raise ValueError("reset-demo-passwords is available only when ME_YOU_ENV=development")
+
+    factory = _resolve_session_factory(session_factory)
+    demo_accounts = (
+        ("School admin", "demo.admin@example.test"),
+        ("Teacher", "demo.teacher@example.test"),
+        ("Enrolled student", "demo.enrolled@example.test"),
+        ("Invited student", "demo.invited@example.test"),
+    )
+    credentials: list[tuple[str, str, str]] = []
+    missing: list[str] = []
+    async with factory() as session:
+        for label, email in demo_accounts:
+            user = await session.scalar(
+                select(User).where(User.email == email).with_for_update()
+            )
+            if user is None:
+                missing.append(email)
+                continue
+            password = secrets.token_urlsafe(24)
+            user.password_hash = password_hash.hash(password)
+            user.token_version = (user.token_version or 0) + 1
+            credentials.append((label, email, password))
+        await session.commit()
+    return credentials, missing
+
+
 def _write_demo_credentials(path: str, credentials: list[tuple[str, str, str]]) -> None:
     descriptor = os.open(
         path,
@@ -538,6 +569,13 @@ def main() -> None:
     commands.add_parser("purge-security-events", help="Delete old security audit events")
     seed_parser = commands.add_parser("seed-demo", help="Seed development-only school and course demo data")
     seed_parser.add_argument("--output", required=True, metavar="FILE", help="Write generated credentials to FILE")
+    reset_demo_parser = commands.add_parser(
+        "reset-demo-passwords",
+        help="Reset passwords for existing development demo accounts",
+    )
+    reset_demo_parser.add_argument(
+        "--output", required=True, metavar="FILE", help="Write generated credentials to FILE"
+    )
     arguments = parser.parse_args()
 
     try:
@@ -545,6 +583,12 @@ def main() -> None:
             credentials = asyncio.run(seed_demo())
             _write_demo_credentials(arguments.output, credentials)
             print(arguments.output)
+        elif arguments.command == "reset-demo-passwords":
+            credentials, missing = asyncio.run(reset_demo_passwords())
+            _write_demo_credentials(arguments.output, credentials)
+            print(arguments.output)
+            for email in missing:
+                print(f"Missing demo account {email}; run seed-demo to create demo accounts.")
         elif arguments.command == "create-platform-admin":
             email = asyncio.run(create_platform_admin())
             print(f"Platform administrator created or promoted: {email}")
