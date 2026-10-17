@@ -19,6 +19,7 @@ import { getFriendlyErrorMessage } from '../api/client'
 import { listBlockedUsers, unblockUser } from '../api/moderation'
 import { getMyProfile, updateMyProfile } from '../api/profile'
 import { useAuth } from '../hooks/useAuth'
+import { useTheme } from '../hooks/useTheme'
 
 const notificationLabels: Record<keyof NotificationPreferences, string> = {
   COMMENT: 'Comments and replies',
@@ -34,6 +35,7 @@ export function SettingsPage() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const { logout } = useAuth()
+  const { choice, setChoice } = useTheme()
   const [emailNotice, setEmailNotice] = useState<string | null>(null)
   const [deletionError, setDeletionError] = useState<string | null>(null)
   const accountQuery = useQuery({ queryKey: ['account', 'me'], queryFn: getMyAccount })
@@ -118,6 +120,22 @@ export function SettingsPage() {
       </header>
 
       <div className="stacked-card-list">
+        <section className="card">
+          <h2>Appearance</h2>
+          <label className="field" htmlFor="theme-choice">
+            <span>Theme</span>
+            <select id="theme-choice" value={choice} onChange={(event) => {
+              const nextChoice = event.currentTarget.value
+              if (nextChoice === 'system' || nextChoice === 'light' || nextChoice === 'dark') setChoice(nextChoice)
+            }}>
+              <option value="system">System</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+          </label>
+          <p className="muted-copy">System follows your device appearance setting.</p>
+        </section>
+
         <section className="card">
           <h2>Notifications</h2>
           {preferencesQuery.isPending ? (

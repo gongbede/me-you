@@ -8,6 +8,7 @@ import {
 } from '../api/notifications'
 import { listBlockedUsers, unblockUser } from '../api/moderation'
 import { SettingsPage } from './SettingsPage'
+import { ThemeProvider } from '../hooks/useTheme'
 import {
   changeMyPassword,
   deleteMyAccount,
@@ -65,12 +66,13 @@ const profile = {
 
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
-  return render(<QueryClientProvider client={queryClient}><MemoryRouter><SettingsPage /></MemoryRouter></QueryClientProvider>)
+  return render(<ThemeProvider><QueryClientProvider client={queryClient}><MemoryRouter><SettingsPage /></MemoryRouter></QueryClientProvider></ThemeProvider>)
 }
 
 describe('SettingsPage', () => {
   afterEach(() => cleanup())
   beforeEach(() => {
+    localStorage.clear()
     vi.mocked(getNotificationPreferences).mockResolvedValue({ preferences })
     vi.mocked(updateNotificationPreferences).mockResolvedValue({
       preferences: { ...preferences, FOLLOW: false },
@@ -88,6 +90,14 @@ describe('SettingsPage', () => {
     vi.mocked(requestEmailVerification).mockResolvedValue({ message: 'Verification sent' })
     vi.mocked(revokeAllSessions).mockResolvedValue({ message: 'All account sessions have been revoked' })
     vi.mocked(deleteMyAccount).mockResolvedValue({ message: 'Account deleted' })
+  })
+
+  it('lets the user choose a theme from Settings', async () => {
+    renderPage()
+    fireEvent.change(screen.getByRole('combobox', { name: 'Theme' }), { target: { value: 'dark' } })
+
+    await waitFor(() => expect(document.documentElement).toHaveAttribute('data-theme', 'dark'))
+    expect(localStorage.getItem('me-you-theme')).toBe('dark')
   })
 
   it('loads and saves notification preferences', async () => {

@@ -1,4 +1,4 @@
-import { Bell, BookOpen, Building2, ChevronDown, Ellipsis, House, LogOut, MessageSquare, RotateCw, Search, Settings2, UserRound, Users, X } from 'lucide-react'
+import { Bell, BookOpen, Building2, ChevronDown, Ellipsis, House, LogOut, MessageSquare, Moon, RotateCw, Search, Settings2, Sun, UserRound, Users, X } from 'lucide-react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
@@ -12,6 +12,7 @@ import { getUnreadNotificationCount } from '../api/notifications'
 import { ApiError } from '../api/client'
 import { InstallPromptBanner } from './InstallPromptBanner'
 import { getPlatformAdminAccess } from '../api/moderation'
+import { useTheme } from '../hooks/useTheme'
 
 const baseTabs = [
   { to: '/', label: 'Home', icon: House, end: true },
@@ -33,6 +34,7 @@ const moreTabs = [
 
 export function AppShell() {
   const { user } = useAuth()
+  const { resolvedTheme, toggleTheme } = useTheme()
   const location = useLocation()
   const navigate = useNavigate()
   const [searchText, setSearchText] = useState('')
@@ -180,7 +182,11 @@ export function AppShell() {
             <Search size={17} aria-hidden="true" />
             <input id="topbar-search-input" value={searchText} maxLength={100} onChange={(event) => setSearchText(event.currentTarget.value)} placeholder="Search people, posts, schools" />
           </form>
-          <div className="topbar__actions"><NotificationBell />
+          <div className="topbar__actions">
+            <button className="icon-button theme-toggle" type="button" aria-label={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`} onClick={toggleTheme}>
+              {resolvedTheme === 'dark' ? <Sun size={19} aria-hidden="true" /> : <Moon size={19} aria-hidden="true" />}
+            </button>
+            <NotificationBell />
             <div className="topbar-menu" ref={avatarMenuRef}>
               <button className="topbar-avatar-trigger" type="button" aria-label="Open profile menu" aria-haspopup="true" aria-controls="topbar-profile-menu" aria-expanded={isAvatarMenuOpen} onClick={() => { setIsAvatarMenuOpen(!isAvatarMenuOpen); setIsDesktopMoreOpen(false) }}>
                 {profileQuery.isError ? <RotateCw size={16} aria-hidden="true" /> : profileQuery.data?.profile_picture_url ? <img src={profileQuery.data.profile_picture_url} alt={`${profileQuery.data.display_name}'s avatar`} /> : <span aria-hidden="true">{user?.username.slice(0, 1).toUpperCase()}</span>}

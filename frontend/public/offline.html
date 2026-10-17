@@ -5,12 +5,41 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0B6BFF" />
     <title>You're offline · Me&You</title>
+    <script>
+      (() => {
+        let choice = 'system'
+        try {
+          const stored = localStorage.getItem('me-you-theme')
+          if (stored === 'light' || stored === 'dark' || stored === 'system') choice = stored
+        } catch {
+          // Use the system theme when browser storage is unavailable.
+        }
+        const prefersDark = typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches
+        const dark = choice === 'dark' || (choice === 'system' && prefersDark)
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light'
+        document.querySelector('meta[name="theme-color"]').content = dark ? '#0B1F44' : '#0B6BFF'
+      })()
+    </script>
     <style>
       :root {
         color-scheme: light;
         font-family: Arial, sans-serif;
-        color: #0b1f44;
-        background: #eff6ff;
+        --canvas: #eff6ff;
+        --ink: #0b1f44;
+        --surface: #fff;
+        --line: #dbeafe;
+        --action: #0b6bff;
+        color: var(--ink);
+        background: var(--canvas);
+      }
+
+      :root[data-theme='dark'] {
+        color-scheme: dark;
+        --canvas: #081326;
+        --ink: #e8f0ff;
+        --surface: #0b1f44;
+        --line: #2b4266;
+        --action: #0754c7;
       }
 
       body {
@@ -18,14 +47,18 @@
         min-height: 100vh;
         margin: 0;
         place-items: center;
+        background:
+          radial-gradient(ellipse at 10% 8%, rgb(11 107 255 / 12%), transparent 32rem),
+          radial-gradient(ellipse at 95% 10%, rgb(0 194 199 / 8%), transparent 28rem),
+          var(--canvas);
       }
 
       main {
         width: min(90%, 28rem);
         padding: 2rem;
-        border: 1px solid #dbeafe;
+        border: 1px solid var(--line);
         border-radius: 1.25rem;
-        background: #fff;
+        background: var(--surface);
         text-align: center;
       }
 
@@ -34,7 +67,7 @@
         padding: 0.75rem 1rem;
         border-radius: 0.75rem;
         color: #fff;
-        background: #0b6bff;
+        background: var(--action);
         font-weight: 700;
         text-decoration: none;
       }

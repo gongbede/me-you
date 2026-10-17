@@ -5,11 +5,14 @@ import './index.css'
 import './moderation-search.css'
 import App from './App.tsx'
 import { registerServiceWorker } from './pwa/registerServiceWorker'
+import { ThemeProvider } from './hooks/useTheme'
 
 registerServiceWorker(import.meta.env.PROD)
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <ThemeProvider>
+      <App />
+    </ThemeProvider>
   </StrictMode>,
 )

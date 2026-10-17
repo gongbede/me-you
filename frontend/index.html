@@ -11,6 +11,21 @@
     <link rel="apple-touch-icon" href="/brand/apple-touch-icon-180.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>Me&You</title>
+    <script>
+      (() => {
+        let choice = 'system'
+        try {
+          const stored = localStorage.getItem('me-you-theme')
+          if (stored === 'light' || stored === 'dark' || stored === 'system') choice = stored
+        } catch {
+          // Use the system theme when browser storage is unavailable.
+        }
+        const prefersDark = typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches
+        const dark = choice === 'dark' || (choice === 'system' && prefersDark)
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light'
+        document.querySelector('meta[name="theme-color"]').content = dark ? '#0B1F44' : '#0B6BFF'
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

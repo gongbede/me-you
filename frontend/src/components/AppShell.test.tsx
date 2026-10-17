@@ -7,6 +7,7 @@ import { listConversations } from '../api/messaging'
 import { getMyProfile } from '../api/profile'
 import { getUnreadNotificationCount } from '../api/notifications'
 import { getPlatformAdminAccess } from '../api/moderation'
+import { ThemeProvider } from '../hooks/useTheme'
 import { AppShell } from './AppShell'
 
 vi.mock('../api/education', () => ({ getTeachingCourses: vi.fn(), listAdministeredInstitutions: vi.fn() }))
@@ -29,9 +30,11 @@ function renderAppShell(initialEntry = '/') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={[initialEntry]}>
-        <AppShell />
-      </MemoryRouter>
+      <ThemeProvider>
+        <MemoryRouter initialEntries={[initialEntry]}>
+          <AppShell />
+        </MemoryRouter>
+      </ThemeProvider>
     </QueryClientProvider>,
   )
 }

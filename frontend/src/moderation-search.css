@@ -2,7 +2,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  color: var(--navy, #0b1f44);
+  color: var(--navy);
 }
 
 .report-dialog-backdrop {
@@ -12,7 +12,7 @@
   display: grid;
   place-items: center;
   padding: 1rem;
-  background: rgb(11 31 68 / 55%);
+  background: rgb(var(--shadow-ink) / 55%);
 }
 
 .report-dialog {
@@ -21,8 +21,8 @@
   overflow: auto;
   padding: 1.25rem;
   border-radius: 1rem;
-  background: #fff;
-  box-shadow: 0 1rem 3rem rgb(11 31 68 / 24%);
+  background: var(--surface);
+  box-shadow: 0 1rem 3rem rgb(var(--shadow-ink) / 24%);
 }
 
 .report-dialog > header,
@@ -48,10 +48,10 @@
   gap: 0.5rem;
   width: min(32rem, 52vw);
   padding: 0.45rem 0.75rem;
-  border: 1px solid #d8e1ee;
+  border: 1px solid var(--line);
   border-radius: 999px;
-  color: #52627a;
-  background: #fff;
+  color: var(--muted);
+  background: var(--surface-field);
 }
 
 .topbar-search input,
@@ -60,13 +60,13 @@
   min-width: 0;
   border: 0;
   outline: 0;
-  color: #0b1f44;
+  color: var(--ink);
   background: transparent;
 }
 
 .topbar-search:focus-within,
 .search-page__input:focus-within {
-  outline: 2px solid #0b6bff;
+  outline: 2px solid var(--royal-blue);
   outline-offset: 2px;
 }
 
@@ -75,30 +75,30 @@
   align-items: center;
   gap: 0.65rem;
   padding: 0.8rem 1rem;
-  border: 1px solid #d8e1ee;
+  border: 1px solid var(--line);
   border-radius: 0.8rem;
-  color: #52627a;
-  background: #fff;
+  color: var(--muted);
+  background: var(--surface-field);
 }
 
 .search-tabs {
   display: flex;
   gap: 0.5rem;
   margin-block: 1rem;
-  border-bottom: 1px solid #d8e1ee;
+  border-bottom: 1px solid var(--line);
 }
 
 .search-tabs button {
   padding: 0.75rem 1rem;
   border: 0;
   border-bottom: 3px solid transparent;
-  color: #52627a;
+  color: var(--muted);
   background: transparent;
 }
 
 .search-tabs button[aria-selected='true'] {
-  border-bottom-color: #0b6bff;
-  color: #0b1f44;
+  border-bottom-color: var(--royal-blue);
+  color: var(--navy);
   font-weight: 700;
 }
 
@@ -119,15 +119,15 @@
   gap: 0.75rem;
   min-height: 3.5rem;
   padding: 0.75rem 1rem;
-  border: 1px solid #d8e1ee;
+  border: 1px solid var(--line);
   border-radius: 0.75rem;
-  color: #0b1f44;
-  background: #fff;
+  color: var(--ink);
+  background: var(--surface);
   text-decoration: none;
 }
 
 .search-results li > a:hover {
-  border-color: #0b6bff;
+  border-color: var(--royal-blue);
 }
 
 .search-results li > a > span {
@@ -135,7 +135,7 @@
 }
 
 .search-results small {
-  color: #52627a;
+  color: var(--muted);
 }
 
 .settings-blocked-list li {
@@ -163,5 +163,34 @@
 
   .admin-report-actions {
     justify-content: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .topbar {
+    gap: 6px;
+    padding-right: 10px;
+    padding-left: 10px;
+  }
+
+  .topbar-search {
+    width: clamp(78px, 25vw, 120px);
+    flex: 0 1 120px;
+    padding-inline: 7px;
+  }
+
+  .topbar-search input {
+    font-size: 0.72rem;
+  }
+
+  .topbar__actions {
+    gap: 3px;
+  }
+
+  .topbar__actions .icon-button,
+  .topbar__actions .notification-bell__trigger,
+  .topbar-avatar-trigger {
+    width: 34px;
+    height: 34px;
   }
 }
