@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { LoaderCircle, MessageCircle } from 'lucide-react'
 import { createPost, getFeed, type Post } from '../api/social'
@@ -6,7 +6,8 @@ import { getFriendlyErrorMessage } from '../api/client'
 import { PostComposer } from '../components/PostComposer'
 import { PostCard } from '../components/PostCard'
 import { useAuth } from '../hooks/useAuth'
-import { ReelsViewer } from './ReelsPage'
+
+const ReelsViewer = lazy(() => import('./ReelsPage').then((module) => ({ default: module.ReelsViewer })))
 
 const homeTabStorageKey = 'home.activeTab'
 type HomeTab = 'feed' | 'reels'
@@ -106,7 +107,7 @@ export function HomePage() {
           <button className="button button--outline" type="button" onClick={() => void feedQuery.fetchNextPage()}>Retry</button>
         </div>
       )}
-      </section> : <section id="home-panel-reels" role="tabpanel" aria-labelledby="home-tab-reels" className="home-tab-panel"><ReelsViewer embedded /></section>}
+      </section> : <section id="home-panel-reels" role="tabpanel" aria-labelledby="home-tab-reels" className="home-tab-panel"><Suspense fallback={<p role="status">Loading Reels…</p>}><ReelsViewer embedded /></Suspense></section>}
     </div>
   )
 }

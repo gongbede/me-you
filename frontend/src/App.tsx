@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { AppErrorBoundary } from './components/AppErrorBoundary'
 import { AppShell } from './components/AppShell'
@@ -21,18 +22,21 @@ import { SchoolsPage } from './pages/SchoolsPage'
 import { VerifyEmailPage } from './pages/VerifyEmailPage'
 import { TeachingPage } from './pages/TeachingPage'
 import { ClassroomsIndexPage, ClassroomsPage } from './pages/ClassroomsPage'
-import { AdministrationPage } from './pages/AdministrationPage'
 import { NotificationsPage } from './pages/NotificationsPage'
 import { MessagesPage } from './pages/MessagesPage'
-import { ReelsPage } from './pages/ReelsPage'
-import { SettingsPage } from './pages/SettingsPage'
-import { SearchPage } from './pages/SearchPage'
-import { AdminReportsPage } from './pages/AdminReportsPage'
 import { PostDetailPage } from './pages/PostDetailPage'
-import { MusicPage, VideosPage } from './pages/MediaLibraryPage'
 import { MusicPlayerProvider } from './components/MusicPlayer'
-import { VideoWatchPage } from './pages/VideoWatchPage'
-import { PlaylistDetailPage, TrackDetailPage } from './pages/MusicManagement'
+
+const AdministrationPage = lazy(() => import('./pages/AdministrationPage').then((module) => ({ default: module.AdministrationPage })))
+const AdminReportsPage = lazy(() => import('./pages/AdminReportsPage').then((module) => ({ default: module.AdminReportsPage })))
+const ReelsPage = lazy(() => import('./pages/ReelsPage').then((module) => ({ default: module.ReelsPage })))
+const SettingsPage = lazy(() => import('./pages/SettingsPage').then((module) => ({ default: module.SettingsPage })))
+const SearchPage = lazy(() => import('./pages/SearchPage').then((module) => ({ default: module.SearchPage })))
+const VideosPage = lazy(() => import('./pages/MediaLibraryPage').then((module) => ({ default: module.VideosPage })))
+const MusicPage = lazy(() => import('./pages/MediaLibraryPage').then((module) => ({ default: module.MusicPage })))
+const VideoWatchPage = lazy(() => import('./pages/VideoWatchPage').then((module) => ({ default: module.VideoWatchPage })))
+const TrackDetailPage = lazy(() => import('./pages/MusicManagement').then((module) => ({ default: module.TrackDetailPage })))
+const PlaylistDetailPage = lazy(() => import('./pages/MusicManagement').then((module) => ({ default: module.PlaylistDetailPage })))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -47,6 +51,7 @@ export default function App() {
         <BrowserRouter>
           <MusicPlayerProvider>
           <AppErrorBoundary>
+            <Suspense fallback={<p role="status" className="learning-loading">Loading page…</p>}>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
@@ -93,6 +98,7 @@ export default function App() {
               </Route>
               <Route path="*" element={<NotFoundPage />} />
             </Routes>
+            </Suspense>
           </AppErrorBoundary>
           </MusicPlayerProvider>
         </BrowserRouter>
