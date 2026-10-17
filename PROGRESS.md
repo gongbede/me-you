@@ -1,0 +1,7 @@
+Task 1: Navigation, notifications and top bar — done — commit: 7e7099f — note: sidebar and notifications navigation updated with unread count and settings route.
+Task 2: Installable app (PWA) and offline shell — not started — commit: pending — note: pending.
+Task 3: Report, block and admin moderation — not started — commit: pending — note: pending.
+Task 4: Search — not started — commit: pending — note: pending.
+Task 5: Profiles, follows and settings — not started — commit: pending — note: pending.
+Task 6: Feed and post quality — not started — commit: pending — note: pending.
+Task 7: Reels completion — not started — commit: pending — note: pending.

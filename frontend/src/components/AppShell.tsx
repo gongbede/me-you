@@ -8,6 +8,7 @@ import { getTeachingCourses, listAdministeredInstitutions } from '../api/educati
 import { NotificationBell } from './NotificationBell'
 import { listConversations } from '../api/messaging'
 import { getMyProfile } from '../api/profile'
+import { getUnreadNotificationCount } from '../api/notifications'
 import { ApiError } from '../api/client'
 
 const baseTabs = [
@@ -16,6 +17,12 @@ const baseTabs = [
   { to: '/schools', label: 'Schools', icon: Building2, end: false },
   { to: '/my-courses', label: 'My Courses', icon: BookOpen, end: false },
   { to: '/profile', label: 'Profile', icon: UserRound, end: false },
+]
+
+const sidebarExtraTabs = [
+  { to: '/classrooms', label: 'Classrooms', icon: Users, end: false },
+  { to: '/notifications', label: 'Notifications', icon: Bell, end: false },
+  { to: '/settings', label: 'Settings', icon: Settings2, end: false },
 ]
 
 export function AppShell() {
@@ -52,16 +59,25 @@ export function AppShell() {
     retry: false,
   })
   const unreadMessages = messagesQuery.data?.reduce((total, conversation) => total + conversation.unread_count, 0) ?? 0
+  const notificationUnreadQuery = useQuery({
+    queryKey: ['notifications', 'unread-count'],
+    queryFn: getUnreadNotificationCount,
+    refetchInterval: isVisible ? 30_000 : false,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+  })
+  const unreadNotifications = notificationUnreadQuery.data?.unread_count ?? 0
   const tabs = [
     ...baseTabs.slice(0, 4),
     ...(teachingQuery.data?.length ? [{ to: '/teaching', label: 'Teaching', icon: BookOpen, end: false }] : []),
     ...(administrationQuery.data?.length ? [{ to: '/administration', label: 'Administration', icon: Settings2, end: false }] : []),
+    ...sidebarExtraTabs,
     baseTabs[4],
   ]
   const learningPath = location.pathname.startsWith('/courses/') || location.pathname.startsWith('/lessons/')
-  const isMorePath = ['/profile', '/teaching', '/administration', '/classrooms', '/notifications', '/logout'].some((path) => location.pathname === path || location.pathname.startsWith(`${path}/`))
+  const isMorePath = ['/profile', '/teaching', '/administration', '/classrooms', '/notifications', '/settings', '/logout'].some((path) => location.pathname === path || location.pathname.startsWith(`${path}/`))
   const learningTabIsActive = (to: string, isActive: boolean) =>
-    isActive || (to === '/my-courses' && learningPath) || (to === '/teaching' && location.pathname.startsWith('/teaching')) || (to === '/administration' && location.pathname.startsWith('/administration')) || (to === '/messages' && location.pathname.startsWith('/messages'))
+    isActive || (to === '/my-courses' && learningPath) || (to === '/teaching' && location.pathname.startsWith('/teaching')) || (to === '/administration' && location.pathname.startsWith('/administration')) || (to === '/messages' && location.pathname.startsWith('/messages')) || (to === '/notifications' && location.pathname.startsWith('/notifications')) || (to === '/classrooms' && location.pathname.startsWith('/classrooms')) || (to === '/settings' && location.pathname.startsWith('/settings'))
 
   useEffect(() => {
     if (!isMoreOpen) return
@@ -102,9 +118,9 @@ export function AppShell() {
         <div className="sidebar__section-label">YOUR SPACE</div>
         <nav className="sidebar__nav">
           {tabs.map(({ to, label, icon: Icon, end }) => (
-            <NavLink aria-label={label === 'Messages' && unreadMessages > 0 ? `Messages, ${unreadMessages} unread` : undefined} className={({ isActive }) => `nav-link ${learningTabIsActive(to, isActive) ? 'is-active' : ''}`} end={end} key={to} to={to}>
+            <NavLink aria-label={label === 'Messages' && unreadMessages > 0 ? `Messages, ${unreadMessages} unread` : label === 'Notifications' && unreadNotifications > 0 ? `Notifications, ${unreadNotifications} unread` : undefined} className={({ isActive }) => `nav-link ${learningTabIsActive(to, isActive) ? 'is-active' : ''}`} end={end} key={to} to={to}>
               <Icon size={19} strokeWidth={2} aria-hidden="true" />
-              <span>{label}{label === 'Messages' && unreadMessages > 0 && <span className="nav-unread-badge">{unreadMessages > 99 ? '99+' : unreadMessages}</span>}</span>
+              <span>{label}{(label === 'Messages' && unreadMessages > 0) || (label === 'Notifications' && unreadNotifications > 0) ? <span className="nav-unread-badge">{(label === 'Messages' ? unreadMessages : unreadNotifications) > 99 ? '99+' : (label === 'Messages' ? unreadMessages : unreadNotifications)}</span> : null}</span>
             </NavLink>
           ))}
           {teachingQuery.isError && (
@@ -123,6 +139,12 @@ export function AppShell() {
             <button className="nav-link nav-link--retry" type="button" onClick={() => void messagesQuery.refetch()}>
               <RotateCw size={19} aria-hidden="true" />
               <span>Retry Messages</span>
+            </button>
+          )}
+          {notificationUnreadQuery.isError && (
+            <button className="nav-link nav-link--retry" type="button" onClick={() => void notificationUnreadQuery.refetch()}>
+              <RotateCw size={19} aria-hidden="true" />
+              <span>Retry Notifications</span>
             </button>
           )}
         </nav>
@@ -175,7 +197,8 @@ export function AppShell() {
             {teachingQuery.data?.length ? <NavLink className={({ isActive }) => `more-sheet__link${isActive || location.pathname.startsWith('/teaching') ? ' is-active' : ''}`} to="/teaching" onClick={closeMoreSheet}><BookOpen size={19} aria-hidden="true" /><span>Teaching</span></NavLink> : null}
             {administrationQuery.data?.length ? <NavLink className={({ isActive }) => `more-sheet__link${isActive || location.pathname.startsWith('/administration') ? ' is-active' : ''}`} to="/administration" onClick={closeMoreSheet}><Settings2 size={19} aria-hidden="true" /><span>Administration</span></NavLink> : null}
             <NavLink className={({ isActive }) => `more-sheet__link${isActive ? ' is-active' : ''}`} to="/classrooms" onClick={closeMoreSheet}><Users size={19} aria-hidden="true" /><span>Classrooms</span></NavLink>
-            <NavLink className={({ isActive }) => `more-sheet__link${isActive ? ' is-active' : ''}`} to="/notifications" onClick={closeMoreSheet}><Bell size={19} aria-hidden="true" /><span>Notifications</span></NavLink>
+            <NavLink className={({ isActive }) => `more-sheet__link${isActive || location.pathname.startsWith('/notifications') ? ' is-active' : ''}`} to="/notifications" onClick={closeMoreSheet}><Bell size={19} aria-hidden="true" /><span>Notifications{unreadNotifications > 0 ? ` (${unreadNotifications})` : ''}</span></NavLink>
+            <NavLink className={({ isActive }) => `more-sheet__link${isActive || location.pathname.startsWith('/settings') ? ' is-active' : ''}`} to="/settings" onClick={closeMoreSheet}><Settings2 size={19} aria-hidden="true" /><span>Settings</span></NavLink>
             <NavLink className={({ isActive }) => `more-sheet__link${isActive ? ' is-active' : ''}`} to="/logout" onClick={closeMoreSheet}><LogOut size={19} aria-hidden="true" /><span>Sign out</span></NavLink>
           </nav>
         </section>

@@ -25,6 +25,7 @@ import { AdministrationPage } from './pages/AdministrationPage'
 import { NotificationsPage } from './pages/NotificationsPage'
 import { MessagesPage } from './pages/MessagesPage'
 import { ReelsPage } from './pages/ReelsPage'
+import { SettingsPage } from './pages/SettingsPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -54,6 +55,7 @@ export default function App() {
                   <Route path="administration" element={<AdministrationPage />} />
                   <Route path="administration/schools/:institutionId" element={<AdministrationPage />} />
                   <Route path="notifications" element={<NotificationsPage />} />
+                  <Route path="settings" element={<SettingsPage />} />
                   <Route path="messages" element={<MessagesPage />} />
                   <Route path="messages/:conversationId" element={<MessagesPage />} />
                   <Route path="reels" element={<ReelsPage />} />
