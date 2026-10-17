@@ -25,6 +25,11 @@ CORS_ORIGINS = tuple(
     for origin in os.getenv("ME_YOU_CORS_ORIGINS", "").split(",")
     if origin.strip()
 )
+TRUSTED_ORIGINS = tuple(
+    origin.strip()
+    for origin in os.getenv("ME_YOU_TRUSTED_ORIGINS", "").split(",")
+    if origin.strip()
+)
 
 
 def validate_jwt_secret(secret: str | None = None, environment: str | None = None) -> str:
@@ -58,6 +63,7 @@ def validate_production_config(
     secret: str | None = None,
     database_url: str | None = None,
     cors_origins: tuple[str, ...] | None = None,
+    trusted_origins: tuple[str, ...] | None = None,
     storage_backend: str | None = None,
     s3_bucket: str | None = None,
     s3_endpoint_url: str | None = None,
@@ -79,6 +85,11 @@ def validate_production_config(
     resolved_origins = cors_origins if cors_origins is not None else CORS_ORIGINS
     if not resolved_origins or "*" in resolved_origins:
         raise ValueError("ME_YOU_CORS_ORIGINS must contain explicit origins in production")
+    resolved_trusted_origins = (
+        trusted_origins if trusted_origins is not None else TRUSTED_ORIGINS
+    )
+    if any("*" in origin for origin in resolved_trusted_origins):
+        raise ValueError("ME_YOU_TRUSTED_ORIGINS must contain explicit origins in production")
     resolved_storage_backend = storage_backend or os.getenv("STORAGE_BACKEND", "local").lower()
     if resolved_storage_backend != "s3":
         raise ValueError("STORAGE_BACKEND must be s3 in production")

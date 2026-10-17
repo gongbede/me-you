@@ -20,6 +20,7 @@ from .config import (
     CORS_ORIGINS,
     RATE_LIMITS,
     RATE_LIMIT_ENABLED,
+    TRUSTED_ORIGINS,
     VERSION,
     validate_production_config,
 )
@@ -103,7 +104,21 @@ def request_origin(request: Request) -> str | None:
 
 def origin_is_allowed(request: Request) -> bool:
     origin = request_origin(request)
-    return origin is not None and origin in CORS_ORIGINS
+    if origin is None:
+        return False
+    if origin in CORS_ORIGINS or origin in TRUSTED_ORIGINS:
+        return True
+    if APP_ENV != "development":
+        return False
+    parsed = urlsplit(origin)
+    return (
+        "https://*.app.github.dev" in TRUSTED_ORIGINS
+        and parsed.scheme == "https"
+        and parsed.hostname is not None
+        and parsed.hostname != "app.github.dev"
+        and parsed.hostname.endswith(".app.github.dev")
+        and parsed.netloc.lower() == parsed.hostname
+    )
 
 
 def csrf_rejection(request_id: str, detail: str, *, status_code: int = 403) -> JSONResponse:

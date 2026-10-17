@@ -189,6 +189,7 @@ def test_cookie_requests_require_allowed_origin_and_session_bound_csrf(monkeypat
     import app.main as app_main
 
     monkeypatch.setattr(app_main, "CORS_ORIGINS", ("http://testserver",))
+    monkeypatch.setattr(app_main, "TRUSTED_ORIGINS", ("https://*.app.github.dev",))
     monkeypatch.setattr(app_main, "RATE_LIMIT_ENABLED", False)
     csrf_token = "c" * 43
     cookie_token = create_access_token(uuid.uuid4(), csrf_token=csrf_token)
@@ -203,6 +204,14 @@ def test_cookie_requests_require_allowed_origin_and_session_bound_csrf(monkeypat
             cookies={AUTH_SESSION_COOKIE_NAME: cookie_token},
             headers={"Origin": "https://untrusted.example", "X-CSRF-Token": csrf_token},
         )
+        trusted_origin = client.post(
+            "/api/v1/not-a-route",
+            cookies={AUTH_SESSION_COOKIE_NAME: cookie_token},
+            headers={
+                "Origin": "https://example-5173.app.github.dev",
+                "X-CSRF-Token": csrf_token,
+            },
+        )
         accepted = client.post(
             "/api/v1/not-a-route",
             cookies={AUTH_SESSION_COOKIE_NAME: cookie_token},
@@ -210,7 +219,40 @@ def test_cookie_requests_require_allowed_origin_and_session_bound_csrf(monkeypat
         )
     assert missing_csrf.status_code == 403
     assert bad_origin.status_code == 403
+    assert trusted_origin.status_code == 404
     assert accepted.status_code == 404
+
+
+def test_protected_request_accepts_cookie_session(monkeypatch):
+    from app.database import get_postgres_session
+
+    monkeypatch.setattr("app.main.RATE_LIMIT_ENABLED", False)
+    user = User(
+        id=uuid.uuid4(), username="cookie-user", email="cookie@example.test",
+        password_hash="stored-hash", token_version=0, is_active=True,
+    )
+    csrf_token = "c" * 43
+
+    async def override_database():
+        yield AuthSession([user])
+
+    app.dependency_overrides[get_postgres_session] = override_database
+    try:
+        with TestClient(app) as client:
+            response = client.get(
+                "/api/v1/account/session",
+                cookies={
+                    AUTH_SESSION_COOKIE_NAME: create_access_token(
+                        user.id, csrf_token=csrf_token,
+                    ),
+                },
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["id"] == str(user.id)
+    assert response.json()["csrf_token"] == csrf_token
 
 
 def test_cookie_login_requires_allowed_origin_and_expired_cookie_is_cleared(monkeypatch):

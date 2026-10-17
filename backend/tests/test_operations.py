@@ -98,6 +98,7 @@ class OperationsTests(unittest.TestCase):
             {"secret": "short", "database_url": "postgresql+asyncpg://db/me_you", "cors_origins": ("https://app.example.com",)},
             {"secret": "a" * 48, "database_url": "", "cors_origins": ("https://app.example.com",)},
             {"secret": "a" * 48, "database_url": "postgresql+asyncpg://db/me_you", "cors_origins": ("*",)},
+            {"secret": "a" * 48, "database_url": "postgresql+asyncpg://db/me_you", "cors_origins": ("https://app.example.com",), "trusted_origins": ("https://*.app.github.dev",)},
         ):
             with self.subTest(configuration=configuration), self.assertRaises(ValueError):
                 validate_production_config(environment="production", **configuration)
