@@ -10,6 +10,7 @@ import { listConversations } from '../api/messaging'
 import { getMyProfile } from '../api/profile'
 import { getUnreadNotificationCount } from '../api/notifications'
 import { ApiError } from '../api/client'
+import { InstallPromptBanner } from './InstallPromptBanner'
 
 const baseTabs = [
   { to: '/', label: 'Home', icon: House, end: true },
@@ -173,6 +174,7 @@ export function AppShell() {
           <span className="topbar__greeting">A brighter day to learn something.</span>
           <div className="topbar__actions"><span className="topbar__spark" aria-hidden="true">✦</span><NotificationBell /></div>
         </header>
+        <InstallPromptBanner />
         <main className="app-main"><Outlet /></main>
       </div>
 

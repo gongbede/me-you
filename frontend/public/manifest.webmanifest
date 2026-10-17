@@ -1,7 +1,9 @@
 {
   "name": "Me&You",
   "short_name": "Me&You",
+  "description": "Learn · Connect · Grow",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#FFFFFF",
   "theme_color": "#0B6BFF",

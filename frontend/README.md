@@ -28,6 +28,8 @@ npm run build
 
 `npm run gen:api` reads `openapi.json`. Generate it without starting the API with `python ../backend/scripts/export_openapi.py` from this directory after installing backend requirements.
 
+Production builds register the PWA service worker. It caches only the static app shell, bundled assets, brand icons, and offline notice; API responses and uploaded media are never cached. The install prompt appears only when the browser exposes its installation event, and dismissing it is remembered in local storage.
+
 ## Authentication note
 
 The current foundation stores bearer tokens in `sessionStorage` for the current browser session. Replace this with a server-managed `HttpOnly`, `Secure`, `SameSite` cookie flow before production use; JavaScript-accessible token storage is not the long-term target.
