@@ -115,24 +115,27 @@ async def seed_demo(session_factory: Any = None) -> list[tuple[str, str, str]]:
         enrolled_user = users["demo.enrolled@example.test"]
         invited_user = users["demo.invited@example.test"]
 
-        await _get_or_create(
+        admin_membership = await _get_or_create(
             session,
             InstitutionMembership,
             {"user_id": admin_user.id, "institution_id": institution.id},
             {"role": "ADMIN"},
         )
-        await _get_or_create(
+        admin_membership.role = "ADMIN"
+        teacher_membership = await _get_or_create(
             session,
             InstitutionMembership,
             {"user_id": teacher_user.id, "institution_id": institution.id},
             {"role": "TEACHER"},
         )
+        teacher_membership.role = "TEACHER"
         enrolled_membership = await _get_or_create(
             session,
             InstitutionMembership,
             {"user_id": enrolled_user.id, "institution_id": institution.id},
             {"role": "STUDENT"},
         )
+        enrolled_membership.role = "STUDENT"
         teacher = await _get_or_create(
             session,
             Teacher,

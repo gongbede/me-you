@@ -6,12 +6,14 @@ import { getTeachingCourses, listAdministeredInstitutions } from '../api/educati
 import { listConversations } from '../api/messaging'
 import { getMyProfile } from '../api/profile'
 import { getUnreadNotificationCount } from '../api/notifications'
+import { getPlatformAdminAccess } from '../api/moderation'
 import { AppShell } from './AppShell'
 
 vi.mock('../api/education', () => ({ getTeachingCourses: vi.fn(), listAdministeredInstitutions: vi.fn() }))
 vi.mock('../api/messaging', () => ({ listConversations: vi.fn() }))
 vi.mock('../api/profile', () => ({ getMyProfile: vi.fn() }))
 vi.mock('../api/notifications', () => ({ getUnreadNotificationCount: vi.fn() }))
+vi.mock('../api/moderation', () => ({ getPlatformAdminAccess: vi.fn() }))
 vi.mock('../hooks/useAuth', () => ({
   useAuth: () => ({ user: { id: 'teacher-id', username: 'teacher', email: 'teacher@example.test' } }),
 }))
@@ -21,6 +23,7 @@ const getAdminInstitutions = vi.mocked(listAdministeredInstitutions)
 const getConversations = vi.mocked(listConversations)
 const getProfile = vi.mocked(getMyProfile)
 const getUnreadNotifications = vi.mocked(getUnreadNotificationCount)
+const getPlatformAccess = vi.mocked(getPlatformAdminAccess)
 
 function renderAppShell(initialEntry = '/') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -40,6 +43,7 @@ describe('AppShell Teaching navigation', () => {
     getAdminInstitutions.mockReset().mockResolvedValue([])
     getConversations.mockReset().mockResolvedValue([])
     getUnreadNotifications.mockReset().mockResolvedValue({ unread_count: 0 })
+    getPlatformAccess.mockReset().mockResolvedValue({ is_platform_admin: false })
     getProfile.mockReset().mockResolvedValue({
       user_id: 'teacher-id',
       display_name: 'Teacher',
@@ -56,9 +60,9 @@ describe('AppShell Teaching navigation', () => {
   it('shows the first-letter fallback when the user has no avatar', async () => {
     renderAppShell()
 
-    const navigation = screen.getByRole('complementary', { name: 'Main navigation' })
-    expect(await within(navigation).findByText('T', { selector: '.avatar-initial' })).toBeInTheDocument()
-    expect(within(navigation).queryByRole('img', { name: "Teacher's avatar" })).not.toBeInTheDocument()
+    const avatarButton = screen.getByRole('button', { name: 'Open profile menu' })
+    expect(await within(avatarButton).findByText('T')).toBeInTheDocument()
+    expect(within(avatarButton).queryByRole('img')).not.toBeInTheDocument()
   })
 
   it('shows the user avatar image when their profile has one', async () => {
@@ -75,18 +79,16 @@ describe('AppShell Teaching navigation', () => {
     })
     renderAppShell()
 
-    const navigation = screen.getByRole('complementary', { name: 'Main navigation' })
-    expect(await within(navigation).findByRole('img', { name: "Teacher's avatar" })).toHaveAttribute(
-      'src',
-      'https://example.test/teacher.png',
-    )
+    const avatarButton = screen.getByRole('button', { name: 'Open profile menu' })
+    expect(await within(avatarButton).findByRole('img')).toHaveAttribute('src', 'https://example.test/teacher.png')
   })
 
   it('offers a retry when course lookup fails and restores Teaching on success', async () => {
     getCourses.mockRejectedValueOnce(new Error('Network unavailable')).mockResolvedValueOnce([{ id: 'course-1' }] as never)
     renderAppShell()
 
-    const mainNavigation = screen.getByRole('complementary', { name: 'Main navigation' })
+    const mainNavigation = screen.getByRole('navigation', { name: 'Main navigation' })
+    fireEvent.click(within(mainNavigation).getByRole('button', { name: 'More navigation' }))
     const retry = await within(mainNavigation).findByRole('button', { name: 'Retry Teaching' })
     fireEvent.click(retry)
 
@@ -99,7 +101,8 @@ describe('AppShell Teaching navigation', () => {
     getAdminInstitutions.mockResolvedValue([{ id: 'school-1' }] as never)
     renderAppShell()
 
-    const mainNavigation = screen.getByRole('complementary', { name: 'Main navigation' })
+    const mainNavigation = screen.getByRole('navigation', { name: 'Main navigation' })
+    fireEvent.click(within(mainNavigation).getByRole('button', { name: 'More navigation' }))
     expect(await within(mainNavigation).findByRole('link', { name: 'Administration' })).toBeInTheDocument()
   })
 
@@ -117,7 +120,8 @@ describe('AppShell Teaching navigation', () => {
     getAdminInstitutions.mockRejectedValueOnce(new Error('Admin lookup unavailable')).mockResolvedValueOnce([{ id: 'school-1' }] as never)
     renderAppShell()
 
-    const mainNavigation = screen.getByRole('complementary', { name: 'Main navigation' })
+    const mainNavigation = screen.getByRole('navigation', { name: 'Main navigation' })
+    fireEvent.click(within(mainNavigation).getByRole('button', { name: 'More navigation' }))
     fireEvent.click(await within(mainNavigation).findByRole('button', { name: 'Retry Administration' }))
     expect(await within(mainNavigation).findByRole('link', { name: 'Administration' })).toBeInTheDocument()
     expect(getAdminInstitutions).toHaveBeenCalledTimes(2)
@@ -132,7 +136,7 @@ describe('AppShell Teaching navigation', () => {
     }])
     renderAppShell()
 
-    const mainNavigation = screen.getByRole('complementary', { name: 'Main navigation' })
+    const mainNavigation = screen.getByRole('navigation', { name: 'Main navigation' })
     expect(await within(mainNavigation).findByRole('link', { name: 'Messages, 4 unread' })).toBeInTheDocument()
   })
 
@@ -172,8 +176,9 @@ describe('AppShell Teaching navigation', () => {
     getAdminInstitutions.mockResolvedValue([{ id: 'school-1' }] as never)
     renderAppShell()
 
-    fireEvent.click(screen.getByRole('button', { name: 'More' }))
-    expect(await within(await screen.findByRole('dialog', { name: 'More' })).findByRole('link', { name: 'Administration' })).toBeInTheDocument()
+    const desktopNavigation = screen.getByRole('navigation', { name: 'Main navigation' })
+    fireEvent.click(within(desktopNavigation).getByRole('button', { name: 'More navigation' }))
+    expect(await within(desktopNavigation).findByRole('link', { name: 'Administration' })).toBeInTheDocument()
   })
 
   it('keeps active states on nested message and course classroom routes', async () => {
@@ -181,14 +186,50 @@ describe('AppShell Teaching navigation', () => {
     getAdminInstitutions.mockResolvedValue([])
     renderAppShell('/messages/conversation-1')
 
-    const sidebar = screen.getByRole('complementary', { name: 'Main navigation' })
+    const desktopNavigation = screen.getByRole('navigation', { name: 'Main navigation' })
     const mobileNavigation = screen.getByRole('navigation', { name: 'Mobile navigation' })
-    expect(within(sidebar).getByRole('link', { name: 'Messages' })).toHaveClass('is-active')
+    expect(within(desktopNavigation).getByRole('link', { name: 'Messages' })).toHaveClass('is-active')
     expect(within(mobileNavigation).getByRole('link', { name: 'Messages' })).toHaveClass('is-active')
 
     cleanup()
     renderAppShell('/courses/course-1/classrooms')
-    expect(within(screen.getByRole('complementary', { name: 'Main navigation' })).getByRole('link', { name: 'My Courses' })).toHaveClass('is-active')
+    expect(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('link', { name: 'My Courses' })).toHaveClass('is-active')
     expect(within(screen.getByRole('navigation', { name: 'Mobile navigation' })).getByRole('link', { name: 'My Courses' })).toHaveClass('is-active')
+  })
+
+  it('exposes desktop navigation and the five-item phone bar', async () => {
+    getCourses.mockResolvedValue([])
+    renderAppShell()
+
+    expect(screen.getByRole('navigation', { name: 'Main navigation' })).toBeInTheDocument()
+    const phoneNavigation = screen.getByRole('navigation', { name: 'Mobile navigation' })
+    expect(within(phoneNavigation).getAllByRole('link')).toHaveLength(4)
+    expect(within(phoneNavigation).getByRole('button', { name: 'More' })).toBeInTheDocument()
+  })
+
+  it('closes desktop More on Escape and outside click', () => {
+    getCourses.mockResolvedValue([])
+    renderAppShell()
+    const desktopNavigation = screen.getByRole('navigation', { name: 'Main navigation' })
+    const trigger = within(desktopNavigation).getByRole('button', { name: 'More navigation' })
+
+    fireEvent.click(trigger)
+    expect(within(desktopNavigation).getByRole('navigation', { name: 'More navigation' })).toBeInTheDocument()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(within(desktopNavigation).queryByRole('navigation', { name: 'More navigation' })).not.toBeInTheDocument()
+
+    fireEvent.click(trigger)
+    fireEvent.mouseDown(document.body)
+    expect(within(desktopNavigation).queryByRole('navigation', { name: 'More navigation' })).not.toBeInTheDocument()
+  })
+
+  it('shows platform Reports only for platform administrators', async () => {
+    getCourses.mockResolvedValue([])
+    getPlatformAccess.mockResolvedValue({ is_platform_admin: true })
+    renderAppShell()
+
+    const desktopNavigation = screen.getByRole('navigation', { name: 'Main navigation' })
+    fireEvent.click(within(desktopNavigation).getByRole('button', { name: 'More navigation' }))
+    expect(await within(desktopNavigation).findByRole('link', { name: 'Reports' })).toBeInTheDocument()
   })
 })

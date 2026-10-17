@@ -1,4 +1,4 @@
-import { Bell, BookOpen, Building2, Ellipsis, House, LogOut, MessageSquare, RotateCw, Search, Settings2, UserRound, Users, X } from 'lucide-react'
+import { Bell, BookOpen, Building2, ChevronDown, Ellipsis, House, LogOut, MessageSquare, RotateCw, Search, Settings2, UserRound, Users, X } from 'lucide-react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
@@ -21,11 +21,14 @@ const baseTabs = [
   { to: '/profile', label: 'Profile', icon: UserRound, end: false },
 ]
 
-const sidebarExtraTabs = [
-  { to: '/search', label: 'Search', icon: Search, end: false },
+const desktopPrimaryTabs = baseTabs.slice(0, 4)
+
+const moreTabs = [
   { to: '/classrooms', label: 'Classrooms', icon: Users, end: false },
+  { to: '/search', label: 'Search', icon: Search, end: false },
   { to: '/notifications', label: 'Notifications', icon: Bell, end: false },
   { to: '/settings', label: 'Settings', icon: Settings2, end: false },
+  baseTabs[4],
 ]
 
 export function AppShell() {
@@ -35,8 +38,12 @@ export function AppShell() {
   const [searchText, setSearchText] = useState('')
   const [isVisible, setIsVisible] = useState(() => !document.hidden)
   const [isMoreOpen, setIsMoreOpen] = useState(false)
+  const [isDesktopMoreOpen, setIsDesktopMoreOpen] = useState(false)
+  const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false)
   const moreTriggerRef = useRef<HTMLButtonElement>(null)
   const moreSheetRef = useRef<HTMLElement>(null)
+  const desktopMoreRef = useRef<HTMLDivElement>(null)
+  const avatarMenuRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const update = () => setIsVisible(!document.hidden)
     document.addEventListener('visibilitychange', update)
@@ -73,14 +80,6 @@ export function AppShell() {
     refetchOnWindowFocus: true,
   })
   const unreadNotifications = notificationUnreadQuery.data?.unread_count ?? 0
-  const tabs = [
-    ...baseTabs.slice(0, 4),
-    ...(teachingQuery.data?.length ? [{ to: '/teaching', label: 'Teaching', icon: BookOpen, end: false }] : []),
-    ...(administrationQuery.data?.length ? [{ to: '/administration', label: 'Administration', icon: Settings2, end: false }] : []),
-    ...sidebarExtraTabs,
-    ...(platformAdminQuery.data?.is_platform_admin ? [{ to: '/admin/reports', label: 'Reports', icon: Bell, end: false }] : []),
-    baseTabs[4],
-  ]
   const learningPath = location.pathname.startsWith('/courses/') || location.pathname.startsWith('/lessons/')
   const isMorePath = ['/profile', '/teaching', '/administration', '/classrooms', '/notifications', '/settings', '/logout', '/search', '/admin'].some((path) => location.pathname === path || location.pathname.startsWith(`${path}/`))
   const learningTabIsActive = (to: string, isActive: boolean) =>
@@ -90,6 +89,27 @@ export function AppShell() {
     if (!isMoreOpen) return
     moreSheetRef.current?.querySelector<HTMLElement>('[data-more-first]')?.focus()
   }, [isMoreOpen])
+
+  useEffect(() => {
+    if (!isDesktopMoreOpen && !isAvatarMenuOpen) return
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      const target = event.target
+      if (!(target instanceof Node)) return
+      if (!desktopMoreRef.current?.contains(target)) setIsDesktopMoreOpen(false)
+      if (!avatarMenuRef.current?.contains(target)) setIsAvatarMenuOpen(false)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setIsDesktopMoreOpen(false)
+      setIsAvatarMenuOpen(false)
+    }
+    document.addEventListener('mousedown', closeOnOutsideClick)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('mousedown', closeOnOutsideClick)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [isDesktopMoreOpen, isAvatarMenuOpen])
 
   function closeMoreSheet() {
     setIsMoreOpen(false)
@@ -120,69 +140,58 @@ export function AppShell() {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar" aria-label="Main navigation">
-        <Logo variant="horizontal-white" size={38} />
-        <div className="sidebar__section-label">YOUR SPACE</div>
-        <nav className="sidebar__nav">
-          {tabs.map(({ to, label, icon: Icon, end }) => (
-            <NavLink aria-label={label === 'Messages' && unreadMessages > 0 ? `Messages, ${unreadMessages} unread` : label === 'Notifications' && unreadNotifications > 0 ? `Notifications, ${unreadNotifications} unread` : undefined} className={({ isActive }) => `nav-link ${learningTabIsActive(to, isActive) ? 'is-active' : ''}`} end={end} key={to} to={to}>
-              <Icon size={19} strokeWidth={2} aria-hidden="true" />
-              <span>{label}{(label === 'Messages' && unreadMessages > 0) || (label === 'Notifications' && unreadNotifications > 0) ? <span className="nav-unread-badge">{(label === 'Messages' ? unreadMessages : unreadNotifications) > 99 ? '99+' : (label === 'Messages' ? unreadMessages : unreadNotifications)}</span> : null}</span>
-            </NavLink>
-          ))}
-          {teachingQuery.isError && (
-            <button className="nav-link nav-link--retry" type="button" onClick={() => void teachingQuery.refetch()}>
-              <RotateCw size={19} aria-hidden="true" />
-              <span>Retry Teaching</span>
-            </button>
-          )}
-          {administrationQuery.isError && (
-            <button className="nav-link nav-link--retry" type="button" onClick={() => void administrationQuery.refetch()}>
-              <RotateCw size={19} aria-hidden="true" />
-              <span>Retry Administration</span>
-            </button>
-          )}
-          {messagesQuery.isError && (
-            <button className="nav-link nav-link--retry" type="button" onClick={() => void messagesQuery.refetch()}>
-              <RotateCw size={19} aria-hidden="true" />
-              <span>Retry Messages</span>
-            </button>
-          )}
-          {notificationUnreadQuery.isError && (
-            <button className="nav-link nav-link--retry" type="button" onClick={() => void notificationUnreadQuery.refetch()}>
-              <RotateCw size={19} aria-hidden="true" />
-              <span>Retry Notifications</span>
-            </button>
-          )}
-        </nav>
-        <div className="sidebar__bottom">
-          <div className="sidebar__user">
-            {profileQuery.isError ? (
-              <button className="avatar-initial" type="button" aria-label="Retry loading avatar" onClick={() => void profileQuery.refetch()}>
-                <RotateCw size={16} aria-hidden="true" />
-              </button>
-            ) : profileQuery.data?.profile_picture_url ? (
-              <img className="avatar-initial sidebar__avatar-image" src={profileQuery.data.profile_picture_url} alt={`${profileQuery.data.display_name}'s avatar`} />
-            ) : (
-              <span className="avatar-initial" aria-hidden="true">{user?.username.slice(0, 1).toUpperCase()}</span>
-            )}
-            <span className="sidebar__user-copy"><strong>{user?.username}</strong><small>{user?.email}</small></span>
-          </div>
-          <NavLink className="nav-link nav-link--quiet" to="/logout">
-            <LogOut size={18} aria-hidden="true" /><span>Sign out</span>
-          </NavLink>
-        </div>
-      </aside>
-
       <div className="app-column">
         <header className="topbar">
           <div className="topbar__mobile-brand"><Logo variant="mark" size={36} /></div>
+          <NavLink className="topbar__brand" to="/" aria-label="Me&You home"><Logo variant="horizontal" size={36} /></NavLink>
+          <nav className="topbar__primary-nav" aria-label="Main navigation">
+            {desktopPrimaryTabs.map(({ to, label, icon: Icon, end }) => (
+              <NavLink aria-label={label === 'Messages' && unreadMessages > 0 ? `Messages, ${unreadMessages} unread` : label} className={({ isActive }) => `topbar__nav-link ${learningTabIsActive(to, isActive) ? 'is-active' : ''}`} end={end} key={to} to={to}>
+                <Icon size={17} aria-hidden="true" /><span>{label}</span>
+                {label === 'Messages' && unreadMessages > 0 && <span className="nav-unread-badge">{unreadMessages > 99 ? '99+' : unreadMessages}</span>}
+              </NavLink>
+            ))}
+            {moreTabs.map(({ to, label, icon: Icon, end }) => (
+              <NavLink aria-label={label === 'Notifications' && unreadNotifications > 0 ? `Notifications, ${unreadNotifications} unread` : label} className={({ isActive }) => `topbar__nav-link topbar__nav-link--collapsible ${learningTabIsActive(to, isActive) ? 'is-active' : ''}`} end={end} key={to} to={to}>
+                <Icon size={17} aria-hidden="true" /><span>{label}</span>
+                {label === 'Notifications' && unreadNotifications > 0 && <span className="nav-unread-badge">{unreadNotifications > 99 ? '99+' : unreadNotifications}</span>}
+              </NavLink>
+            ))}
+            <div className="topbar-menu" ref={desktopMoreRef}>
+              <button className="topbar__nav-link topbar__menu-trigger" type="button" aria-label="More navigation" aria-haspopup="true" aria-controls="topbar-more-menu" aria-expanded={isDesktopMoreOpen} onClick={() => { setIsDesktopMoreOpen(!isDesktopMoreOpen); setIsAvatarMenuOpen(false) }}>
+                <Ellipsis size={18} aria-hidden="true" /><span>More</span><ChevronDown size={14} aria-hidden="true" />
+              </button>
+              {isDesktopMoreOpen && <nav id="topbar-more-menu" className="topbar-dropdown" aria-label="More navigation">
+                {moreTabs.map(({ to, label, icon: Icon }) => (
+                  <NavLink className={({ isActive }) => `topbar-dropdown__link topbar-dropdown__link--collapsible${learningTabIsActive(to, isActive) ? ' is-active' : ''}`} key={to} to={to} onClick={() => setIsDesktopMoreOpen(false)}>
+                    <Icon size={18} aria-hidden="true" /><span>{label}{label === 'Notifications' && unreadNotifications > 0 ? ` (${unreadNotifications})` : ''}</span>
+                  </NavLink>
+                ))}
+                {teachingQuery.data?.length ? <NavLink className={({ isActive }) => `topbar-dropdown__link${isActive || location.pathname.startsWith('/teaching') ? ' is-active' : ''}`} to="/teaching" onClick={() => setIsDesktopMoreOpen(false)}><BookOpen size={18} aria-hidden="true" /><span>Teaching</span></NavLink> : null}
+                {administrationQuery.data?.length ? <NavLink className={({ isActive }) => `topbar-dropdown__link${isActive || location.pathname.startsWith('/administration') ? ' is-active' : ''}`} to="/administration" onClick={() => setIsDesktopMoreOpen(false)}><Settings2 size={18} aria-hidden="true" /><span>Administration</span></NavLink> : null}
+                {platformAdminQuery.data?.is_platform_admin && <NavLink className={({ isActive }) => `topbar-dropdown__link${isActive ? ' is-active' : ''}`} to="/admin/reports" onClick={() => setIsDesktopMoreOpen(false)}><Bell size={18} aria-hidden="true" /><span>Reports</span></NavLink>}
+                {teachingQuery.isError && <button className="topbar-dropdown__link" type="button" onClick={() => void teachingQuery.refetch()}><RotateCw size={18} aria-hidden="true" /><span>Retry Teaching</span></button>}
+                {administrationQuery.isError && <button className="topbar-dropdown__link" type="button" onClick={() => void administrationQuery.refetch()}><RotateCw size={18} aria-hidden="true" /><span>Retry Administration</span></button>}
+              </nav>}
+            </div>
+          </nav>
           <form className="topbar-search" role="search" onSubmit={(event) => { event.preventDefault(); navigate(`/search${searchText.trim() ? `?q=${encodeURIComponent(searchText.trim())}` : ''}`) }}>
             <label className="sr-only" htmlFor="topbar-search-input">Search</label>
             <Search size={17} aria-hidden="true" />
             <input id="topbar-search-input" value={searchText} maxLength={100} onChange={(event) => setSearchText(event.currentTarget.value)} placeholder="Search people, posts, schools" />
           </form>
-          <div className="topbar__actions"><span className="topbar__spark" aria-hidden="true">✦</span><NotificationBell /></div>
+          <div className="topbar__actions"><NotificationBell />
+            <div className="topbar-menu" ref={avatarMenuRef}>
+              <button className="topbar-avatar-trigger" type="button" aria-label="Open profile menu" aria-haspopup="true" aria-controls="topbar-profile-menu" aria-expanded={isAvatarMenuOpen} onClick={() => { setIsAvatarMenuOpen(!isAvatarMenuOpen); setIsDesktopMoreOpen(false) }}>
+                {profileQuery.isError ? <RotateCw size={16} aria-hidden="true" /> : profileQuery.data?.profile_picture_url ? <img src={profileQuery.data.profile_picture_url} alt={`${profileQuery.data.display_name}'s avatar`} /> : <span aria-hidden="true">{user?.username.slice(0, 1).toUpperCase()}</span>}
+              </button>
+              {isAvatarMenuOpen && <nav id="topbar-profile-menu" className="topbar-dropdown topbar-dropdown--right" aria-label="Profile menu">
+                <NavLink className="topbar-dropdown__link" to="/profile" onClick={() => setIsAvatarMenuOpen(false)}><UserRound size={18} aria-hidden="true" /><span>Profile</span></NavLink>
+                <NavLink className="topbar-dropdown__link" to="/settings" onClick={() => setIsAvatarMenuOpen(false)}><Settings2 size={18} aria-hidden="true" /><span>Settings</span></NavLink>
+                <NavLink className="topbar-dropdown__link" to="/logout" onClick={() => setIsAvatarMenuOpen(false)}><LogOut size={18} aria-hidden="true" /><span>Sign out</span></NavLink>
+              </nav>}
+            </div>
+          </div>
         </header>
         <InstallPromptBanner />
         <main className="app-main"><Outlet /></main>
@@ -207,12 +216,11 @@ export function AppShell() {
           <nav className="more-sheet__nav" aria-label="More navigation">
             <NavLink className={({ isActive }) => `more-sheet__link${isActive ? ' is-active' : ''}`} data-more-first to="/profile" onClick={closeMoreSheet}><UserRound size={19} aria-hidden="true" /><span>Profile</span></NavLink>
             <NavLink className={({ isActive }) => `more-sheet__link${isActive ? ' is-active' : ''}`} to="/search" onClick={closeMoreSheet}><Search size={19} aria-hidden="true" /><span>Search</span></NavLink>
+            {moreTabs.filter(({ to }) => to !== '/profile' && to !== '/search').map(({ to, label, icon: Icon }) => <NavLink key={to} className={({ isActive }) => `more-sheet__link${learningTabIsActive(to, isActive) ? ' is-active' : ''}`} to={to} onClick={closeMoreSheet}><Icon size={19} aria-hidden="true" /><span>{label}{label === 'Notifications' && unreadNotifications > 0 ? ` (${unreadNotifications})` : ''}</span></NavLink>)}
+            <NavLink className={({ isActive }) => `more-sheet__link${isActive || location.pathname.startsWith('/search') ? ' is-active' : ''}`} to="/search" onClick={closeMoreSheet}><Search size={19} aria-hidden="true" /><span>Search</span></NavLink>
             {platformAdminQuery.data?.is_platform_admin && <NavLink className={({ isActive }) => `more-sheet__link${isActive ? ' is-active' : ''}`} to="/admin/reports" onClick={closeMoreSheet}><Bell size={19} aria-hidden="true" /><span>Reports</span></NavLink>}
             {teachingQuery.data?.length ? <NavLink className={({ isActive }) => `more-sheet__link${isActive || location.pathname.startsWith('/teaching') ? ' is-active' : ''}`} to="/teaching" onClick={closeMoreSheet}><BookOpen size={19} aria-hidden="true" /><span>Teaching</span></NavLink> : null}
             {administrationQuery.data?.length ? <NavLink className={({ isActive }) => `more-sheet__link${isActive || location.pathname.startsWith('/administration') ? ' is-active' : ''}`} to="/administration" onClick={closeMoreSheet}><Settings2 size={19} aria-hidden="true" /><span>Administration</span></NavLink> : null}
-            <NavLink className={({ isActive }) => `more-sheet__link${isActive ? ' is-active' : ''}`} to="/classrooms" onClick={closeMoreSheet}><Users size={19} aria-hidden="true" /><span>Classrooms</span></NavLink>
-            <NavLink className={({ isActive }) => `more-sheet__link${isActive || location.pathname.startsWith('/notifications') ? ' is-active' : ''}`} to="/notifications" onClick={closeMoreSheet}><Bell size={19} aria-hidden="true" /><span>Notifications{unreadNotifications > 0 ? ` (${unreadNotifications})` : ''}</span></NavLink>
-            <NavLink className={({ isActive }) => `more-sheet__link${isActive || location.pathname.startsWith('/settings') ? ' is-active' : ''}`} to="/settings" onClick={closeMoreSheet}><Settings2 size={19} aria-hidden="true" /><span>Settings</span></NavLink>
             <NavLink className={({ isActive }) => `more-sheet__link${isActive ? ' is-active' : ''}`} to="/logout" onClick={closeMoreSheet}><LogOut size={19} aria-hidden="true" /><span>Sign out</span></NavLink>
           </nav>
         </section>

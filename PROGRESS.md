@@ -6,3 +6,5 @@ Task 0: Demo login recovery — done — commit: 19c0149 — note: added develop
 Task 5: Profiles, follows and settings — done — commit: b1bc2be — note: follower-only profile privacy, public profile content/follow views, and account/security settings.
 Task 6: Feed and post quality — not started — commit: pending — note: pending.
 Task 7: Reels completion — not started — commit: pending — note: pending.
+Prompt 9 Run 1 — Task A: Top navigation — done — commit: pending — note: moved desktop navigation to the sticky top bar, retained the phone More sheet, restricted admin links using server authorization, and fixed stale seeded student roles.
+Prompt 9 Run 1 — Task B: Dark mode and new background — not started — commit: pending — note: pending.

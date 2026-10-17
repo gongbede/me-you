@@ -1138,6 +1138,14 @@ def test_seed_demo_is_idempotent(postgres_database_url, monkeypatch):
                     for model in models
                 }
             first_credentials = await seed_demo(session_factory)
+            async with session_factory() as session:
+                enrolled_user_id = select(User.id).where(User.email == "demo.enrolled@example.test")
+                await session.execute(
+                    update(InstitutionMembership)
+                    .where(InstitutionMembership.user_id == enrolled_user_id.scalar_subquery())
+                    .values(role="ADMIN")
+                )
+                await session.commit()
             second_credentials = await seed_demo(session_factory)
 
             async with session_factory() as session:
@@ -1147,9 +1155,15 @@ def test_seed_demo_is_idempotent(postgres_database_url, monkeypatch):
                     )
                     for model in models
                 }
+                enrolled_role = await session.scalar(
+                    select(InstitutionMembership.role)
+                    .join(User, User.id == InstitutionMembership.user_id)
+                    .where(User.email == "demo.enrolled@example.test")
+                )
 
             assert len(first_credentials) == 4
             assert second_credentials == []
+            assert enrolled_role == "STUDENT"
             expected_additions = {
                 "institutions": 1,
                 "faculties": 1,
