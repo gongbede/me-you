@@ -103,6 +103,28 @@ class OperationsTests(unittest.TestCase):
             with self.subTest(configuration=configuration), self.assertRaises(ValueError):
                 validate_production_config(environment="production", **configuration)
 
+    def test_production_rejects_wildcard_trusted_origins(self):
+        with self.assertRaisesRegex(ValueError, "ME_YOU_TRUSTED_ORIGINS"):
+            validate_production_config(
+                environment="production",
+                secret="0123456789abcdefABCDEF!@#$%^&*()_+-=",
+                database_url="postgresql+asyncpg://db/me_you",
+                cors_origins=("https://app.example.com",),
+                trusted_origins=("https://*.app.github.dev",),
+                storage_backend="s3",
+                s3_bucket="media",
+                s3_endpoint_url="https://s3.example.com",
+                s3_access_key="access-key",
+                s3_secret_key="secret-key",
+            )
+
+    def test_development_allows_wildcard_trusted_origins(self):
+        validate_production_config(
+            environment="development",
+            cors_origins=("http://localhost:5173",),
+            trusted_origins=("https://*.app.github.dev",),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
