@@ -175,9 +175,9 @@ class SocialCoreTests(unittest.IsolatedAsyncioTestCase):
         session = SocialSession(
             scalar_rows=[[self.post], [self.post.id]],
             execute_rows=[
-                [(self.post.id, 3)],
-                [(self.post.id, 2)],
+                [(self.post.id, 3, 2)],
                 [(self.author, None, None, True)],
+                [],
             ],
         )
 

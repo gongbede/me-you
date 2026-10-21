@@ -73,6 +73,7 @@ from .communication import (
 )
 from .social import (
 	CommentResponse,
+	CommentLikeResponse,
 	CreateComment,
 	CreateReel,
 	CreatePost,
@@ -84,6 +85,8 @@ from .social import (
 	NotificationResponse,
 	NotificationUnreadCountResponse,
 	PostResponse,
+	PostAttachmentInput,
+	PostAttachmentResponse,
 	UpdateComment,
 	UpdatePost,
 	UserSummary,
@@ -125,6 +128,7 @@ from .user import (
 
 __all__ = [
 	"CommentResponse",
+	"CommentLikeResponse",
 	"CourseCreate",
 	"CourseResponse",
 	"CourseProgressResponse",
@@ -213,6 +217,8 @@ __all__ = [
 	"NotificationPreferencesUpdate",
 	"NotificationUnreadCountResponse",
 	"PostResponse",
+	"PostAttachmentInput",
+	"PostAttachmentResponse",
 	"ProfileResponse",
 	"PlatformAdminUserResponse",
 	"BlockedUserResponse",

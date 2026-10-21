@@ -2800,6 +2800,256 @@ def test_feed_query_count_is_bounded_for_twenty_posts(postgres_database_url):
     asyncio.run(verify())
 
 
+def test_post_quality_feed_images_edits_replies_and_comment_likes(postgres_database_url):
+    from app.models import (
+        Comment,
+        CommentLike,
+        Follow,
+        MediaAsset,
+        Notification,
+        NotificationPreference,
+        PostAttachment,
+        UserBlock,
+    )
+    from app.providers import ProviderRegistry, ProviderSettings
+    from app.routes.comments import (
+        create_comment,
+        delete_comment,
+        like_comment,
+        list_comments,
+        unlike_comment,
+        update_comment,
+    )
+    from app.routes.posts import create_post, delete_post, get_feed, update_post
+    from app.schemas import (
+        CreateComment,
+        CreatePost,
+        PostAttachmentInput,
+        UpdateComment,
+        UpdatePost,
+    )
+
+    class Storage:
+        def __init__(self):
+            self.deleted = []
+
+        async def create_download_url(self, object_key, *, expires_in_seconds):
+            return f"https://media.example.test/{object_key}"
+
+        async def delete_object(self, object_key):
+            self.deleted.append(object_key)
+
+    async def verify():
+        engine = create_async_engine(postgres_database_url)
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        storage = Storage()
+        providers = ProviderRegistry(
+            settings=ProviderSettings(storage="test-posts"), storage=storage
+        )
+        try:
+            async with session_factory() as session:
+                owner = await create_user(session)
+                follower = await create_user(session)
+                outsider = await create_user(session)
+                mentioned = await create_user(session, username="mentioned_user")
+                blocked_mention = await create_user(session, username="blocked_user")
+                muted_mention = await create_user(session, username="muted_user")
+                session.add(Follow(follower_id=follower.id, following_id=owner.id))
+                session.add_all(
+                    [
+                        UserBlock(blocker_id=owner.id, blocked_id=blocked_mention.id),
+                        NotificationPreference(
+                            user_id=muted_mention.id,
+                            notification_type="MENTION",
+                            enabled=False,
+                        ),
+                    ]
+                )
+                now = datetime.now(timezone.utc)
+                image = MediaAsset(
+                    owner_id=owner.id,
+                    purpose="POST_IMAGE",
+                    status="READY",
+                    storage_provider="test-posts",
+                    storage_key=f"post-image-{uuid.uuid4()}",
+                    content_type="image/png",
+                    byte_size=512,
+                    original_filename="photo.png",
+                    upload_expires_at=now,
+                )
+                foreign_image = MediaAsset(
+                    owner_id=outsider.id,
+                    purpose="POST_IMAGE",
+                    status="READY",
+                    storage_provider="test-posts",
+                    storage_key=f"foreign-image-{uuid.uuid4()}",
+                    content_type="image/png",
+                    byte_size=512,
+                    original_filename="foreign.png",
+                    upload_expires_at=now,
+                )
+                session.add_all([image, foreign_image])
+                await session.commit()
+                image_id = image.id
+                foreign_image_id = foreign_image.id
+                owner_id, follower_id, outsider_id = owner.id, follower.id, outsider.id
+
+                owner = await session.get(User, owner_id)
+                post_result = await create_post(
+                    CreatePost(
+                        content="hello @mentioned_user @mentioned_user @blocked_user @muted_user",
+                        attachments=[PostAttachmentInput(media_asset_id=str(image_id), alt_text="A photo")],
+                    ),
+                    owner,
+                    session,
+                    providers,
+                )
+                post_id = uuid.UUID(post_result["id"])
+                assert post_result["attachments"][0]["alt_text"] == "A photo"
+                assert post_result["attachments"][0]["image_url"].endswith(image.storage_key)
+                assert await session.scalar(
+                    select(PostAttachment).where(PostAttachment.post_id == post_id)
+                ) is not None
+                mention_notifications = list(
+                    (
+                        await session.scalars(
+                            select(Notification).where(
+                                Notification.post_id == post_id,
+                                Notification.type == "MENTION",
+                            )
+                        )
+                    ).all()
+                )
+                assert len(mention_notifications) == 1
+                assert mention_notifications[0].recipient_id == mentioned.id
+
+                outsider = await session.get(User, outsider_id)
+                with pytest.raises(HTTPException) as foreign_asset:
+                    await create_post(
+                        CreatePost(
+                            content="invalid image",
+                            attachments=[PostAttachmentInput(media_asset_id=str(image_id))],
+                        ),
+                        outsider,
+                        session,
+                        providers,
+                    )
+                assert foreign_asset.value.status_code == 422
+                with pytest.raises(HTTPException) as non_owner_edit:
+                    await update_post(post_id, UpdatePost(content="no"), outsider, session, providers)
+                assert non_owner_edit.value.status_code == 403
+
+                latest = await get_feed(
+                    outsider, session, providers, offset=0, mode="LATEST", limit=20
+                )
+                following = await get_feed(
+                    outsider, session, providers, offset=0, mode="FOLLOWING", limit=20
+                )
+                assert any(item["id"] == str(post_id) for item in latest["items"])
+                assert all(item["id"] != str(post_id) for item in following["items"])
+                await create_post(
+                    CreatePost(content="another latest post"), outsider, session, providers
+                )
+                page = await get_feed(
+                    outsider, session, providers, offset=0, mode="LATEST", limit=1
+                )
+                if page["has_more"]:
+                    next_page = await get_feed(
+                        outsider,
+                        session,
+                        providers,
+                        offset=0,
+                        mode="LATEST",
+                        limit=1,
+                        cursor=page["next_cursor"],
+                    )
+                    assert not set(item["id"] for item in page["items"]) & set(
+                        item["id"] for item in next_page["items"]
+                    )
+
+                edited = await update_post(
+                    post_id,
+                    UpdatePost(content="edited", attachments=[]),
+                    owner,
+                    session,
+                    providers,
+                )
+                assert edited["edited"] is True
+                assert edited["attachments"] == []
+                assert await session.get(MediaAsset, image_id) is None
+                assert "post-image" in storage.deleted[0]
+
+                root = await create_comment(post_id, CreateComment(content="root"), owner, session)
+                reply = await create_comment(
+                    post_id,
+                    CreateComment(content="reply", parent_id=root["id"]),
+                    await session.get(User, follower_id),
+                    session,
+                )
+                assert reply["parent_id"] == root["id"]
+                edited_reply = await update_comment(
+                    uuid.UUID(reply["id"]),
+                    UpdateComment(content="edited reply"),
+                    await session.get(User, follower_id),
+                    session,
+                )
+                assert edited_reply["content"] == "edited reply"
+                with pytest.raises(HTTPException) as nested_reply:
+                    await create_comment(
+                        post_id,
+                        CreateComment(content="too deep", parent_id=reply["id"]),
+                        outsider,
+                        session,
+                    )
+                assert nested_reply.value.status_code == 404
+                root_row = await session.get(Comment, uuid.UUID(root["id"]))
+                outsider = await session.get(User, outsider_id)
+                await like_comment(root_row.id, outsider, session)
+                listed = await list_comments(post_id, outsider, session, limit=100)
+                root_result = next(item for item in listed if item["id"] == root["id"])
+                assert root_result["like_count"] == 1
+                assert root_result["liked_by_me"] is True
+                with pytest.raises(HTTPException) as duplicate_like:
+                    await like_comment(root_row.id, outsider, session)
+                assert duplicate_like.value.status_code == 409
+                await unlike_comment(root_row.id, outsider, session)
+                assert await session.scalar(
+                    select(CommentLike).where(
+                        CommentLike.comment_id == root_row.id,
+                        CommentLike.user_id == outsider.id,
+                    )
+                ) is None
+                await delete_comment(
+                    uuid.UUID(reply["id"]), await session.get(User, follower_id), session
+                )
+                assert await session.get(Comment, uuid.UUID(reply["id"])) is None
+
+                with pytest.raises(HTTPException) as non_owner_delete:
+                    await delete_post(post_id, outsider, session, providers)
+                assert non_owner_delete.value.status_code == 403
+                await delete_post(post_id, owner, session, providers)
+                assert await session.get(MediaAsset, foreign_image_id) is not None
+                await session.execute(
+                    delete(User).where(
+                        User.id.in_(
+                            [
+                                owner_id,
+                                follower_id,
+                                outsider_id,
+                                mentioned.id,
+                                blocked_mention.id,
+                                muted_mention.id,
+                            ]
+                        )
+                    )
+                )
+                await session.commit()
+        finally:
+            await engine.dispose()
+
+    asyncio.run(verify())
+
+
 def test_private_profile_avatar_is_not_in_post_author_summary(postgres_database_url):
     from app.models import Post, Profile
     from app.routes.posts import get_post_by_id

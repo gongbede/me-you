@@ -218,6 +218,33 @@ class MediaTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(error.exception.status_code, 413)
         self.assertIn("size limit", error.exception.detail)
 
+    async def test_post_image_upload_uses_image_types_and_configured_limit(self):
+        from unittest.mock import patch
+
+        request = MediaUploadIntentCreate(
+            purpose="POST_IMAGE",
+            content_type="image/png",
+            byte_size=101,
+            original_filename="post.png",
+        )
+        with patch("app.routes.media.POST_IMAGE_MAX_BYTES", 100):
+            with self.assertRaises(HTTPException) as error:
+                await create_media_upload_intent(
+                    request, self.user, MediaSession(), self.providers
+                )
+        self.assertEqual(error.exception.status_code, 413)
+        invalid = MediaUploadIntentCreate(
+            purpose="POST_IMAGE",
+            content_type="image/svg+xml",
+            byte_size=20,
+            original_filename="post.svg",
+        )
+        with self.assertRaises(HTTPException) as type_error:
+            await create_media_upload_intent(
+                invalid, self.user, MediaSession(), self.providers
+            )
+        self.assertEqual(type_error.exception.status_code, 422)
+
     async def test_reel_completion_rejects_configured_oversize_and_spoofed_magic(self):
         from unittest.mock import patch
 

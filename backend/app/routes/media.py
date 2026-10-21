@@ -19,9 +19,9 @@ from ..config import (
     STORAGE_SIGNED_URL_LIFETIME_SECONDS,
 )
 from ..database import get_postgres_session
-from ..models import InstitutionMembership, MediaAsset, Post, Profile, User
+from ..models import InstitutionMembership, MediaAsset, Post, PostAttachment, Profile, User
 from ..models import Track, Video
-from ..privacy import can_view_profile
+from ..privacy import can_view_profile, require_post_visibility
 from ..providers import ProviderRegistry, get_provider_registry, provider_or_503
 from ..providers.storage import (
     LocalDiskStorageProvider,
@@ -376,6 +376,18 @@ async def create_media_download_url(
                 owner, profile.visibility, current_user, database
             )
         )
+    if not authorized and asset.purpose == "POST_IMAGE":
+        post = await database.scalar(
+            select(Post)
+            .join(PostAttachment, PostAttachment.post_id == Post.id)
+            .where(PostAttachment.media_asset_id == asset.id)
+        )
+        if post is not None:
+            try:
+                await require_post_visibility(post, current_user, database)
+                authorized = True
+            except HTTPException:
+                authorized = False
     if not authorized and asset.purpose in {"VIDEO", "AUDIO"}:
         item_model = Video if asset.purpose == "VIDEO" else Track
         item = await database.scalar(
@@ -428,6 +440,10 @@ async def delete_media_asset(
         select(Post.id).where(Post.media_asset_id == asset.id)
     ) is not None:
         raise HTTPException(status_code=409, detail="Media asset is attached to a reel")
+    if await database.scalar(
+        select(PostAttachment.id).where(PostAttachment.media_asset_id == asset.id)
+    ) is not None:
+        raise HTTPException(status_code=409, detail="Media asset is attached to a post")
     if asset.purpose in {"VIDEO", "AUDIO"}:
         model = Video if asset.purpose == "VIDEO" else Track
         if await database.scalar(select(model.id).where(model.media_asset_id == asset.id)) is not None:
