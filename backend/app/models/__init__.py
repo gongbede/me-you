@@ -1,4 +1,5 @@
 from .comment import Comment
+from .comment_like import CommentLike
 from .activity import Activity
 from .account_email_token import AccountEmailToken
 from .auth_identity import AuthIdentity
@@ -31,6 +32,7 @@ from .notification_preference import NotificationPreference
 from .report import Report
 from .user_block import UserBlock
 from .post import Post
+from .post_attachment import PostAttachment
 from .post_like import PostLike
 from .phone_login_code import PhoneLoginCode
 from .profile import Profile
@@ -43,6 +45,7 @@ from .music import MusicCategoryFollow, Playlist, PlaylistItem, Track
 
 __all__ = [
 	"Comment",
+	"CommentLike",
 	"Activity",
 	"AccountEmailToken",
 	"AuthIdentity",
@@ -75,6 +78,7 @@ __all__ = [
 	"Report",
 	"UserBlock",
 	"Post",
+	"PostAttachment",
 	"PostLike",
 	"PhoneLoginCode",
 	"Profile",

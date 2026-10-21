@@ -15,3 +15,14 @@ Prompt 9 Run 2b — Task 1: Backend media regression tests — partly — added 
 Prompt 9 Run 2b — Task 2: My Videos and watch page — done — commit: 09a957f — added owned-video management with visibility badges, editing and confirmed deletion, a dedicated watch route with likes/comments/reporting, and notification links to the watch page.
 Prompt 9 Run 2b — Task 3: Playlist management UI and track page — done — commit: 12e1115 — added playlist CRUD/detail/reordering, My Tracks edits with rights re-confirmation, track detail/report route, follow-state controls, mini-player playlist insertion, and Space-key playback that avoids focused controls.
 Prompt 9 Run 2b — Task 4: Code-split large pages — done — commit: 4907ced — lazy-loaded Videos, Music, Reels, Settings, Search, and administration pages with Suspense fallbacks; main JavaScript entry reduced from 575.21 kB to 406.71 kB.
+
+Team Batch 1 — Task 1: Secure and verify earlier post-quality work — done — commit: pending — added reversible post attachment/reply/comment-like schema, edited state, image-only media purpose with configurable size limit, mention parser and preference/block-aware notifications; normal backend 259 passed, PostgreSQL 68 passed, migration upgrade/check clean.
+Team Batch 1 — Task 2: Post and comment endpoints — not started — commit: pending.
+Team Batch 1 — Task 3: API types — not started — commit: pending.
+Team Batch 1 — Task 4: Composer, images, editing — not started — commit: pending.
+Team Batch 1 — Task 5: Feed and comments UI — not started — commit: pending.
+Team Batch 1 — Task 6: Reels backend — not started — commit: pending.
+Team Batch 1 — Task 7: Reels UI — not started — commit: pending.
+Team Batch 1 — Task 8: Enrollment and demo-role bugs — not started — commit: pending.
+Team Batch 1 — Task 9: Video and music regression tests — not started — commit: pending.
+Team Batch 1 — Task 10: Classroom completion — not started — commit: pending.

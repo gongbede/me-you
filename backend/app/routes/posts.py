@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..activity import record_activity
 from ..config import STORAGE_SIGNED_URL_LIFETIME_SECONDS
 from ..database import get_postgres_session
+from ..mentions import notify_mentions
 from ..models import (
     Comment,
     Follow,
@@ -264,6 +265,9 @@ async def create_post(
         actor_id=current_user.id,
         target_type="post",
         target_id=post.id,
+    )
+    await notify_mentions(
+        post.content, actor_id=current_user.id, post_id=post.id, database=database
     )
     await database.commit()
     await database.refresh(post)

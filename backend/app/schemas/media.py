@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, field_validator
 MediaPurpose = Literal[
     "PROFILE_IMAGE",
     "POST_MEDIA",
+    "POST_IMAGE",
     "COURSE_MEDIA",
     "REEL",
     "VIDEO",

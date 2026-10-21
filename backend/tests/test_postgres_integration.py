@@ -189,6 +189,13 @@ def test_database_rejects_duplicate_username_and_email(postgres_database_url):
     asyncio.run(verify())
 
 
+def test_post_quality_migration_supports_downgrade_and_upgrade(postgres_database_url):
+    result = _alembic(postgres_database_url, "downgrade", "0028_music_library")
+    assert result.returncode == 0, result.stdout + result.stderr
+    result = _alembic(postgres_database_url, "upgrade", "head")
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_notification_preferences_and_mark_all_are_user_scoped(postgres_database_url):
     from app.models import Notification, NotificationPreference
     from app.notification_preferences import add_notification

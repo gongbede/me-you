@@ -7,6 +7,7 @@ from app.models import (
     Activity,
     AuthIdentity,
     Comment,
+    CommentLike,
     Assessment,
     AssessmentResult,
     AssessmentSubmission,
@@ -28,6 +29,7 @@ from app.models import (
     NotificationPreference,
     Report,
     Post,
+    PostAttachment,
     PostLike,
     PhoneLoginCode,
     Profile,
@@ -81,6 +83,7 @@ class MigrationFoundationTests(unittest.TestCase):
                 "phone_login_codes",
                 "videos", "video_likes", "video_views", "video_comments",
                 "tracks", "playlists", "playlist_items", "music_category_follows",
+                "post_attachments", "comment_likes",
             },
         )
         self.assertIs(User.__table__, Base.metadata.tables["users"])
@@ -88,7 +91,9 @@ class MigrationFoundationTests(unittest.TestCase):
         self.assertIs(UserBlock.__table__, Base.metadata.tables["user_blocks"])
         self.assertIs(Profile.__table__, Base.metadata.tables["profiles"])
         self.assertIs(Post.__table__, Base.metadata.tables["posts"])
+        self.assertIs(PostAttachment.__table__, Base.metadata.tables["post_attachments"])
         self.assertIs(Comment.__table__, Base.metadata.tables["comments"])
+        self.assertIs(CommentLike.__table__, Base.metadata.tables["comment_likes"])
         self.assertIs(PostLike.__table__, Base.metadata.tables["post_likes"])
         self.assertIs(Follow.__table__, Base.metadata.tables["follows"])
         self.assertIs(Notification.__table__, Base.metadata.tables["notifications"])
@@ -241,6 +246,7 @@ class MigrationFoundationTests(unittest.TestCase):
             ("0026_profile_email_change.py", "0026_profile_email_change", "0025_reports_blocks_moderation"),
             ("0027_video_library.py", "0027_video_library", "0026_profile_email_change"),
             ("0028_music_library.py", "0028_music_library", "0027_video_library"),
+            ("0029_post_quality.py", "0029_post_quality", "0028_music_library"),
         )
         for filename, revision, down_revision in revisions:
             migration = load_module(

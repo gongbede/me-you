@@ -73,3 +73,8 @@ def test_video_and_audio_size_limits_can_be_configured(monkeypatch):
     monkeypatch.setattr("app.routes.media.AUDIO_MAX_BYTES", 567)
     assert max_bytes_for_purpose("VIDEO") == 1234
     assert max_bytes_for_purpose("AUDIO") == 567
+
+
+def test_post_image_size_limit_can_be_configured(monkeypatch):
+    monkeypatch.setattr("app.routes.media.POST_IMAGE_MAX_BYTES", 1234)
+    assert max_bytes_for_purpose("POST_IMAGE") == 1234

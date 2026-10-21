@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..config import (
     APP_ENV,
     MEDIA_USER_QUOTA_BYTES,
+    POST_IMAGE_MAX_BYTES,
     REEL_MAX_BYTES,
     VIDEO_MAX_BYTES,
     AUDIO_MAX_BYTES,
@@ -46,6 +47,7 @@ CONTENT_TYPES_BY_PURPOSE = {
     "POST_MEDIA": {
         "image/jpeg", "image/png", "image/webp", "video/mp4", "video/webm", "audio/mpeg", "audio/ogg",
     },
+    "POST_IMAGE": {"image/jpeg", "image/png", "image/webp"},
     "COURSE_MEDIA": {
         "image/jpeg", "image/png", "image/webp", "video/mp4", "video/webm", "audio/mpeg", "audio/ogg", "application/pdf",
     },
@@ -59,6 +61,7 @@ CONTENT_TYPES_BY_PURPOSE = {
 MAX_BYTES_BY_PURPOSE = {
     "PROFILE_IMAGE": 5_000_000,
     "POST_MEDIA": 250_000_000,
+    "POST_IMAGE": POST_IMAGE_MAX_BYTES,
     "COURSE_MEDIA": 500_000_000,
     "REEL": REEL_MAX_BYTES,
     "VIDEO": VIDEO_MAX_BYTES,
@@ -68,6 +71,8 @@ MAX_BYTES_BY_PURPOSE = {
 
 
 def max_bytes_for_purpose(purpose: str) -> int:
+    if purpose == "POST_IMAGE":
+        return POST_IMAGE_MAX_BYTES
     if purpose == "REEL":
         return REEL_MAX_BYTES
     if purpose == "VIDEO":

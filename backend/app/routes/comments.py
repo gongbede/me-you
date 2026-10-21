@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ..database import get_postgres_session
+from ..mentions import notify_mentions
 from ..models import Comment, Notification, Post, User, UserBlock
 from ..notification_preferences import add_notification
 from ..pagination import ascending_time_uuid_clause, time_uuid_cursor
@@ -80,6 +81,13 @@ async def create_comment(
                 target_id=comment.id,
             )
         )
+    await notify_mentions(
+        comment.content,
+        actor_id=current_user.id,
+        post_id=post.id,
+        comment_id=comment.id,
+        database=database,
+    )
     await database.commit()
     await database.refresh(comment)
     return comment_response(comment)

@@ -51,6 +51,9 @@ class Post(Base):
     is_hidden: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
+    edited: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -69,8 +72,12 @@ class Post(Base):
     likes: Mapped[list["PostLike"]] = relationship(
         back_populates="post", cascade="all, delete-orphan", passive_deletes=True
     )
+    attachments: Mapped[list["PostAttachment"]] = relationship(
+        back_populates="post", cascade="all, delete-orphan", passive_deletes=True
+    )
 
 
 if TYPE_CHECKING:
     from .comment import Comment
+    from .post_attachment import PostAttachment
     from .post_like import PostLike

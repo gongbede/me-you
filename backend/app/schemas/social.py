@@ -17,6 +17,7 @@ class NotificationType(str, Enum):
     VIDEO_COMMENT = "VIDEO_COMMENT"
     VIDEO_LIKE = "VIDEO_LIKE"
     NEW_TRACK = "NEW_TRACK"
+    MENTION = "MENTION"
 
 
 class UserSummary(BaseModel):
