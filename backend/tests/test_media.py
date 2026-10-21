@@ -24,6 +24,7 @@ from app.routes.media import (
     create_media_download_url,
     create_media_upload_intent,
     delete_media_asset,
+    get_post_image_limits,
     router,
 )
 from app.schemas import MediaUploadIntentCreate
@@ -244,6 +245,11 @@ class MediaTests(unittest.IsolatedAsyncioTestCase):
                 invalid, self.user, MediaSession(), self.providers
             )
         self.assertEqual(type_error.exception.status_code, 422)
+
+    async def test_post_image_limits_expose_configured_size_and_mime_types(self):
+        response = await get_post_image_limits(self.user)
+        self.assertEqual(response["max_bytes"], 10_000_000)
+        self.assertEqual(response["content_types"], ["image/jpeg", "image/png", "image/webp"])
 
     async def test_reel_completion_rejects_configured_oversize_and_spoofed_magic(self):
         from unittest.mock import patch

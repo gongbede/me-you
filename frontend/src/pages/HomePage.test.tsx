@@ -14,6 +14,14 @@ vi.mock('../api/social', () => ({
   getFeed: vi.fn(),
 }))
 
+vi.mock('../api/media', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../api/media')>(),
+  getPostImageLimits: vi.fn().mockResolvedValue({
+    max_bytes: 10_000_000,
+    content_types: ['image/jpeg', 'image/png', 'image/webp'],
+  }),
+}))
+
 vi.mock('../components/PostCard', () => ({
   PostCard: ({ post }: { post: { content: string } }) => <article>{post.content}</article>,
 }))

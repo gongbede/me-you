@@ -33,6 +33,7 @@ from ..schemas import (
     MediaAvatarSet,
     MediaDownloadResponse,
     MediaReelLimitsResponse,
+    MediaPostImageLimitsResponse,
     MediaUploadIntentCreate,
     MediaUploadIntentResponse,
 )
@@ -89,6 +90,16 @@ async def get_reel_media_limits(
     return {
         "max_bytes": REEL_MAX_BYTES,
         "content_types": sorted(CONTENT_TYPES_BY_PURPOSE["REEL"]),
+    }
+
+
+@router.get("/post-image-limits", response_model=MediaPostImageLimitsResponse)
+async def get_post_image_limits(
+    _current_user: User = Depends(get_current_postgres_user),
+):
+    return {
+        "max_bytes": POST_IMAGE_MAX_BYTES,
+        "content_types": sorted(CONTENT_TYPES_BY_PURPOSE["POST_IMAGE"]),
     }
 
 

@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider, useInfiniteQuery } from '@tanstack/react-query'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setPostLike } from '../api/social'
 import { PostCard } from './PostCard'
 
@@ -12,6 +12,7 @@ vi.mock('../hooks/useAuth', () => ({
 vi.mock('../api/social', () => ({
   deletePost: vi.fn(),
   setPostLike: vi.fn(),
+  updatePost: vi.fn(),
 }))
 
 vi.mock('./UserIdentity', () => ({
@@ -41,11 +42,14 @@ const post = {
 
 const feedPage = { items: [post], offset: 0, limit: 20, has_more: false, next_cursor: null }
 
-function renderCard() {
+function renderCard(card = post) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { staleTime: Infinity, retry: false }, mutations: { retry: false } },
   })
-  queryClient.setQueryData(['feed'], { pages: [feedPage], pageParams: [undefined] })
+  queryClient.setQueryData(['feed'], {
+    pages: [{ ...feedPage, items: [card] }],
+    pageParams: [undefined],
+  })
 
   function FeedCard() {
     const feedQuery = useInfiniteQuery({
@@ -55,7 +59,7 @@ function renderCard() {
       getNextPageParam: (page) => page.next_cursor ?? undefined,
       enabled: false,
     })
-    const feedPost = feedQuery.data?.pages[0]?.items[0] ?? post
+    const feedPost = feedQuery.data?.pages[0]?.items[0] ?? card
     return <PostCard post={feedPost} onDeleted={vi.fn()} />
   }
 
@@ -67,6 +71,7 @@ function renderCard() {
 }
 
 describe('PostCard optimistic likes', () => {
+  afterEach(cleanup)
   beforeEach(() => {
     vi.mocked(setPostLike).mockResolvedValue(undefined)
   })
@@ -92,5 +97,57 @@ describe('PostCard optimistic likes', () => {
     await act(async () => rejectRequest?.(new Error('Network unavailable')))
     await waitFor(() => expect(screen.getByRole('button', { name: 'Like post, 2 likes' })).toBeInTheDocument())
     expect(screen.getByRole('alert')).toHaveTextContent('Network unavailable')
+  })
+})
+
+describe('PostCard owner tools and images', () => {
+  afterEach(cleanup)
+  it('edits a post inline and shows the edited marker', async () => {
+    const { updatePost } = await import('../api/social')
+    vi.mocked(updatePost).mockResolvedValue({ ...post, content: 'Updated post', edited: true })
+    renderCard({ ...post, author_id: 'viewer-id' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit post' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Edit post' }), { target: { value: 'Updated post' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(updatePost).toHaveBeenCalledWith('post-id', { content: 'Updated post' }))
+    expect(await screen.findByText('Updated post')).toBeInTheDocument()
+    expect(await screen.findByText('Edited')).toBeInTheDocument()
+  })
+
+  it('opens an image viewer that supports next, keyboard navigation, and Escape', async () => {
+    const card = {
+      ...post,
+      attachments: [
+        { id: 'image-1', media_asset_id: 'asset-1', image_url: '/one.png', alt_text: 'First', position: 0 },
+        { id: 'image-2', media_asset_id: 'asset-2', image_url: '/two.png', alt_text: 'Second', position: 1 },
+      ],
+    }
+    renderCard(card)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open image 1 of 2' }))
+    const dialog = screen.getByRole('dialog', { name: 'Post image viewer' })
+    expect(dialog).toBeInTheDocument()
+    expect(within(dialog).getByRole('img', { name: 'First' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Next image' }))
+    expect(within(dialog).getByRole('img', { name: 'Second' })).toBeInTheDocument()
+    fireEvent.keyDown(window, { key: 'ArrowLeft' })
+    expect(within(dialog).getByRole('img', { name: 'First' })).toBeInTheDocument()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('asks for confirmation before deleting and copies a post anchor URL', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    renderCard({ ...post, author_id: 'viewer-id' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy post link' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('Link copied')
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining('#post-post-id'))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete post' }))
+    expect(window.confirm).toHaveBeenCalledWith('Delete this post?')
   })
 })

@@ -2881,6 +2881,27 @@
         "title": "MediaDownloadResponse",
         "type": "object"
       },
+      "MediaPostImageLimitsResponse": {
+        "properties": {
+          "content_types": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Content Types",
+            "type": "array"
+          },
+          "max_bytes": {
+            "title": "Max Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "max_bytes",
+          "content_types"
+        ],
+        "title": "MediaPostImageLimitsResponse",
+        "type": "object"
+      },
       "MediaReelLimitsResponse": {
         "properties": {
           "content_types": {
@@ -13072,6 +13093,32 @@
           }
         },
         "summary": "Receive Local Upload",
+        "tags": [
+          "media"
+        ]
+      }
+    },
+    "/api/v1/media/post-image-limits": {
+      "get": {
+        "operationId": "get_post_image_limits_api_v1_media_post_image_limits_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaPostImageLimitsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Post Image Limits",
         "tags": [
           "media"
         ]
@@ -23451,6 +23498,32 @@
           }
         },
         "summary": "Receive Local Upload",
+        "tags": [
+          "media"
+        ]
+      }
+    },
+    "/media/post-image-limits": {
+      "get": {
+        "operationId": "get_post_image_limits_media_post_image_limits_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaPostImageLimitsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Post Image Limits",
         "tags": [
           "media"
         ]

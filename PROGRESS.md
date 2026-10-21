@@ -18,8 +18,8 @@ Prompt 9 Run 2b — Task 4: Code-split large pages — done — commit: 4907ced 
 
 Team Batch 1 — Task 1: Secure and verify earlier post-quality work — done — commit: c951554 — added reversible post attachment/reply/comment-like schema, edited state, image-only media purpose with configurable size limit, mention parser and preference/block-aware notifications; normal backend 259 passed, PostgreSQL 68 passed, migration upgrade/check clean.
 Team Batch 1 — Task 2: Post and comment endpoints — done — commit: 28ec5c1 — added owner-validated image attachments and cleanup, post edits/deletes, Following/Latest cursor feeds, one-level replies, comment likes and owner edits/deletes; backend normal 262 passed, PostgreSQL 69 passed, migration check clean.
-Team Batch 1 — Task 3: API types — done — commit: pending — regenerated OpenAPI and TypeScript declarations, added typed helpers for Latest feeds, images, edits, replies and comment likes; frontend lint passed, 109 tests passed, production build passed (406.78 kB main bundle).
-Team Batch 1 — Task 4: Composer, images, editing — not started — commit: pending.
+Team Batch 1 — Task 3: API types — done — commit: 93eea10 — regenerated OpenAPI and TypeScript declarations, added typed helpers for Latest feeds, images, edits, replies and comment likes; frontend lint passed, 109 tests passed, production build passed (406.78 kB main bundle).
+Team Batch 1 — Task 4: Composer, images, editing — in progress — commit: pending.
 Team Batch 1 — Task 5: Feed and comments UI — not started — commit: pending.
 Team Batch 1 — Task 6: Reels backend — not started — commit: pending.
 Team Batch 1 — Task 7: Reels UI — not started — commit: pending.

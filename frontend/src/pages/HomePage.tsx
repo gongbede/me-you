@@ -1,7 +1,8 @@
 import { lazy, Suspense, useState } from 'react'
-import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { LoaderCircle, MessageCircle } from 'lucide-react'
 import { createPost, getFeed, type Post } from '../api/social'
+import { getPostImageLimits } from '../api/media'
 import { getFriendlyErrorMessage } from '../api/client'
 import { PostComposer } from '../components/PostComposer'
 import { PostCard } from '../components/PostCard'
@@ -23,8 +24,12 @@ export function HomePage() {
     getNextPageParam: (page) => page.has_more ? page.next_cursor ?? undefined : undefined,
     enabled: activeTab === 'feed',
   })
+  const imageLimitsQuery = useQuery({
+    queryKey: ['media', 'post-image-limits'],
+    queryFn: getPostImageLimits,
+  })
   const createMutation = useMutation({
-    mutationFn: (content: string) => createPost(content),
+    mutationFn: ({ content, attachments }: { content: string; attachments: Parameters<typeof createPost>[1] }) => createPost(content, attachments),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['feed'] })
     },
@@ -64,9 +69,11 @@ export function HomePage() {
 
       {activeTab === 'feed' ? <section id="home-panel-feed" role="tabpanel" aria-labelledby="home-tab-feed" className="home-tab-panel">
       <PostComposer
-        onPost={(content) => createMutation.mutateAsync(content).then(() => undefined)}
+        onPost={(content, attachments) => createMutation.mutateAsync({ content, attachments }).then(() => undefined)}
         isPosting={createMutation.isPending}
         error={createMutation.isError ? getFriendlyErrorMessage(createMutation.error) : null}
+        imageLimits={imageLimitsQuery.data ?? null}
+        imageLimitsError={imageLimitsQuery.isError ? getFriendlyErrorMessage(imageLimitsQuery.error) : null}
       />
 
       {feedQuery.isPending ? (

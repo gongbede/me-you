@@ -2007,6 +2007,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/media/post-image-limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Post Image Limits */
+        get: operations["get_post_image_limits_api_v1_media_post_image_limits_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/media/reel-limits": {
         parameters: {
             query?: never;
@@ -4269,6 +4286,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/media/post-image-limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Post Image Limits */
+        get: operations["get_post_image_limits_media_post_image_limits_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/media/reel-limits": {
         parameters: {
             query?: never;
@@ -6275,6 +6309,13 @@ export interface components {
             download_url: string;
             /** Expires In Seconds */
             expires_in_seconds: number;
+        };
+        /** MediaPostImageLimitsResponse */
+        MediaPostImageLimitsResponse: {
+            /** Content Types */
+            content_types: string[];
+            /** Max Bytes */
+            max_bytes: number;
         };
         /** MediaReelLimitsResponse */
         MediaReelLimitsResponse: {
@@ -12030,6 +12071,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_post_image_limits_api_v1_media_post_image_limits_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaPostImageLimitsResponse"];
                 };
             };
         };
@@ -18206,6 +18267,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_post_image_limits_media_post_image_limits_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaPostImageLimitsResponse"];
                 };
             };
         };

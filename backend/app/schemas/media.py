@@ -76,3 +76,8 @@ class MediaAvatarSet(BaseModel):
 class MediaReelLimitsResponse(BaseModel):
     max_bytes: int
     content_types: list[str]
+
+
+class MediaPostImageLimitsResponse(BaseModel):
+    max_bytes: int
+    content_types: list[str]
