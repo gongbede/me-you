@@ -32,6 +32,8 @@ const post = {
   post_type: 'POST' as const,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
+  edited: false,
+  attachments: [],
   like_count: 2,
   comment_count: 4,
   liked_by_me: false,

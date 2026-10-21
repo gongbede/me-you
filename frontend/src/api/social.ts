@@ -4,9 +4,13 @@ export type Post = ApiSchemas['PostResponse']
 export type Comment = ApiSchemas['CommentResponse']
 export type FeedPage = ApiSchemas['FeedResponse']
 export type PostLike = ApiSchemas['LikeResponse']
+export type CommentLike = ApiSchemas['CommentLikeResponse']
+export type PostAttachmentInput = ApiSchemas['PostAttachmentInput']
+export type FeedMode = 'FOLLOWING' | 'LATEST'
 
-export function getFeed(cursor?: string): Promise<FeedPage> {
+export function getFeed(cursor?: string, mode: FeedMode = 'FOLLOWING'): Promise<FeedPage> {
   const query = new URLSearchParams({ limit: '20' })
+  query.set('mode', mode)
   if (cursor) query.set('cursor', cursor)
   return apiRequest(`/api/v1/posts/feed?${query}`)
 }
@@ -15,11 +19,18 @@ export function getPost(postId: string): Promise<Post> {
   return apiRequest(`/api/v1/posts/${postId}`)
 }
 
-export function createPost(content: string): Promise<Post> {
+export function createPost(
+  content: string,
+  attachments: PostAttachmentInput[] = [],
+): Promise<Post> {
   return apiRequest('/api/v1/posts', {
     method: 'POST',
-    body: { content, visibility: 'PUBLIC' },
+    body: { content, visibility: 'PUBLIC', attachments } satisfies ApiSchemas['CreatePost'],
   })
+}
+
+export function updatePost(postId: string, update: ApiSchemas['UpdatePost']): Promise<Post> {
+  return apiRequest(`/api/v1/posts/${postId}`, { method: 'PATCH', body: update })
 }
 
 export function deletePost(postId: string): Promise<void> {
@@ -43,15 +54,35 @@ export function getCommentsPage(postId: string, cursor?: string): Promise<{
   ).then(({ data, nextCursor }) => ({ items: data, nextCursor }))
 }
 
-export function createComment(postId: string, content: string): Promise<Comment> {
+export function createComment(
+  postId: string,
+  content: string,
+  parentId?: string,
+): Promise<Comment> {
   return apiRequest(`/api/v1/posts/${postId}/comments`, {
     method: 'POST',
-    body: { content },
+    body: { content, parent_id: parentId } satisfies ApiSchemas['CreateComment'],
+  })
+}
+
+export function updateComment(commentId: string, content: string): Promise<Comment> {
+  return apiRequest(`/api/v1/comments/${commentId}`, {
+    method: 'PATCH',
+    body: { content } satisfies ApiSchemas['UpdateComment'],
   })
 }
 
 export function deleteComment(commentId: string): Promise<void> {
   return apiRequest(`/api/v1/comments/${commentId}`, { method: 'DELETE' })
+}
+
+export function setCommentLike(
+  commentId: string,
+  liked: boolean,
+): Promise<void | CommentLike> {
+  return liked
+    ? apiRequest(`/api/v1/comments/${commentId}/like`, { method: 'POST' })
+    : apiRequest(`/api/v1/comments/${commentId}/like`, { method: 'DELETE' })
 }
 
 export function getPublicProfile(userId: string): Promise<ApiSchemas['ProfileDiscoveryResponse']> {

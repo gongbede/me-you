@@ -24,7 +24,7 @@ export function HomePage() {
     enabled: activeTab === 'feed',
   })
   const createMutation = useMutation({
-    mutationFn: createPost,
+    mutationFn: (content: string) => createPost(content),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['feed'] })
     },

@@ -31,6 +31,8 @@ const makePost = (id: string, content: string) => ({
   post_type: 'POST' as const,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
+  edited: false,
+  attachments: [],
   like_count: 0,
   comment_count: 0,
   liked_by_me: false,
