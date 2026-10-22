@@ -6,6 +6,7 @@ import { getPostImageLimits } from '../api/media'
 import { getFriendlyErrorMessage } from '../api/client'
 import { PostComposer } from '../components/PostComposer'
 import { PostCard } from '../components/PostCard'
+import { PageHeader } from '../components/PageHeader'
 import { useAuth } from '../hooks/useAuth'
 
 const ReelsViewer = lazy(() => import('./ReelsPage').then((module) => ({ default: module.ReelsViewer })))
@@ -53,14 +54,8 @@ export function HomePage() {
   }
 
   return (
-    <div className="page-stack">
-      <section className="page-heading-row feed-heading">
-        <div>
-          <span className="eyebrow">YOUR COMMUNITY</span>
-          <h1>Home</h1>
-          <p>Share what you’re learning, {user?.username}.</p>
-        </div>
-      </section>
+    <div className="page-stack" data-section="learning">
+      <PageHeader section="YOUR COMMUNITY" title="Home" description={`Share what you’re learning, ${user?.username ?? 'today'}.`} />
 
       <div className="home-tabs" role="tablist" aria-label="Home content">
         <button id="home-tab-feed" type="button" role="tab" aria-selected={activeTab === 'feed'} aria-controls="home-panel-feed" tabIndex={activeTab === 'feed' ? 0 : -1} className={activeTab === 'feed' ? 'is-active' : ''} onClick={() => selectTab('feed')}>Feed</button>

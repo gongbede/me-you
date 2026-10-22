@@ -20,6 +20,7 @@ import { listBlockedUsers, unblockUser } from '../api/moderation'
 import { getMyProfile, updateMyProfile } from '../api/profile'
 import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
+import { PageHeader } from '../components/PageHeader'
 
 const notificationLabels: Record<keyof NotificationPreferences, string> = {
   COMMENT: 'Comments and replies',
@@ -116,12 +117,7 @@ export function SettingsPage() {
 
   return (
     <section className="page-shell">
-      <header className="page-heading-row learning-heading">
-        <div>
-          <span className="eyebrow">ACCOUNT</span>
-          <h1>Settings</h1>
-        </div>
-      </header>
+      <PageHeader section="ACCOUNT" title="Settings" description="Manage your account, privacy, and preferences." />
 
       <div className="stacked-card-list">
         <section className="card">

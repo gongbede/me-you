@@ -1,9 +1,10 @@
 import { useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Music2, Video } from 'lucide-react'
+import { Music2, Plus, Video, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { apiRequest, getFriendlyErrorMessage } from '../api/client'
 import { avatarUploadTransport } from '../api/avatar'
+import { PageHeader } from '../components/PageHeader'
 import { useMusicPlayer } from '../hooks/useMusicPlayer'
 import { MyTracksPanel, PlaylistLibraryPanel } from './MusicManagement'
 
@@ -22,7 +23,7 @@ type MediaItem = {
 const videoCategories = ['Education', 'Programming', 'Technology', 'Music', 'Entertainment', 'Sports', 'Lifestyle', 'Faith', 'Other']
 const musicCategories = ['Afrobeats', 'R&B', 'Hip-hop', 'Gospel', 'Highlife', 'Amapiano', 'Pop', 'Reggae and Dancehall', 'Jazz', 'Rock', 'Classical', 'Instrumental', 'Other']
 
-function MediaUpload({ kind, onUploaded }: { kind: 'video' | 'music'; onUploaded: () => void }) {
+function MediaUpload({ kind, onUploaded, onClose, id }: { kind: 'video' | 'music'; onUploaded: () => void; onClose: () => void; id: string }) {
   const [file, setFile] = useState<File | null>(null)
   const [title, setTitle] = useState('')
   const [artist, setArtist] = useState('')
@@ -76,8 +77,8 @@ function MediaUpload({ kind, onUploaded }: { kind: 'video' | 'music'; onUploaded
     }
   }
 
-  return <form className="learning-section" onSubmit={(event) => void submit(event)}>
-    <h2>Upload {kind === 'video' ? 'a video' : 'a track'}</h2>
+  return <form id={id} className="learning-section media-upload-panel" onSubmit={(event) => void submit(event)}>
+    <div className="media-upload-panel__heading"><h2>Upload {kind === 'video' ? 'a video' : 'a track'}</h2><button className="icon-button" type="button" aria-label="Close upload form" title="Close upload form" onClick={onClose}><X size={18} aria-hidden="true" /></button></div>
     <label className="field"><span>Title</span><input required maxLength={120} value={title} onChange={(event) => setTitle(event.currentTarget.value)} /></label>
     {kind === 'music' && <label className="field"><span>Artist name</span><input required maxLength={120} value={artist} onChange={(event) => setArtist(event.currentTarget.value)} /></label>}
     <label className="field"><span>Category</span><select value={category} onChange={(event) => setCategory(event.currentTarget.value)}>{(kind === 'video' ? videoCategories : musicCategories).map((value) => <option key={value}>{value}</option>)}</select></label>
@@ -94,6 +95,7 @@ function LibraryPage({ kind }: { kind: 'video' | 'music' }) {
   const [category, setCategory] = useState('')
   const [search, setSearch] = useState('')
   const [tab, setTab] = useState<'discover' | 'mine' | 'playlists'>('discover')
+  const [isUploadOpen, setIsUploadOpen] = useState(false)
   const key = [kind, 'library', category, search]
   const itemsQuery = useQuery({
     queryKey: key,
@@ -121,7 +123,13 @@ function LibraryPage({ kind }: { kind: 'video' | 'music' }) {
   const categories = kind === 'video' ? videoCategories : musicCategories
   const refresh = () => void queryClient.invalidateQueries({ queryKey: [kind, 'library'] })
   return <div className="page-stack" data-section={kind === 'video' ? 'videos' : 'music'}>
-    <header className="page-heading-row learning-heading"><div><span className="eyebrow">DISCOVER</span><h1>{title}</h1><p>{kind === 'video' ? 'Browse and share videos from the community.' : 'Community-uploaded music only; no commercial catalogue.'}</p></div>{kind === 'video' ? <Video aria-hidden="true" /> : <Music2 aria-hidden="true" />}</header>
+    <PageHeader
+      section="DISCOVER"
+      title={title}
+      description={kind === 'video' ? 'Browse and share videos from the community.' : 'Community-uploaded music only; no commercial catalogue.'}
+      action={<button className="button button--primary" type="button" aria-expanded={isUploadOpen} aria-controls="media-upload-form" onClick={() => setIsUploadOpen((open) => !open)}><Plus size={16} aria-hidden="true" />{isUploadOpen ? 'Close upload' : kind === 'video' ? 'Upload video' : 'Upload track'}</button>}
+    />
+    {isUploadOpen && <MediaUpload id="media-upload-form" kind={kind} onClose={() => setIsUploadOpen(false)} onUploaded={() => { refresh(); setIsUploadOpen(false) }} />}
     {kind === 'video' && <div className="chip-row" role="tablist" aria-label="Video sections">
       <button className={`chip${tab === 'discover' ? ' is-active' : ''}`} role="tab" aria-selected={tab === 'discover'} type="button" onClick={() => setTab('discover')}>Discover</button>
       <button className={`chip${tab === 'mine' ? ' is-active' : ''}`} role="tab" aria-selected={tab === 'mine'} type="button" onClick={() => setTab('mine')}>My videos</button>
@@ -133,7 +141,6 @@ function LibraryPage({ kind }: { kind: 'video' | 'music' }) {
     </div>}
     {tab === 'mine' && kind === 'video' ? <MyVideosPanel onChanged={refresh} /> : <>
     {kind === 'music' && tab === 'playlists' ? <PlaylistLibraryPanel /> : kind === 'music' && tab === 'mine' ? <MyTracksPanel /> : <>
-    <MediaUpload kind={kind} onUploaded={refresh} />
     <section className="learning-section" aria-label={`${title} library`}>
       <label className="field"><span>Search {title.toLowerCase()}</span><input value={search} maxLength={100} onChange={(event) => setSearch(event.currentTarget.value)} /></label>
       <div className="chip-row" role="group" aria-label={`${title} categories`}>
@@ -225,7 +232,15 @@ export function MyVideosPanel({ onChanged }: { onChanged: () => void }) {
 
 function MediaCard({ item, kind, queue, index }: { item: MediaItem; kind: 'video' | 'music'; queue: MediaItem[]; index: number }) {
   const player = useMusicPlayer()
-  return <article className="learning-card"><h2>{kind === 'video' ? <Link to={`/videos/${item.id}`}>{item.title}</Link> : <Link to={`/music/tracks/${item.id}`}>{item.title}</Link>}</h2><p>{kind === 'music' ? `${item.artist_name} · ` : ''}{item.category}</p>{kind === 'video' ? <Link className="button button--outline" to={`/videos/${item.id}`}>Watch</Link> : <><button className="button button--outline" type="button" onClick={() => void player.playQueue(queue, index)}>Play</button><AddToPlaylistButton trackId={item.id} /></>}</article>
+  const PlaceholderIcon = kind === 'video' ? Video : Music2
+  return <article className="learning-card media-card">
+    <div className={`media-card__thumbnail media-card__thumbnail--${kind}`} aria-hidden="true"><PlaceholderIcon size={30} /></div>
+    <div className="media-card__content">
+      <div className="media-card__meta"><span className="chip">{item.category}</span><span>{kind === 'music' ? item.artist_name : 'Community video'}</span></div>
+      <h2>{kind === 'video' ? <Link to={`/videos/${item.id}`}>{item.title}</Link> : <Link to={`/music/tracks/${item.id}`}>{item.title}</Link>}</h2>
+      {kind === 'video' ? <Link className="button button--outline" to={`/videos/${item.id}`}>Watch</Link> : <><button className="button button--outline" type="button" onClick={() => void player.playQueue(queue, index)}>Play</button><AddToPlaylistButton trackId={item.id} /></>}
+    </div>
+  </article>
 }
 
 function AddToPlaylistButton({ trackId }: { trackId: string }) {

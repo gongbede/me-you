@@ -4,6 +4,7 @@ import { Building2, LoaderCircle, Search as SearchIcon, UserRound } from 'lucide
 import { Link, useSearchParams } from 'react-router-dom'
 import { getFriendlyErrorMessage } from '../api/client'
 import { search } from '../api/search'
+import { PageHeader } from '../components/PageHeader'
 
 type SearchTab = 'people' | 'posts' | 'schools'
 const tabs: { id: SearchTab; label: string }[] = [
@@ -44,7 +45,7 @@ export function SearchPage() {
 
   return (
     <section className="page-shell search-page">
-      <header className="page-heading-row learning-heading"><div><span className="eyebrow">DISCOVER</span><h1>Search</h1></div></header>
+      <PageHeader section="DISCOVER" title="Search" description="Find people, posts, and schools in your community." />
       <label className="search-page__input"><SearchIcon size={19} aria-hidden="true" /><span className="sr-only">Search people, posts, and schools</span><input autoFocus value={input} maxLength={100} onChange={(event) => setInput(event.currentTarget.value)} placeholder="Search people, posts, and schools" /></label>
       <div className="search-tabs" role="tablist" aria-label="Search categories">
         {tabs.map((tab) => <button key={tab.id} id={`search-tab-${tab.id}`} type="button" role="tab" aria-selected={activeTab === tab.id} aria-controls="search-results" onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}

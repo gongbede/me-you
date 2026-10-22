@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, BookOpen, CalendarClock, Check, Clock3, Graduati
 import { useState, type FormEvent } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { ApiError, getFriendlyErrorMessage } from '../api/client'
+import { PageHeader } from '../components/PageHeader'
 import {
   changeClassSessionState,
   createClassSession,
@@ -135,10 +136,7 @@ function ClassroomSchedule({ courseId, teacherMode }: { courseId: string; teache
   return (
     <div className="page-stack classroom-page">
       <Link className="teaching-back" to={teacherMode ? `/teaching/courses/${courseId}` : `/courses/${courseId}`}><ArrowLeft size={17} aria-hidden="true" /> {course.name}</Link>
-      <section className="page-heading-row teaching-heading">
-        <div><span className="eyebrow">{course.code}</span><h1>Live classrooms</h1><p>{teacherMode ? 'Schedule class time and bring your course together.' : 'Join a live class or see what is coming up.'}</p></div>
-        {teacherMode && !isCreating && <button className="button button--primary" type="button" onClick={() => setIsCreating(true)}><Plus size={17} aria-hidden="true" /> Schedule</button>}
-      </section>
+      <PageHeader section={course.code} title="Live classrooms" description={teacherMode ? 'Schedule class time and bring your course together.' : 'Join a live class or see what is coming up.'} action={teacherMode && !isCreating ? <button className="button button--primary" type="button" onClick={() => setIsCreating(true)}><Plus size={17} aria-hidden="true" /> Schedule</button> : undefined} />
       {!teacherMode && <div className="classroom-note"><Video size={17} aria-hidden="true" /><span>Class chat and attendance are available here. Video calling requires a configured provider.</span></div>}
       {isCreating && <section className="teaching-editor" aria-labelledby="classroom-create-title"><h2 id="classroom-create-title">Schedule a classroom</h2><ClassroomScheduleForm isSaving={createMutation.isPending} onCancel={() => setIsCreating(false)} onSave={(input) => createMutation.mutateAsync(input).then(() => undefined)} /></section>}
       {createMutation.error && <p className="form-alert" role="alert">{classroomError(createMutation.error)}</p>}
@@ -298,7 +296,7 @@ export function ClassroomsIndexPage() {
 
   return (
     <div className="page-stack learning-page">
-      <section className="page-heading-row learning-heading"><div><span className="eyebrow">YOUR COURSES</span><h1>Classrooms</h1><p>Open live classroom schedules for your courses.</p></div></section>
+      <PageHeader section="YOUR COURSES" title="Classrooms" description="Open live classroom schedules for your courses." />
       {classroomsQuery.isPending ? <p className="learning-loading" role="status">Loading your classrooms…</p> : classroomsQuery.isError ? (
         <div className="page-state page-state--error" role="alert"><h2>Classrooms unavailable</h2><p>{getFriendlyErrorMessage(classroomsQuery.error)}</p><button className="button button--outline" type="button" onClick={() => void classroomsQuery.refetch()}>Retry</button></div>
       ) : classroomsQuery.data.length === 0 ? (

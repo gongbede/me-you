@@ -89,6 +89,11 @@ export function AppShell() {
   })
   const unreadNotifications = notificationUnreadQuery.data?.unread_count ?? 0
   const learningPath = location.pathname.startsWith('/courses/') || location.pathname.startsWith('/lessons/')
+  const pageSection = location.pathname.startsWith('/messages')
+    ? 'messages'
+    : ['/schools', '/my-courses', '/classrooms', '/teaching', '/courses', '/lessons'].some((path) => location.pathname.startsWith(path))
+      ? 'learning'
+      : undefined
   const isMorePath = ['/profile', '/teaching', '/administration', '/classrooms', '/notifications', '/settings', '/logout', '/search', '/admin', '/videos', '/music'].some((path) => location.pathname === path || location.pathname.startsWith(`${path}/`))
   const learningTabIsActive = (to: string, isActive: boolean) =>
     isActive || (to === '/my-courses' && learningPath) || (to === '/teaching' && location.pathname.startsWith('/teaching')) || (to === '/administration' && location.pathname.startsWith('/administration')) || (to === '/messages' && location.pathname.startsWith('/messages')) || (to === '/notifications' && location.pathname.startsWith('/notifications')) || (to === '/classrooms' && location.pathname.startsWith('/classrooms')) || (to === '/settings' && location.pathname.startsWith('/settings'))
@@ -223,7 +228,7 @@ export function AppShell() {
           </div>
         </header>
         <InstallPromptBanner />
-        <main className="app-main"><Outlet /></main>
+        <main className="app-main" data-section={pageSection}><Outlet /></main>
         <AppFooter />
       </div>
 

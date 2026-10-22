@@ -3,6 +3,7 @@ import { ArrowRight, BookOpen, GraduationCap } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { getFriendlyErrorMessage } from '../api/client'
 import { getInstitutionCatalog, listEnrollments, listInstitutions } from '../api/education'
+import { PageHeader } from '../components/PageHeader'
 
 export function MyCoursesPage() {
   const coursesQuery = useQuery({
@@ -20,9 +21,7 @@ export function MyCoursesPage() {
 
   return (
     <div className="page-stack learning-page">
-      <section className="page-heading-row learning-heading">
-        <div><span className="eyebrow">YOUR STUDY PLAN</span><h1>My Courses</h1><p>Courses where your enrollment is active.</p></div>
-      </section>
+      <PageHeader section="YOUR STUDY PLAN" title="My Courses" description="Courses where your enrollment is active." />
       {coursesQuery.isPending ? <p className="learning-loading" role="status">Loading your courses…</p> : coursesQuery.isError ? (
         <div className="page-state page-state--error" role="alert"><h2>Courses unavailable</h2><p>{getFriendlyErrorMessage(coursesQuery.error)} Check that your school membership is active.</p><button className="button button--outline" type="button" onClick={() => void coursesQuery.refetch()}>Retry</button></div>
       ) : coursesQuery.data.length === 0 ? (

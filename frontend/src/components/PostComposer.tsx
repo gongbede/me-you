@@ -127,7 +127,7 @@ export function PostComposer({
         rows={3}
         value={content}
         onChange={(event) => setContent(event.currentTarget.value)}
-        placeholder="What have you been learning?"
+        placeholder="What are you learning today?"
         aria-describedby="post-character-count"
       />
       <div className="post-composer__media-controls">

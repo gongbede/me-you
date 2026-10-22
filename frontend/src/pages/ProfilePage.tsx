@@ -5,6 +5,7 @@ import { ApiError, getFriendlyErrorMessage, type ApiSchemas } from '../api/clien
 import { AVATAR_CONTENT_TYPES, clearAvatar, uploadAvatar, validateAvatarFile } from '../api/avatar'
 import { createMyProfile, getMyProfile, updateMyProfile } from '../api/profile'
 import { Field } from '../components/Field'
+import { PageHeader } from '../components/PageHeader'
 
 type EditableProfile = ApiSchemas['CreateProfile']
 
@@ -197,12 +198,9 @@ export function ProfilePage() {
   const profile = profileQuery.data
   return (
     <div className="page-stack profile-page">
-      <section className="page-heading-row">
-        <div><span className="eyebrow">YOUR SPACE</span><h1>Profile</h1><p>Share a little of what makes you, you.</p></div>
-        {profile && !editing && <button className="button button--outline" type="button" onClick={() => { setNotice(null); setEditing(true) }}>
+      <PageHeader section="YOUR SPACE" title="Profile" description="Share a little of what makes you, you." action={profile && !editing && <button className="button button--outline" type="button" onClick={() => { setNotice(null); setEditing(true) }}>
           <PencilLine size={17} aria-hidden="true" /> Edit profile
-        </button>}
-      </section>
+        </button>} />
       {notice && <p className="form-success" role="status">{notice}</p>}
       <section className="profile-card" aria-label="Profile details">
         <div className="profile-card__identity">

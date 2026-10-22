@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowRight, Check, MailOpen, Search, School as SchoolIcon, X } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { getFriendlyErrorMessage } from '../api/client'
+import { PageHeader } from '../components/PageHeader'
 import {
   acceptInvitation,
   createInstitution,
@@ -113,13 +114,7 @@ export function SchoolsPage() {
 
   return (
     <div className="page-stack learning-page">
-      <section className="page-heading-row learning-heading">
-        <div>
-          <span className="eyebrow">YOUR LEARNING COMMUNITY</span>
-          <h1>Schools</h1>
-          <p>Manage your school memberships and invitations.</p>
-        </div>
-      </section>
+      <PageHeader section="YOUR LEARNING COMMUNITY" title="Schools" description="Manage your school memberships and invitations." />
 
       <section className="learning-section" aria-labelledby="school-search-title">
         <div className="learning-section__heading">
