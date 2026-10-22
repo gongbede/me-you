@@ -280,6 +280,107 @@ def test_cookie_login_requires_allowed_origin_and_expired_cookie_is_cleared(monk
     assert "Max-Age=0" in expired.headers["set-cookie"]
 
 
+def test_codespaces_login_origin_and_local_proxy_alias_are_development_only(monkeypatch):
+    import app.main as app_main
+
+    codespaces_origin = "https://cuddly-fiesta-4q6rx76gg945357rw-5173.app.github.dev"
+    monkeypatch.setattr(app_main, "APP_ENV", "development")
+    monkeypatch.setattr(app_main, "CORS_ORIGINS", (codespaces_origin,))
+    monkeypatch.setattr(app_main, "TRUSTED_ORIGINS", (codespaces_origin,))
+    monkeypatch.setattr(app_main, "CODESPACES_ORIGINS_BY_PORT", {5173: codespaces_origin})
+    monkeypatch.setattr(app_main, "RATE_LIMIT_ENABLED", False)
+    with TestClient(app) as client:
+        trusted = client.post(
+            "/api/v1/login",
+            headers={"Origin": codespaces_origin, "X-Me-You-Session": "cookie"},
+            json={},
+        )
+        proxy_alias = client.post(
+            "/api/v1/login",
+            headers={
+                "Origin": "https://localhost:5173",
+                "Referer": f"{codespaces_origin}/login",
+                "Host": "localhost:8000",
+                "X-Forwarded-Host": "cuddly-fiesta-4q6rx76gg945357rw-5173.app.github.dev",
+                "X-Forwarded-Proto": "https",
+                "X-Me-You-Session": "cookie",
+            },
+            json={},
+        )
+        evil = client.post(
+            "/api/v1/login",
+            headers={
+                "Origin": "https://evil.example",
+                "Referer": f"{codespaces_origin}/login",
+                "X-Forwarded-Host": "cuddly-fiesta-4q6rx76gg945357rw-5173.app.github.dev",
+                "X-Forwarded-Proto": "https",
+                "X-Me-You-Session": "cookie",
+            },
+            json={},
+        )
+    assert trusted.status_code == 422
+    assert proxy_alias.status_code == 422
+    assert evil.status_code == 403
+
+
+def test_production_origin_check_rejects_wildcard_and_http_origins(monkeypatch):
+    import app.main as app_main
+
+    monkeypatch.setattr(app_main, "APP_ENV", "production")
+    monkeypatch.setattr(app_main, "CORS_ORIGINS", ("http://localhost:5173",))
+    monkeypatch.setattr(app_main, "TRUSTED_ORIGINS", ("https://*.app.github.dev",))
+    assert not app_main.origin_is_allowed(make_request(headers={"origin": "http://localhost:5173"}))
+    assert not app_main.origin_is_allowed(
+        make_request(headers={"origin": "https://cuddly-fiesta-5173.app.github.dev"})
+    )
+
+
+def test_development_wildcard_origin_handles_long_and_case_varied_hosts(monkeypatch):
+    import app.main as app_main
+
+    monkeypatch.setattr(app_main, "APP_ENV", "development")
+    monkeypatch.setattr(app_main, "CORS_ORIGINS", ())
+    monkeypatch.setattr(app_main, "TRUSTED_ORIGINS", ("https://*.app.github.dev",))
+    long_host = f"{'A' * 63}.APP.GITHUB.DEV"
+    assert app_main.origin_is_allowed(make_request(headers={"origin": f"HTTPS://{long_host}"}))
+    assert not app_main.origin_is_allowed(
+        make_request(headers={"origin": "https://cuddly-fiesta-5173.app.github.dev:443"})
+    )
+    assert not app_main.origin_is_allowed(
+        make_request(headers={"origin": "https://cuddly-fiesta-5173.app.github.dev/"})
+    )
+
+
+def test_origin_rejection_log_excludes_cookie_and_authorization_headers(monkeypatch, caplog):
+    import app.main as app_main
+
+    monkeypatch.setattr(app_main, "APP_ENV", "development")
+    monkeypatch.setattr(app_main, "TRUSTED_ORIGINS", ())
+    monkeypatch.setattr(app_main, "CORS_ORIGINS", ())
+    monkeypatch.setattr(app_main, "RATE_LIMIT_ENABLED", False)
+    with caplog.at_level("DEBUG", logger="me_you.api"), TestClient(app) as client:
+        response = client.post(
+            "/api/v1/login",
+            headers={
+                "Origin": "null",
+                "Referer": "https://evil.example/login",
+                "X-Me-You-Session": "cookie",
+                "Cookie": "session-marker-not-for-logs",
+                "Authorization": "Bearer authorization-marker-not-for-logs",
+            },
+            json={},
+        )
+    rejection_records = [
+        record for record in caplog.records if record.getMessage() == "csrf_origin_rejected"
+    ]
+    assert response.status_code == 403
+    assert len(rejection_records) == 1
+    assert "session-marker-not-for-logs" not in repr(rejection_records[0].__dict__)
+    assert "authorization-marker-not-for-logs" not in repr(rejection_records[0].__dict__)
+    assert "cookie" not in rejection_records[0].__dict__
+    assert "authorization" not in rejection_records[0].__dict__
+
+
 def test_production_cookie_is_secure():
     response = Response()
     with patch("app.security.APP_ENV", "production"):

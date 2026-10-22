@@ -17,6 +17,7 @@ from .config import (
     AUTH_CSRF_HEADER,
     AUTH_SESSION_COOKIE_NAME,
     AUTH_SESSION_MODE_HEADER,
+    CODESPACES_ORIGINS_BY_PORT,
     CORS_ORIGINS,
     RATE_LIMITS,
     RATE_LIMIT_ENABLED,
@@ -72,7 +73,18 @@ class JsonLogFormatter(logging.Formatter):
             "logger": record.name,
             "message": record.getMessage(),
         }
-        for field in ("request_id", "exception_type"):
+        for field in (
+            "request_id",
+            "exception_type",
+            "rejected_origin",
+            "referer",
+            "host",
+            "x_forwarded_host",
+            "x_forwarded_proto",
+            "sec_fetch_site",
+            "request_path",
+            "trusted_origins",
+        ):
             value = getattr(record, field, None)
             if value is not None:
                 payload[field] = value
@@ -96,6 +108,11 @@ def request_origin(request: Request) -> str | None:
             return origin
         return None
     referer = request.headers.get("referer")
+    return referer_origin(request) if referer else None
+
+
+def referer_origin(request: Request) -> str | None:
+    referer = request.headers.get("referer")
     if not referer:
         return None
     parsed = urlsplit(referer)
@@ -108,18 +125,37 @@ def origin_is_allowed(request: Request) -> bool:
     origin = request_origin(request)
     if origin is None:
         return False
+    if APP_ENV == "production":
+        return (
+            urlsplit(origin).scheme == "https"
+            and (origin in CORS_ORIGINS or origin in TRUSTED_ORIGINS)
+        )
     if origin in CORS_ORIGINS or origin in TRUSTED_ORIGINS:
         return True
     if APP_ENV != "development":
         return False
     parsed = urlsplit(origin)
-    return (
+    if (
         "https://*.app.github.dev" in TRUSTED_ORIGINS
         and parsed.scheme == "https"
         and parsed.hostname is not None
         and parsed.hostname != "app.github.dev"
         and parsed.hostname.endswith(".app.github.dev")
         and parsed.netloc.lower() == parsed.hostname
+    ):
+        return True
+    if origin not in {"https://localhost:5173", "https://localhost:5174"}:
+        return False
+    port = int(origin.rsplit(":", 1)[1])
+    expected_codespaces_origin = CODESPACES_ORIGINS_BY_PORT.get(port)
+    referer = request.headers.get("referer")
+    forwarded_host = request.headers.get("x-forwarded-host", "").split(",", 1)[0].strip()
+    forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",", 1)[0].strip()
+    return (
+        expected_codespaces_origin is not None
+        and referer_origin(request) == expected_codespaces_origin
+        and forwarded_host.lower() == urlsplit(expected_codespaces_origin).netloc.lower()
+        and forwarded_proto.lower() == "https"
     )
 
 
@@ -127,6 +163,25 @@ def csrf_rejection(request_id: str, detail: str, *, status_code: int = 403) -> J
     return JSONResponse(
         status_code=status_code,
         content={"detail": detail, "code": "csrf_rejected", "request_id": request_id},
+    )
+
+
+def log_untrusted_origin_rejection(request: Request, request_id: str) -> None:
+    if APP_ENV != "development":
+        return
+    logger.debug(
+        "csrf_origin_rejected",
+        extra={
+            "request_id": request_id,
+            "rejected_origin": request.headers.get("origin"),
+            "referer": request.headers.get("referer"),
+            "host": request.headers.get("host"),
+            "x_forwarded_host": request.headers.get("x-forwarded-host"),
+            "x_forwarded_proto": request.headers.get("x-forwarded-proto"),
+            "sec_fetch_site": request.headers.get("sec-fetch-site"),
+            "request_path": request.url.path,
+            "trusted_origins": TRUSTED_ORIGINS,
+        },
     )
 
 if CORS_ORIGINS:
@@ -224,6 +279,7 @@ async def add_request_and_security_headers(request: Request, call_next):
 
         if cookie_session_login:
             if not origin_is_allowed(request):
+                log_untrusted_origin_rejection(request, request_id)
                 response = csrf_rejection(request_id, "Untrusted request origin")
         elif cookie_token and unsafe_method:
             try:
@@ -240,6 +296,7 @@ async def add_request_and_security_headers(request: Request, call_next):
                 expected_csrf = claims.get("csrf")
                 supplied_csrf = request.headers.get(AUTH_CSRF_HEADER)
                 if not origin_is_allowed(request):
+                    log_untrusted_origin_rejection(request, request_id)
                     response = csrf_rejection(request_id, "Untrusted request origin")
                 elif (
                     not isinstance(expected_csrf, str)

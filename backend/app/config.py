@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -20,6 +21,32 @@ def validate_environment(environment: str | None) -> str:
 
 
 APP_ENV = validate_environment(os.getenv("ME_YOU_ENV"))
+def build_codespaces_origins(
+    environment: str,
+    codespace_name: str | None,
+    forwarding_domain: str | None,
+) -> tuple[str, ...]:
+    if environment != "development" or not codespace_name or not forwarding_domain:
+        return ()
+    name = codespace_name.strip().lower()
+    domain = forwarding_domain.strip().lower().rstrip(".")
+    label_pattern = r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
+    if not re.fullmatch(label_pattern, name) or not all(
+        re.fullmatch(label_pattern, label) for label in domain.split(".")
+    ):
+        return ()
+    return tuple(
+        f"https://{name}-{port}.{domain}"
+        for port in (5173, 5174)
+    )
+
+
+CODESPACES_ORIGINS = build_codespaces_origins(
+    APP_ENV,
+    os.getenv("CODESPACE_NAME"),
+    os.getenv("GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN"),
+)
+CODESPACES_ORIGINS_BY_PORT = dict(zip((5173, 5174), CODESPACES_ORIGINS))
 CORS_ORIGINS = tuple(
     origin.strip()
     for origin in os.getenv("ME_YOU_CORS_ORIGINS", "").split(",")
@@ -30,6 +57,8 @@ TRUSTED_ORIGINS = tuple(
     for origin in os.getenv("ME_YOU_TRUSTED_ORIGINS", "").split(",")
     if origin.strip()
 )
+CORS_ORIGINS = tuple(dict.fromkeys((*CORS_ORIGINS, *CODESPACES_ORIGINS)))
+TRUSTED_ORIGINS = tuple(dict.fromkeys((*TRUSTED_ORIGINS, *CODESPACES_ORIGINS)))
 
 
 def validate_jwt_secret(secret: str | None = None, environment: str | None = None) -> str:
@@ -83,13 +112,19 @@ def validate_production_config(
     if not resolved_database_url or not resolved_database_url.startswith("postgresql+asyncpg://"):
         raise ValueError("ME_YOU_DATABASE_URL must use postgresql+asyncpg in production")
     resolved_origins = cors_origins if cors_origins is not None else CORS_ORIGINS
-    if not resolved_origins or "*" in resolved_origins:
-        raise ValueError("ME_YOU_CORS_ORIGINS must contain explicit origins in production")
+    if not resolved_origins or any(
+        "*" in origin or not origin.lower().startswith("https://")
+        for origin in resolved_origins
+    ):
+        raise ValueError("ME_YOU_CORS_ORIGINS must contain explicit HTTPS origins in production")
     resolved_trusted_origins = (
         trusted_origins if trusted_origins is not None else TRUSTED_ORIGINS
     )
-    if any("*" in origin for origin in resolved_trusted_origins):
-        raise ValueError("ME_YOU_TRUSTED_ORIGINS must contain explicit origins in production")
+    if any(
+        "*" in origin or not origin.lower().startswith("https://")
+        for origin in resolved_trusted_origins
+    ):
+        raise ValueError("ME_YOU_TRUSTED_ORIGINS must contain explicit HTTPS origins in production")
     resolved_storage_backend = storage_backend or os.getenv("STORAGE_BACKEND", "local").lower()
     if resolved_storage_backend != "s3":
         raise ValueError("STORAGE_BACKEND must be s3 in production")

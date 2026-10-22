@@ -1,9 +1,16 @@
 import unittest
+import importlib
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from app.config import validate_environment, validate_jwt_secret, validate_production_config
+import app.config as app_config
+from app.config import (
+    build_codespaces_origins,
+    validate_environment,
+    validate_jwt_secret,
+    validate_production_config,
+)
 from app.database import get_postgres_session
 from app.main import app
 
@@ -98,7 +105,10 @@ class OperationsTests(unittest.TestCase):
             {"secret": "short", "database_url": "postgresql+asyncpg://db/me_you", "cors_origins": ("https://app.example.com",)},
             {"secret": "a" * 48, "database_url": "", "cors_origins": ("https://app.example.com",)},
             {"secret": "a" * 48, "database_url": "postgresql+asyncpg://db/me_you", "cors_origins": ("*",)},
+            {"secret": "a" * 48, "database_url": "postgresql+asyncpg://db/me_you", "cors_origins": ("http://app.example.com",)},
+            {"secret": "a" * 48, "database_url": "postgresql+asyncpg://db/me_you", "cors_origins": ("https://*.example.com",)},
             {"secret": "a" * 48, "database_url": "postgresql+asyncpg://db/me_you", "cors_origins": ("https://app.example.com",), "trusted_origins": ("https://*.app.github.dev",)},
+            {"secret": "a" * 48, "database_url": "postgresql+asyncpg://db/me_you", "cors_origins": ("https://app.example.com",), "trusted_origins": ("http://app.example.com",)},
         ):
             with self.subTest(configuration=configuration), self.assertRaises(ValueError):
                 validate_production_config(environment="production", **configuration)
@@ -124,6 +134,48 @@ class OperationsTests(unittest.TestCase):
             cors_origins=("http://localhost:5173",),
             trusted_origins=("https://*.app.github.dev",),
         )
+
+    def test_codespaces_origins_are_development_only(self):
+        expected = (
+            "https://cuddly-fiesta-4q6rx76gg945357rw-5173.app.github.dev",
+            "https://cuddly-fiesta-4q6rx76gg945357rw-5174.app.github.dev",
+        )
+        self.assertEqual(
+            build_codespaces_origins(
+                "development",
+                "cuddly-fiesta-4q6rx76gg945357rw",
+                "app.github.dev",
+            ),
+            expected,
+        )
+        self.assertEqual(
+            build_codespaces_origins(
+                "production",
+                "cuddly-fiesta-4q6rx76gg945357rw",
+                "app.github.dev",
+            ),
+            (),
+        )
+
+    def test_codespaces_origins_are_added_to_cors_and_trusted_lists(self):
+        expected = (
+            "https://cuddly-fiesta-4q6rx76gg945357rw-5173.app.github.dev",
+            "https://cuddly-fiesta-4q6rx76gg945357rw-5174.app.github.dev",
+        )
+        with patch.dict(
+            "os.environ",
+            {
+                "ME_YOU_ENV": "development",
+                "ME_YOU_CORS_ORIGINS": "http://localhost:5173",
+                "ME_YOU_TRUSTED_ORIGINS": "https://*.app.github.dev",
+                "CODESPACE_NAME": "cuddly-fiesta-4q6rx76gg945357rw",
+                "GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN": "app.github.dev",
+            },
+        ):
+            importlib.reload(app_config)
+            self.assertTrue(set(expected).issubset(app_config.CORS_ORIGINS))
+            self.assertTrue(set(expected).issubset(app_config.TRUSTED_ORIGINS))
+        importlib.reload(app_config)
 
 
 if __name__ == "__main__":
