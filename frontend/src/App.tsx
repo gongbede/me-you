@@ -26,6 +26,7 @@ import { NotificationsPage } from './pages/NotificationsPage'
 import { MessagesPage } from './pages/MessagesPage'
 import { PostDetailPage } from './pages/PostDetailPage'
 import { MusicPlayerProvider } from './components/MusicPlayer'
+import { LegalInfoPage } from './pages/LegalInfoPage'
 
 const AdministrationPage = lazy(() => import('./pages/AdministrationPage').then((module) => ({ default: module.AdministrationPage })))
 const AdminReportsPage = lazy(() => import('./pages/AdminReportsPage').then((module) => ({ default: module.AdminReportsPage })))
@@ -58,6 +59,9 @@ export default function App() {
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
               <Route path="/verify-email" element={<VerifyEmailPage />} />
+              <Route path="/privacy" element={<LegalInfoPage kind="privacy" />} />
+              <Route path="/terms" element={<LegalInfoPage kind="terms" />} />
+              <Route path="/contact" element={<LegalInfoPage kind="contact" />} />
               <Route element={<ProtectedRoute />}>
                 <Route path="/logout" element={<LogoutPage />} />
                 <Route element={<AppShell />}>

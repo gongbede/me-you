@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Logo } from './Logo'
+import { AppFooter } from './AppFooter'
 
 export function AuthFrame({ children, eyebrow, title, intro }: {
   children: ReactNode
@@ -23,6 +24,7 @@ export function AuthFrame({ children, eyebrow, title, intro }: {
           {children}
         </div>
       </section>
+      <AppFooter />
     </main>
   )
 }

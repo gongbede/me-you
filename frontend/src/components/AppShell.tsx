@@ -13,6 +13,7 @@ import { ApiError } from '../api/client'
 import { InstallPromptBanner } from './InstallPromptBanner'
 import { getPlatformAdminAccess } from '../api/moderation'
 import { useTheme } from '../hooks/useTheme'
+import { AppFooter } from './AppFooter'
 
 const baseTabs = [
   { to: '/', label: 'Home', icon: House, end: true },
@@ -40,6 +41,7 @@ export function AppShell() {
   const location = useLocation()
   const navigate = useNavigate()
   const [searchText, setSearchText] = useState('')
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false)
   const [isVisible, setIsVisible] = useState(() => !document.hidden)
   const [isMoreOpen, setIsMoreOpen] = useState(false)
   const [isDesktopMoreOpen, setIsDesktopMoreOpen] = useState(false)
@@ -48,6 +50,8 @@ export function AppShell() {
   const moreSheetRef = useRef<HTMLElement>(null)
   const desktopMoreRef = useRef<HTMLDivElement>(null)
   const avatarMenuRef = useRef<HTMLDivElement>(null)
+  const searchToggleRef = useRef<HTMLButtonElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
   useEffect(() => {
     const update = () => setIsVisible(!document.hidden)
     document.addEventListener('visibilitychange', update)
@@ -179,10 +183,27 @@ export function AppShell() {
               </nav>}
             </div>
           </nav>
-          <form className="topbar-search" role="search" onSubmit={(event) => { event.preventDefault(); navigate(`/search${searchText.trim() ? `?q=${encodeURIComponent(searchText.trim())}` : ''}`) }}>
+          <form className={`topbar-search${isSearchExpanded ? ' is-expanded' : ''}`} role="search" onSubmit={(event) => { event.preventDefault(); setIsSearchExpanded(false); navigate(`/search${searchText.trim() ? `?q=${encodeURIComponent(searchText.trim())}` : ''}`) }}>
+            <button
+              ref={searchToggleRef}
+              className="topbar-search__toggle"
+              type="button"
+              aria-label="Open search"
+              aria-expanded={isSearchExpanded}
+              title="Open search"
+              onFocus={() => {
+                if (!isSearchExpanded) setIsSearchExpanded(true)
+              }}
+              onClick={() => {
+                setIsSearchExpanded(true)
+                requestAnimationFrame(() => searchInputRef.current?.focus())
+              }}
+            >
+              <Search size={17} aria-hidden="true" />
+            </button>
             <label className="sr-only" htmlFor="topbar-search-input">Search</label>
-            <Search size={17} aria-hidden="true" />
-            <input id="topbar-search-input" value={searchText} maxLength={100} onChange={(event) => setSearchText(event.currentTarget.value)} placeholder="Search people, posts, schools" />
+            <input ref={searchInputRef} id="topbar-search-input" value={searchText} maxLength={100} onFocus={() => setIsSearchExpanded(true)} onChange={(event) => setSearchText(event.currentTarget.value)} placeholder="Search people, posts, schools" />
+            {isSearchExpanded && <button className="topbar-search__toggle" type="button" aria-label="Close search" title="Close search" onClick={() => { setIsSearchExpanded(false); searchToggleRef.current?.focus() }}><X size={17} aria-hidden="true" /></button>}
           </form>
           <div className="topbar__actions">
             <button className="icon-button theme-toggle" type="button" aria-label={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`} onClick={toggleTheme}>
@@ -203,6 +224,7 @@ export function AppShell() {
         </header>
         <InstallPromptBanner />
         <main className="app-main"><Outlet /></main>
+        <AppFooter />
       </div>
 
       <nav className="mobile-tabs" aria-label="Mobile navigation">
@@ -225,7 +247,6 @@ export function AppShell() {
             <NavLink className={({ isActive }) => `more-sheet__link${isActive ? ' is-active' : ''}`} data-more-first to="/profile" onClick={closeMoreSheet}><UserRound size={19} aria-hidden="true" /><span>Profile</span></NavLink>
             <NavLink className={({ isActive }) => `more-sheet__link${isActive ? ' is-active' : ''}`} to="/search" onClick={closeMoreSheet}><Search size={19} aria-hidden="true" /><span>Search</span></NavLink>
             {moreTabs.filter(({ to }) => to !== '/profile' && to !== '/search').map(({ to, label, icon: Icon }) => <NavLink key={to} className={({ isActive }) => `more-sheet__link${learningTabIsActive(to, isActive) ? ' is-active' : ''}`} to={to} onClick={closeMoreSheet}><Icon size={19} aria-hidden="true" /><span>{label}{label === 'Notifications' && unreadNotifications > 0 ? ` (${unreadNotifications})` : ''}</span></NavLink>)}
-            <NavLink className={({ isActive }) => `more-sheet__link${isActive || location.pathname.startsWith('/search') ? ' is-active' : ''}`} to="/search" onClick={closeMoreSheet}><Search size={19} aria-hidden="true" /><span>Search</span></NavLink>
             {platformAdminQuery.data?.is_platform_admin && <NavLink className={({ isActive }) => `more-sheet__link${isActive ? ' is-active' : ''}`} to="/admin/reports" onClick={closeMoreSheet}><Bell size={19} aria-hidden="true" /><span>Reports</span></NavLink>}
             {teachingQuery.data?.length ? <NavLink className={({ isActive }) => `more-sheet__link${isActive || location.pathname.startsWith('/teaching') ? ' is-active' : ''}`} to="/teaching" onClick={closeMoreSheet}><BookOpen size={19} aria-hidden="true" /><span>Teaching</span></NavLink> : null}
             {administrationQuery.data?.length ? <NavLink className={({ isActive }) => `more-sheet__link${isActive || location.pathname.startsWith('/administration') ? ' is-active' : ''}`} to="/administration" onClick={closeMoreSheet}><Settings2 size={19} aria-hidden="true" /><span>Administration</span></NavLink> : null}

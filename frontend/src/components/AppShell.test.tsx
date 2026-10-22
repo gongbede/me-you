@@ -210,6 +210,25 @@ describe('AppShell Teaching navigation', () => {
     expect(within(phoneNavigation).getByRole('button', { name: 'More' })).toBeInTheDocument()
   })
 
+  it('expands the compact search control and focuses its input', async () => {
+    getCourses.mockResolvedValue([])
+    renderAppShell()
+
+    const searchForm = screen.getByRole('search')
+    const searchToggle = within(searchForm).getByRole('button', { name: 'Open search' })
+    expect(searchForm).not.toHaveClass('is-expanded')
+    expect(searchToggle).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(searchToggle)
+
+    expect(searchForm).toHaveClass('is-expanded')
+    const closeSearch = within(searchForm).getByRole('button', { name: 'Close search' })
+    expect(closeSearch).toBeInTheDocument()
+    await waitFor(() => expect(within(searchForm).getByRole('textbox', { name: 'Search' })).toHaveFocus())
+    fireEvent.click(closeSearch)
+    expect(searchForm).not.toHaveClass('is-expanded')
+    expect(searchToggle).toHaveFocus()
+  })
+
   it('closes desktop More on Escape and outside click', () => {
     getCourses.mockResolvedValue([])
     renderAppShell()
