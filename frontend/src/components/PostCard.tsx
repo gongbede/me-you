@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQueryClient, type InfiniteData } from '@tanstack/react-query'
-import { Check, Copy, Heart, LoaderCircle, MessageCircle, Pencil, Trash2, X } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Copy, Heart, LoaderCircle, MessageCircle, Pencil, Trash2, X } from 'lucide-react'
 import { deletePost, setPostLike, updatePost, type FeedPage, type Post } from '../api/social'
 import { getFriendlyErrorMessage } from '../api/client'
 import { useAuth } from '../hooks/useAuth'
@@ -24,6 +24,9 @@ export function PostCard({
   const [displayContent, setDisplayContent] = useState(post.content)
   const [isEdited, setIsEdited] = useState(post.edited)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+  const lightboxOpener = useRef<HTMLButtonElement | null>(null)
+  const lightboxCloseButton = useRef<HTMLButtonElement | null>(null)
+  const lightboxDialog = useRef<HTMLElement | null>(null)
   const [copyMessage, setCopyMessage] = useState<string | null>(null)
   const feedKey = ['feed'] as const
   const likeMutation = useMutation({
@@ -63,20 +66,50 @@ export function PostCard({
 
   const isLiked = post.liked_by_me
 
+  const isLightboxOpen = lightboxIndex !== null
+
   useEffect(() => {
-    if (lightboxIndex === null) return
+    if (!isLightboxOpen) return
+    const opener = lightboxOpener.current
+    lightboxCloseButton.current?.focus()
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setLightboxIndex(null)
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setLightboxIndex(null)
+      }
       if (event.key === 'ArrowLeft') {
+        event.preventDefault()
         setLightboxIndex((current) => current === null ? null : (current + post.attachments!.length - 1) % post.attachments!.length)
       }
       if (event.key === 'ArrowRight') {
+        event.preventDefault()
         setLightboxIndex((current) => current === null ? null : (current + 1) % post.attachments!.length)
+      }
+      if (event.key === 'Tab') {
+        const focusable = lightboxDialog.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        )
+        if (!focusable?.length) {
+          event.preventDefault()
+          return
+        }
+        const first = focusable[0]
+        const last = focusable[focusable.length - 1]
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault()
+          last.focus()
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault()
+          first.focus()
+        }
       }
     }
     window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [lightboxIndex, post.attachments])
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      opener?.focus()
+    }
+  }, [isLightboxOpen, post.attachments])
 
   async function copyLink() {
     try {
@@ -146,7 +179,10 @@ export function PostCard({
               key={attachment.id}
               type="button"
               aria-label={`Open image ${index + 1} of ${post.attachments!.length}`}
-              onClick={() => setLightboxIndex(index)}
+              onClick={(event) => {
+                lightboxOpener.current = event.currentTarget
+                setLightboxIndex(index)
+              }}
             >
               <img src={attachment.image_url} alt={attachment.alt_text} loading="lazy" />
             </button>
@@ -191,12 +227,15 @@ export function PostCard({
       )}
       {lightboxIndex !== null && post.attachments?.[lightboxIndex] && (
         <div className="post-lightbox" role="presentation" onClick={() => setLightboxIndex(null)}>
-          <section className="post-lightbox__dialog" role="dialog" aria-modal="true" aria-label="Post image viewer" onClick={(event) => event.stopPropagation()}>
-            <button className="icon-button post-lightbox__close" type="button" aria-label="Close image viewer" title="Close" onClick={() => setLightboxIndex(null)}><X size={20} aria-hidden="true" /></button>
+          <section ref={lightboxDialog} className="post-lightbox__dialog" role="dialog" aria-modal="true" aria-label="Post image viewer" onClick={(event) => event.stopPropagation()}>
+            <button ref={lightboxCloseButton} className="icon-button post-lightbox__close" type="button" aria-label="Close image viewer" title="Close image viewer" onClick={() => setLightboxIndex(null)}><X size={20} aria-hidden="true" /></button>
             <img src={post.attachments[lightboxIndex].image_url} alt={post.attachments[lightboxIndex].alt_text} />
+            {post.attachments[lightboxIndex].alt_text && (
+              <p className="post-lightbox__caption">{post.attachments[lightboxIndex].alt_text}</p>
+            )}
             {post.attachments.length > 1 && <>
-              <button className="icon-button post-lightbox__previous" type="button" aria-label="Previous image" onClick={() => setLightboxIndex((lightboxIndex + post.attachments!.length - 1) % post.attachments!.length)}>‹</button>
-              <button className="icon-button post-lightbox__next" type="button" aria-label="Next image" onClick={() => setLightboxIndex((lightboxIndex + 1) % post.attachments!.length)}>›</button>
+              <button className="icon-button post-lightbox__previous" type="button" aria-label="Previous image" title="Previous image" onClick={() => setLightboxIndex((lightboxIndex + post.attachments!.length - 1) % post.attachments!.length)}><ChevronLeft size={22} aria-hidden="true" /></button>
+              <button className="icon-button post-lightbox__next" type="button" aria-label="Next image" title="Next image" onClick={() => setLightboxIndex((lightboxIndex + 1) % post.attachments!.length)}><ChevronRight size={22} aria-hidden="true" /></button>
               <span className="post-lightbox__count">{lightboxIndex + 1} / {post.attachments.length}</span>
             </>}
           </section>

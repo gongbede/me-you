@@ -26,7 +26,7 @@ describe('post image upload', () => {
         calls.push(`intent:${input.purpose}`)
         return {
           asset: {
-            id: 'asset-id', purpose: 'POST_IMAGE', status: 'UPLOAD_PENDING',
+            id: 'asset-id', purpose: 'POST_IMAGE' as const, status: 'UPLOAD_PENDING' as const,
             content_type: 'image/png', byte_size: 2, original_filename: 'photo.png',
             checksum_sha256: null, created_at: '2026-01-01T00:00:00Z', institution_id: null,
           },
@@ -41,7 +41,7 @@ describe('post image upload', () => {
       complete: vi.fn(async () => {
         calls.push('complete')
         return {
-          id: 'asset-id', purpose: 'POST_IMAGE', status: 'READY',
+          id: 'asset-id', purpose: 'POST_IMAGE' as const, status: 'READY' as const,
           content_type: 'image/png', byte_size: 2, original_filename: 'photo.png',
           checksum_sha256: null, created_at: '2026-01-01T00:00:00Z', institution_id: null,
         }

@@ -1,11 +1,13 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PostComposer } from './PostComposer'
 import { MAX_POST_IMAGES, type PostImageLimits } from '../api/media'
 import { isValidPostContent, MAX_POST_LENGTH } from './feedHelpers'
 
 describe('PostComposer', () => {
+  afterEach(cleanup)
+
   const imageLimits: PostImageLimits = {
     max_bytes: 100,
     content_types: ['image/jpeg', 'image/png', 'image/webp'],
@@ -31,7 +33,7 @@ describe('PostComposer', () => {
       imageLimitsError={null}
     />)
     const postButton = screen.getByRole('button', { name: 'Post' })
-    const composer = screen.getByRole('textbox', { name: 'Share something with your community' })
+    const composer = screen.getByLabelText('Share something with your community')
 
     expect(postButton).toBeDisabled()
     await user.type(composer, '  hello  ')
@@ -51,10 +53,13 @@ describe('PostComposer', () => {
     })
     render(<PostComposer onPost={onPost} isPosting={false} error={null} imageLimits={imageLimits} imageLimitsError={null} uploadImage={uploadImage} />)
 
-    await user.type(screen.getByRole('textbox', { name: 'Share something with your community' }), 'A photo post')
+    await user.type(screen.getByLabelText('Share something with your community'), 'A photo post')
+    const firstFile = new File(['image'], 'remove-me.png', { type: 'image/png' })
     const file = new File(['image'], 'photo.png', { type: 'image/png' })
-    await user.upload(screen.getByLabelText('Add images'), file)
+    await user.upload(screen.getByLabelText('Add images'), [firstFile, file])
     expect(screen.getByRole('img', { name: 'photo.png' })).toHaveAttribute('src', 'blob:photo.png')
+    await user.click(screen.getByRole('button', { name: 'Remove remove-me.png' }))
+    expect(screen.queryByRole('img', { name: 'remove-me.png' })).not.toBeInTheDocument()
     await user.type(screen.getByRole('textbox', { name: 'Alt text for photo.png' }), 'A red kite')
     await user.click(screen.getByRole('button', { name: 'Post' }))
 
@@ -66,7 +71,7 @@ describe('PostComposer', () => {
   })
 
   it('shows per-file validation errors and enforces the image count limit', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ applyAccept: false })
     vi.stubGlobal('URL', {
       ...URL,
       createObjectURL: vi.fn((file: File) => `blob:${file.name}`),
@@ -84,5 +89,41 @@ describe('PostComposer', () => {
     await user.upload(screen.getByLabelText('Add images'), manyImages)
     expect(screen.getByRole('alert')).toHaveTextContent(`up to ${MAX_POST_IMAGES} images`)
     expect(screen.getAllByRole('img')).toHaveLength(MAX_POST_IMAGES)
+  })
+
+  it('rejects images larger than the configured limit', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL: vi.fn((file: File) => `blob:${file.name}`),
+      revokeObjectURL: vi.fn(),
+    })
+    render(<PostComposer onPost={vi.fn()} isPosting={false} error={null} imageLimits={imageLimits} imageLimitsError={null} />)
+
+    await user.upload(
+      screen.getByLabelText('Add images'),
+      new File([new Uint8Array(101)], 'too-large.png', { type: 'image/png' }),
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent('Choose an image smaller than 1 MB')
+    expect(screen.getByRole('button', { name: 'Post' })).toBeDisabled()
+  })
+
+  it('shows a per-file upload error and keeps the image available for retry', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL: vi.fn((file: File) => `blob:${file.name}`),
+      revokeObjectURL: vi.fn(),
+    })
+    const uploadImage = vi.fn().mockRejectedValue(new Error('Upload interrupted'))
+    render(<PostComposer onPost={vi.fn()} isPosting={false} error={null} imageLimits={imageLimits} imageLimitsError={null} uploadImage={uploadImage} />)
+
+    await user.type(screen.getByLabelText('Share something with your community'), 'A photo post')
+    await user.upload(screen.getByLabelText('Add images'), new File(['image'], 'photo.png', { type: 'image/png' }))
+    await user.click(screen.getByRole('button', { name: 'Post' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('photo.png: Upload interrupted')
+    expect(screen.getByRole('img', { name: 'photo.png' })).toBeInTheDocument()
+    expect(uploadImage).toHaveBeenCalledTimes(1)
   })
 })

@@ -155,7 +155,7 @@ export function PostComposer({
         )}
       </div>
       {images.length > 0 && (
-        <div className="post-composer__images">
+        <div className={`post-composer__images post-composer__images--${images.length}`}>
           {images.map((image) => (
             <div className="post-composer__image" key={image.id}>
               <img src={image.previewUrl} alt={image.altText || image.file.name} />
