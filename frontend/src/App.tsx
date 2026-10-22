@@ -27,6 +27,8 @@ import { MessagesPage } from './pages/MessagesPage'
 import { PostDetailPage } from './pages/PostDetailPage'
 import { MusicPlayerProvider } from './components/MusicPlayer'
 import { LegalInfoPage } from './pages/LegalInfoPage'
+import { HelpPage } from './pages/HelpPage'
+import { ToastProvider } from './components/ToastProvider'
 
 const AdministrationPage = lazy(() => import('./pages/AdministrationPage').then((module) => ({ default: module.AdministrationPage })))
 const AdminReportsPage = lazy(() => import('./pages/AdminReportsPage').then((module) => ({ default: module.AdminReportsPage })))
@@ -47,11 +49,12 @@ const queryClient = new QueryClient({
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <BrowserRouter>
-          <MusicPlayerProvider>
-          <AppErrorBoundary>
+    <ToastProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <BrowserRouter>
+            <MusicPlayerProvider>
+            <AppErrorBoundary>
             <Suspense fallback={<p role="status" className="learning-loading">Loading page…</p>}>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
@@ -62,6 +65,7 @@ export default function App() {
               <Route path="/privacy" element={<LegalInfoPage kind="privacy" />} />
               <Route path="/terms" element={<LegalInfoPage kind="terms" />} />
               <Route path="/contact" element={<LegalInfoPage kind="contact" />} />
+              <Route path="/help" element={<HelpPage />} />
               <Route element={<ProtectedRoute />}>
                 <Route path="/logout" element={<LogoutPage />} />
                 <Route element={<AppShell />}>
@@ -103,10 +107,11 @@ export default function App() {
               <Route path="*" element={<NotFoundPage />} />
             </Routes>
             </Suspense>
-          </AppErrorBoundary>
-          </MusicPlayerProvider>
-        </BrowserRouter>
-      </AuthProvider>
-    </QueryClientProvider>
+            </AppErrorBoundary>
+            </MusicPlayerProvider>
+          </BrowserRouter>
+        </AuthProvider>
+      </QueryClientProvider>
+    </ToastProvider>
   )
 }

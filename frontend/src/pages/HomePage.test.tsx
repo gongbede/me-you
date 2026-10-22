@@ -79,4 +79,16 @@ describe('HomePage feed pagination', () => {
     expect(await screen.findByRole('tab', { name: 'Reels' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByTestId('reels-viewer')).toBeInTheDocument()
   })
+
+  it('shows a useful empty state and focuses the composer action', async () => {
+    vi.mocked(getFeed).mockReset().mockResolvedValue({
+      items: [], offset: 0, limit: 20, has_more: false, next_cursor: null,
+    })
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } })
+    render(<QueryClientProvider client={queryClient}><MemoryRouter><HomePage /></MemoryRouter></QueryClientProvider>)
+
+    expect(await screen.findByText('No posts yet. Share the first update.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Write a post' }))
+    expect(screen.getByLabelText('Share something with your community')).toHaveFocus()
+  })
 })

@@ -7,6 +7,8 @@ import { getFriendlyErrorMessage } from '../api/client'
 import { PostComposer } from '../components/PostComposer'
 import { PostCard } from '../components/PostCard'
 import { PageHeader } from '../components/PageHeader'
+import { GetStartedChecklist } from '../components/GetStartedChecklist'
+import { useToast } from '../components/ToastProvider'
 import { useAuth } from '../hooks/useAuth'
 
 const ReelsViewer = lazy(() => import('./ReelsPage').then((module) => ({ default: module.ReelsViewer })))
@@ -17,6 +19,7 @@ type HomeTab = 'feed' | 'reels'
 export function HomePage() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
+  const toast = useToast()
   const [activeTab, setActiveTab] = useState<HomeTab>(() => sessionStorage.getItem(homeTabStorageKey) === 'reels' ? 'reels' : 'feed')
   const feedQuery = useInfiniteQuery({
     queryKey: ['feed'],
@@ -33,6 +36,7 @@ export function HomePage() {
     mutationFn: ({ content, attachments }: { content: string; attachments: Parameters<typeof createPost>[1] }) => createPost(content, attachments),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['feed'] })
+      toast('success', 'Your post was shared.')
     },
   })
   const posts: Post[] = feedQuery.data?.pages.flatMap((page) => page.items) ?? []
@@ -56,6 +60,7 @@ export function HomePage() {
   return (
     <div className="page-stack" data-section="learning">
       <PageHeader section="YOUR COMMUNITY" title="Home" description={`Share what you’re learning, ${user?.username ?? 'today'}.`} />
+      {user && <GetStartedChecklist userId={user.id} onWritePost={() => document.getElementById('post-content')?.focus()} />}
 
       <div className="home-tabs" role="tablist" aria-label="Home content">
         <button id="home-tab-feed" type="button" role="tab" aria-selected={activeTab === 'feed'} aria-controls="home-panel-feed" tabIndex={activeTab === 'feed' ? 0 : -1} className={activeTab === 'feed' ? 'is-active' : ''} onClick={() => selectTab('feed')}>Feed</button>
@@ -84,7 +89,8 @@ export function HomePage() {
       ) : posts.length === 0 ? (
         <div className="feed-empty">
           <MessageCircle size={24} aria-hidden="true" />
-          <p>Nothing here yet. Be the first to post.</p>
+          <p>No posts yet. Share the first update.</p>
+          <button className="button button--primary" type="button" onClick={() => document.getElementById('post-content')?.focus()}>Write a post</button>
         </div>
       ) : (
         <div className="feed-list" aria-label="Your feed">

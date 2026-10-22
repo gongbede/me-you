@@ -8,6 +8,7 @@ export function AppFooter() {
         <Link to="/privacy">Privacy</Link>
         <Link to="/terms">Terms</Link>
         <Link to="/contact">Contact</Link>
+        <Link to="/help">Help</Link>
       </nav>
     </footer>
   )

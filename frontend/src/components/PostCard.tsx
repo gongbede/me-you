@@ -8,6 +8,7 @@ import { CommentsSection } from './CommentsSection'
 import { relativeTime, updateOptimisticLike } from './feedHelpers'
 import { UserIdentity } from './UserIdentity'
 import { ReportDialog } from './ReportDialog'
+import { useToast } from './ToastProvider'
 
 export function PostCard({
   post,
@@ -17,6 +18,7 @@ export function PostCard({
   onDeleted: (postId: string) => void
 }) {
   const { user } = useAuth()
+  const toast = useToast()
   const queryClient = useQueryClient()
   const [commentsOpen, setCommentsOpen] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -46,7 +48,10 @@ export function PostCard({
   })
   const deleteMutation = useMutation({
     mutationFn: () => deletePost(post.id),
-    onSuccess: () => onDeleted(post.id),
+    onSuccess: () => {
+      onDeleted(post.id)
+      toast('success', 'Post deleted.')
+    },
   })
   const editMutation = useMutation({
     mutationFn: () => updatePost(post.id, { content: draftContent.trim() }),
@@ -61,6 +66,7 @@ export function PostCard({
       setDisplayContent(updatedPost.content)
       setIsEdited(updatedPost.edited)
       setEditing(false)
+      toast('success', 'Post saved.')
     },
   })
 
@@ -117,8 +123,10 @@ export function PostCard({
       url.hash = `post-${post.id}`
       await navigator.clipboard.writeText(url.toString())
       setCopyMessage('Link copied')
+      toast('success', 'Post link copied.')
     } catch {
       setCopyMessage('Could not copy link')
+      toast('error', 'Could not copy the post link.')
     }
   }
 
