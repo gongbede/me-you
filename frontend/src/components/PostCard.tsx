@@ -35,15 +35,15 @@ export function PostCard({
     mutationFn: (liked: boolean) => setPostLike(post.id, liked),
     onMutate: async (liked) => {
       await queryClient.cancelQueries({ queryKey: feedKey })
-      const previous = queryClient.getQueryData<InfiniteData<FeedPage>>(feedKey)
-      queryClient.setQueryData<InfiniteData<FeedPage>>(
-        feedKey,
+      const previous = queryClient.getQueriesData<InfiniteData<FeedPage>>({ queryKey: feedKey })
+      queryClient.setQueriesData<InfiniteData<FeedPage>>(
+        { queryKey: feedKey },
         (current) => updateOptimisticLike(current, post.id, liked),
       )
       return { previous }
     },
     onError: (_error, _liked, context) => {
-      if (context?.previous) queryClient.setQueryData(feedKey, context.previous)
+      context?.previous.forEach(([key, value]) => queryClient.setQueryData(key, value))
     },
   })
   const deleteMutation = useMutation({
@@ -56,7 +56,7 @@ export function PostCard({
   const editMutation = useMutation({
     mutationFn: () => updatePost(post.id, { content: draftContent.trim() }),
     onSuccess: (updatedPost) => {
-      queryClient.setQueryData<InfiniteData<FeedPage>>(feedKey, (current) => current && ({
+      queryClient.setQueriesData<InfiniteData<FeedPage>>({ queryKey: feedKey }, (current) => current && ({
         ...current,
         pages: current.pages.map((page) => ({
           ...page,

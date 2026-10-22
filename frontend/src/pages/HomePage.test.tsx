@@ -47,7 +47,10 @@ const makePost = (id: string, content: string) => ({
 })
 
 describe('HomePage feed pagination', () => {
-  afterEach(cleanup)
+  afterEach(() => {
+    cleanup()
+    vi.unstubAllGlobals()
+  })
   beforeEach(() => {
     sessionStorage.clear()
     vi.mocked(getFeed).mockReset()
@@ -63,7 +66,62 @@ describe('HomePage feed pagination', () => {
     expect(await screen.findByText('First page')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Load more' }))
     expect(await screen.findByText('Second page')).toBeInTheDocument()
-    expect(getFeed).toHaveBeenNthCalledWith(2, 'cursor-next')
+    expect(getFeed).toHaveBeenNthCalledWith(2, 'cursor-next', 'FOLLOWING')
+  })
+
+  it('switches between Following and Latest feed modes', async () => {
+    vi.mocked(getFeed).mockReset()
+      .mockResolvedValueOnce({ items: [makePost('following', 'Following post')], offset: 0, limit: 20, has_more: false, next_cursor: null })
+      .mockResolvedValueOnce({ items: [makePost('latest', 'Latest post')], offset: 0, limit: 20, has_more: false, next_cursor: null })
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } })
+    render(<QueryClientProvider client={queryClient}><MemoryRouter><HomePage /></MemoryRouter></QueryClientProvider>)
+
+    expect(await screen.findByText('Following post')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Latest' }))
+    expect(await screen.findByText('Latest post')).toBeInTheDocument()
+    expect(getFeed).toHaveBeenLastCalledWith(undefined, 'LATEST')
+  })
+
+  it('loads another page when the intersection sentinel becomes visible', async () => {
+    class TestIntersectionObserver {
+      private readonly callback: IntersectionObserverCallback
+      constructor(callback: IntersectionObserverCallback) {
+        this.callback = callback
+      }
+      observe(target: Element) {
+        this.callback([{ isIntersecting: true, target } as IntersectionObserverEntry], this as unknown as IntersectionObserver)
+      }
+      disconnect() {}
+      unobserve() {}
+      takeRecords(): IntersectionObserverEntry[] { return [] }
+    }
+    vi.stubGlobal('IntersectionObserver', TestIntersectionObserver)
+    vi.mocked(getFeed).mockReset()
+      .mockResolvedValueOnce({ items: [makePost('one', 'First page')], offset: 0, limit: 20, has_more: true, next_cursor: 'cursor-next' })
+      .mockResolvedValueOnce({ items: [makePost('two', 'Second page')], offset: 0, limit: 20, has_more: false, next_cursor: null })
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } })
+    render(<QueryClientProvider client={queryClient}><MemoryRouter><HomePage /></MemoryRouter></QueryClientProvider>)
+
+    expect(await screen.findByText('First page')).toBeInTheDocument()
+    expect(await screen.findByText('Second page')).toBeInTheDocument()
+    expect(getFeed).toHaveBeenNthCalledWith(2, 'cursor-next', 'FOLLOWING')
+  })
+
+  it('shows a jump button when a background refresh adds a newer post', async () => {
+    vi.mocked(getFeed).mockReset().mockResolvedValue({
+      items: [makePost('one', 'First page')], offset: 0, limit: 20, has_more: false, next_cursor: null,
+    })
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } })
+    render(<QueryClientProvider client={queryClient}><MemoryRouter><HomePage /></MemoryRouter></QueryClientProvider>)
+    expect(await screen.findByText('First page')).toBeInTheDocument()
+    queryClient.setQueryData(['feed', 'FOLLOWING'], {
+      pages: [{ items: [makePost('new', 'New update'), makePost('one', 'First page')], offset: 0, limit: 20, has_more: false, next_cursor: null }],
+      pageParams: [undefined],
+    })
+
+    const jumpButton = await screen.findByRole('button', { name: 'Jump to new posts' })
+    fireEvent.click(jumpButton)
+    expect(screen.queryByRole('button', { name: 'Jump to new posts' })).not.toBeInTheDocument()
   })
 
   it('remembers the last selected Home tab for the session', async () => {

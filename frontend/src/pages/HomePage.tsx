@@ -1,7 +1,7 @@
-import { lazy, Suspense, useState } from 'react'
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query'
 import { LoaderCircle, MessageCircle } from 'lucide-react'
-import { createPost, getFeed, type Post } from '../api/social'
+import { createPost, getFeed, type FeedMode, type FeedPage, type Post } from '../api/social'
 import { getPostImageLimits } from '../api/media'
 import { getFriendlyErrorMessage } from '../api/client'
 import { PostComposer } from '../components/PostComposer'
@@ -21,12 +21,17 @@ export function HomePage() {
   const queryClient = useQueryClient()
   const toast = useToast()
   const [activeTab, setActiveTab] = useState<HomeTab>(() => sessionStorage.getItem(homeTabStorageKey) === 'reels' ? 'reels' : 'feed')
+  const [feedMode, setFeedMode] = useState<FeedMode>('FOLLOWING')
+  const [hasNewPosts, setHasNewPosts] = useState(false)
+  const loadMoreSentinel = useRef<HTMLDivElement>(null)
+  const seenTopPost = useRef<string | null>(null)
   const feedQuery = useInfiniteQuery({
-    queryKey: ['feed'],
-    queryFn: ({ pageParam }) => getFeed(pageParam),
+    queryKey: ['feed', feedMode],
+    queryFn: ({ pageParam }) => getFeed(pageParam, feedMode),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page) => page.has_more ? page.next_cursor ?? undefined : undefined,
     enabled: activeTab === 'feed',
+    refetchInterval: activeTab === 'feed' ? 60_000 : false,
   })
   const imageLimitsQuery = useQuery({
     queryKey: ['media', 'post-image-limits'],
@@ -40,16 +45,49 @@ export function HomePage() {
     },
   })
   const posts: Post[] = feedQuery.data?.pages.flatMap((page) => page.items) ?? []
+  const topPostId = posts[0]?.id ?? null
+  const feedIsPending = feedQuery.isPending
+  const feedIsFetching = feedQuery.isFetching
+  const hasNextPage = feedQuery.hasNextPage
+  const isFetchingNextPage = feedQuery.isFetchingNextPage
+  const fetchNextPage = feedQuery.fetchNextPage
+
+  useEffect(() => {
+    if (feedIsPending || feedIsFetching) return
+    if (seenTopPost.current === null) {
+      seenTopPost.current = topPostId
+      return
+    }
+    if (topPostId && seenTopPost.current !== topPostId) setHasNewPosts(true)
+  }, [feedIsFetching, feedIsPending, topPostId])
+
+  useEffect(() => {
+    const target = loadMoreSentinel.current
+    if (!target || !hasNextPage || isFetchingNextPage || !('IntersectionObserver' in window)) return
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting) && hasNextPage && !isFetchingNextPage) {
+        void fetchNextPage()
+      }
+    }, { rootMargin: '240px 0px' })
+    observer.observe(target)
+    return () => observer.disconnect()
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage])
 
   function removePost(postId: string) {
-    queryClient.setQueryData(['feed'], (previous: typeof feedQuery.data) => previous && ({
-      ...previous,
-      pages: previous.pages.map((page) => ({
-        ...page,
-        items: page.items.filter((post) => post.id !== postId),
-      })),
-    }))
+    queryClient.setQueriesData<InfiniteData<FeedPage>>({ queryKey: ['feed'] }, (previous) => previous && ({
+        ...previous,
+        pages: previous.pages.map((page) => ({
+          ...page,
+          items: page.items.filter((post) => post.id !== postId),
+        })),
+      }))
     void queryClient.invalidateQueries({ queryKey: ['feed'] })
+  }
+
+  function loadNewPosts() {
+    seenTopPost.current = topPostId
+    setHasNewPosts(false)
+    document.getElementById('home-panel-feed')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
   }
 
   function selectTab(tab: HomeTab) {
@@ -68,6 +106,10 @@ export function HomePage() {
       </div>
 
       {activeTab === 'feed' ? <section id="home-panel-feed" role="tabpanel" aria-labelledby="home-tab-feed" className="home-tab-panel">
+      <div className="feed-mode-switch" role="group" aria-label="Feed posts">
+        <button type="button" aria-pressed={feedMode === 'FOLLOWING'} className={feedMode === 'FOLLOWING' ? 'is-active' : ''} onClick={() => { seenTopPost.current = null; setHasNewPosts(false); setFeedMode('FOLLOWING') }}>Following</button>
+        <button type="button" aria-pressed={feedMode === 'LATEST'} className={feedMode === 'LATEST' ? 'is-active' : ''} onClick={() => { seenTopPost.current = null; setHasNewPosts(false); setFeedMode('LATEST') }}>Latest</button>
+      </div>
       <PostComposer
         onPost={(content, attachments) => createMutation.mutateAsync({ content, attachments }).then(() => undefined)}
         isPosting={createMutation.isPending}
@@ -94,9 +136,12 @@ export function HomePage() {
         </div>
       ) : (
         <div className="feed-list" aria-label="Your feed">
+          {hasNewPosts && <button className="button button--secondary feed-new-posts" type="button" onClick={loadNewPosts}>Jump to new posts</button>}
           {posts.map((post) => <PostCard key={post.id} post={post} onDeleted={removePost} />)}
         </div>
       )}
+
+      {feedQuery.hasNextPage && <div ref={loadMoreSentinel} className="feed-load-sentinel" aria-hidden="true" />}
 
       {feedQuery.hasNextPage && (
         <button
